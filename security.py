@@ -75,6 +75,30 @@ def list_users() -> list[dict]:
     ]
 
 
+def get_profile(username: str) -> Dict[str, str]:
+    user = _get_user(username)
+    if user is None:
+        raise ValueError("User not found")
+    return {"username": user["username"], "role": user["role"]}
+
+
+def reset_password(username: str, current_password: str, new_password: str) -> Dict[str, str]:
+    if not new_password:
+        raise ValueError("New password is required")
+
+    user = _get_user(username)
+    if user is None or not verify_password(current_password, user["password"]):
+        raise ValueError("Current password is incorrect")
+
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE users SET password = ? WHERE username = ?",
+            (hash_password(new_password), username),
+        )
+
+    return {"username": username, "status": "updated"}
+
+
 def _get_user(username: str) -> Dict[str, str] | None:
     with get_connection() as conn:
         row = conn.execute(

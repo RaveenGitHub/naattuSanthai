@@ -18,3 +18,8 @@ class UserCreateRequest(BaseModel):
     username: str
     password: str
     role: str = "farmer"
+
+
+class PasswordResetRequest(BaseModel):
+    current_password: str
+    new_password: str

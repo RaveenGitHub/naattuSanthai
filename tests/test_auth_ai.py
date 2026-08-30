@@ -111,3 +111,33 @@ def test_admin_can_list_and_create_users():
     )
     assert create_response.status_code == 200
     assert create_response.json()["data"]["username"] == new_username
+
+
+def test_user_can_view_profile_and_reset_password():
+    login = client.post(
+        "/auth/login",
+        json={"username": "operator1", "password": "password123"},
+    )
+    token = login.json()["token"]
+
+    profile_response = client.get(
+        "/api/profile",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert profile_response.status_code == 200
+    assert profile_response.json()["data"]["username"] == "operator1"
+    assert profile_response.json()["data"]["role"] == "operator"
+
+    reset_response = client.post(
+        "/api/profile/reset-password",
+        json={"current_password": "password123", "new_password": "newpassword456"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert reset_response.status_code == 200
+
+    re_login = client.post(
+        "/auth/login",
+        json={"username": "operator1", "password": "newpassword456"},
+    )
+    assert re_login.status_code == 200
+    assert re_login.json()["role"] == "operator"
