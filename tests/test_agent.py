@@ -2,7 +2,9 @@ from tech_pm_agent import (
     AGENT_REGISTRY,
     build_agent_prompt,
     generate_agent_response,
+    generate_api_contract,
     generate_backlog,
+    generate_data_model,
     generate_prd,
     generate_roadmap,
     generate_sprint_plan,
@@ -82,3 +84,21 @@ def test_generate_sprint_plan_has_iterations():
     assert "Sprint 3" in sprint_plan
     assert "Sprint 6" in sprint_plan
     assert "Pilot" in sprint_plan
+
+
+def test_generate_data_model_has_core_entities():
+    data_model = generate_data_model("Digital Farming Support Center")
+
+    assert "Farmer" in data_model
+    assert "Farm" in data_model
+    assert "SoilTestRecord" in data_model
+    assert "MarketPrice" in data_model
+
+
+def test_generate_api_contract_lists_endpoints():
+    api = generate_api_contract("Digital Farming Support Center")
+
+    assert "/api/farmers" in api
+    assert "/api/soil-tests" in api
+    assert "/api/weather/alerts" in api
+    assert "/api/market-prices" in api

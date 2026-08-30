@@ -327,6 +327,128 @@ Sprint 6: Pilot, QA, and Rollout
 """.strip()
 
 
+def generate_data_model(product_name: str) -> str:
+    return f"""{product_name} Data Model
+
+Farmer
+- id: UUID
+- name: string
+- phone: string
+- village: string
+- language_preference: string
+- created_at: datetime
+
+Farm
+- id: UUID
+- farmer_id: UUID
+- acreage: decimal
+- location: geography
+- soil_type: string
+- crop_history: text
+
+SoilTestRecord
+- id: UUID
+- farm_id: UUID
+- tested_at: datetime
+- nutrient_profile: JSON
+- ph_level: decimal
+- moisture: decimal
+- fertility_status: string
+
+Crop
+- id: UUID
+- farm_id: UUID
+- crop_name: string
+- sowing_date: date
+- harvesting_window: date
+- advisory_status: string
+
+AdvisoryRecommendation
+- id: UUID
+- crop_id: UUID
+- recommendation_type: string
+- recommendation_text: text
+- confidence_score: decimal
+- recommended_by: string
+- created_at: datetime
+
+WeatherAlert
+- id: UUID
+- village_id: string
+- alert_type: string
+- severity: string
+- message: text
+- valid_from: datetime
+- valid_to: datetime
+
+MarketPrice
+- id: UUID
+- crop_name: string
+- market_name: string
+- price_per_kg: decimal
+- updated_at: datetime
+- source: string
+
+Scheme
+- id: UUID
+- scheme_name: string
+- eligibility_criteria: JSON
+- application_deadline: date
+- status: string
+
+SchemeApplication
+- id: UUID
+- farmer_id: UUID
+- scheme_id: UUID
+- eligibility_status: string
+- submission_status: string
+- notes: text
+""".strip()
+
+
+def generate_api_contract(product_name: str) -> str:
+    return f"""{product_name} API Contract
+
+GET /api/farmers
+- Returns farmer profile list with filters by village and phone
+
+POST /api/farmers
+- Creates a farmer profile
+
+GET /api/farms/{{farmer_id}}
+- Returns all farms for a farmer
+
+POST /api/soil-tests
+- Creates soil testing record and triggers advisory generation
+
+GET /api/soil-tests/{{farm_id}}
+- Returns historical soil tests for a farm
+
+POST /api/advisories
+- Creates recommendation for selected crop or soil state
+
+GET /api/weather/alerts?location={{village}}
+- Returns active weather alerts by village
+
+POST /api/crop-detection
+- Submits crop image for AI diagnosis
+
+GET /api/market-prices?crop={{crop_name}}
+- Returns price feed by crop and market
+
+GET /api/schemes?farmer_id={{id}}
+- Returns eligible schemes for farmer profile
+
+POST /api/notifications
+- Sends farmer or operator notifications by channel
+
+Response conventions:
+- Standard status codes: 200, 201, 400, 404, 500
+- All responses return JSON with success, data, and error fields
+- All protected endpoints validate role-based access
+""".strip()
+
+
 if __name__ == "__main__":
     print("Available agents:")
     for agent in AGENT_REGISTRY:
@@ -338,3 +460,7 @@ if __name__ == "__main__":
     print(generate_system_architecture("Digital Farming Support Center"))
     print("\nSample Sprint Plan:\n")
     print(generate_sprint_plan("Digital Farming Support Center"))
+    print("\nSample Data Model:\n")
+    print(generate_data_model("Digital Farming Support Center"))
+    print("\nSample API Contract:\n")
+    print(generate_api_contract("Digital Farming Support Center"))
