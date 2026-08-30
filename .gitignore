@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.env
+.env.*
+digital_farming.db
+*.sqlite3
+coverage.xml
+.coverage
+*.log
+.DS_Store
