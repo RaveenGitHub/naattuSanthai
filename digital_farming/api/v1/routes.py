@@ -5,6 +5,7 @@ from fastapi import APIRouter, Query
 from digital_farming.services.advisory import get_field_advisory
 from digital_farming.services.crop_calendar import build_crop_calendar
 from digital_farming.services.irrigation import build_irrigation_plan
+from digital_farming.services.market_intelligence import get_market_intelligence
 from digital_farming.services.pest_monitoring import evaluate_pest_risk
 from digital_farming.services.soil_health import assess_soil_health
 
@@ -98,4 +99,20 @@ def crop_calendar(
         "crop": calendar["crop"],
         "season": calendar["season"],
         "activities": calendar["activities"],
+    }
+
+
+@router.get("/market/intelligence")
+def market_intelligence(
+    crop: str = Query(..., description="Crop name to assess"),
+    market: str = Query(..., description="Local market or mandi name"),
+) -> dict:
+    intelligence = get_market_intelligence(crop=crop, market=market)
+    return {
+        "crop": intelligence["crop"],
+        "market": intelligence["market"],
+        "base_price_per_kg": intelligence["base_price_per_kg"],
+        "market_trend": intelligence["market_trend"],
+        "recommended_action": intelligence["recommended_action"],
+        "buyer_insights": intelligence["buyer_insights"],
     }

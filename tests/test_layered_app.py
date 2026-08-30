@@ -73,3 +73,14 @@ def test_crop_calendar_route_returns_seasonal_plan():
     assert payload["season"] == "Kharif"
     assert isinstance(payload["activities"], list)
     assert payload["activities"]
+
+
+def test_market_intelligence_route_returns_price_and_procurement_guidance():
+    response = client.get("/api/v1/market/intelligence?crop=rice&market=Kallakurichi")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["crop"] == "rice"
+    assert payload["market"] == "Kallakurichi"
+    assert payload["recommended_action"]
+    assert isinstance(payload["buyer_insights"], list)
+    assert payload["buyer_insights"]
