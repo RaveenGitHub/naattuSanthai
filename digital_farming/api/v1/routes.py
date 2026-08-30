@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Query
 
 from digital_farming.services.advisory import get_field_advisory
+from digital_farming.services.crop_calendar import build_crop_calendar
 from digital_farming.services.irrigation import build_irrigation_plan
 from digital_farming.services.pest_monitoring import evaluate_pest_risk
 from digital_farming.services.soil_health import assess_soil_health
@@ -84,4 +85,17 @@ def pest_monitor(
         "dominant_issue": result["dominant_issue"],
         "risk_score": result["risk_score"],
         "action_plan": result["action_plan"],
+    }
+
+
+@router.get("/season/crop-calendar")
+def crop_calendar(
+    crop: str = Query(..., description="Crop type for the seasonal plan"),
+    season: str = Query("Kharif", description="Season name such as Kharif, Rabi, or Summer"),
+) -> dict:
+    calendar = build_crop_calendar(crop=crop, season=season)
+    return {
+        "crop": calendar["crop"],
+        "season": calendar["season"],
+        "activities": calendar["activities"],
     }

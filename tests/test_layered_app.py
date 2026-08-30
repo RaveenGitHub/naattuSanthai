@@ -63,3 +63,13 @@ def test_pest_monitoring_route_returns_risk_and_actions():
     assert payload["risk_score"] >= 0
     assert isinstance(payload["action_plan"], list)
     assert payload["action_plan"]
+
+
+def test_crop_calendar_route_returns_seasonal_plan():
+    response = client.get("/api/v1/season/crop-calendar?crop=rice&season=Kharif")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["crop"] == "rice"
+    assert payload["season"] == "Kharif"
+    assert isinstance(payload["activities"], list)
+    assert payload["activities"]
