@@ -84,3 +84,16 @@ def test_market_intelligence_route_returns_price_and_procurement_guidance():
     assert payload["recommended_action"]
     assert isinstance(payload["buyer_insights"], list)
     assert payload["buyer_insights"]
+
+
+def test_sustainability_report_route_returns_carbon_and_regeneration_summary():
+    response = client.get(
+        "/api/v1/sustainability/carbon?farm_size_ha=5&soil_carbon_tons=2.4&water_use_liters=4200&energy_use_kwh=320"
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["farm_size_ha"] == 5.0
+    assert "carbon_status" in payload
+    assert payload["carbon_status"]
+    assert isinstance(payload["recommendations"], list)
+    assert payload["recommendations"]

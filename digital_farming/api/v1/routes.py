@@ -8,6 +8,7 @@ from digital_farming.services.irrigation import build_irrigation_plan
 from digital_farming.services.market_intelligence import get_market_intelligence
 from digital_farming.services.pest_monitoring import evaluate_pest_risk
 from digital_farming.services.soil_health import assess_soil_health
+from digital_farming.services.sustainability import assess_carbon_and_sustainability
 
 router = APIRouter(tags=["v1"])
 
@@ -115,4 +116,30 @@ def market_intelligence(
         "market_trend": intelligence["market_trend"],
         "recommended_action": intelligence["recommended_action"],
         "buyer_insights": intelligence["buyer_insights"],
+    }
+
+
+@router.get("/sustainability/carbon")
+def sustainability_carbon_report(
+    farm_size_ha: float = Query(..., description="Farm size in hectares"),
+    soil_carbon_tons: float = Query(..., description="Estimated soil carbon stock in tons"),
+    water_use_liters: float = Query(..., description="Total irrigation and operational water used in liters"),
+    energy_use_kwh: float = Query(..., description="Total energy consumed in kWh"),
+) -> dict:
+    report = assess_carbon_and_sustainability(
+        farm_size_ha=farm_size_ha,
+        soil_carbon_tons=soil_carbon_tons,
+        water_use_liters=water_use_liters,
+        energy_use_kwh=energy_use_kwh,
+    )
+    return {
+        "farm_size_ha": report["farm_size_ha"],
+        "soil_carbon_tons": report["soil_carbon_tons"],
+        "water_use_liters": report["water_use_liters"],
+        "energy_use_kwh": report["energy_use_kwh"],
+        "carbon_score": report["carbon_score"],
+        "carbon_status": report["carbon_status"],
+        "water_efficiency_m3_per_ha": report["water_efficiency_m3_per_ha"],
+        "energy_use_kwh_per_ha": report["energy_use_kwh_per_ha"],
+        "recommendations": report["recommendations"],
     }
