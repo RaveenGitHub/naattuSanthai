@@ -76,3 +76,17 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS diagnosis_records (
+                id TEXT PRIMARY KEY,
+                crop_type TEXT NOT NULL,
+                image_url TEXT NOT NULL,
+                diagnosis TEXT NOT NULL,
+                recommendation TEXT NOT NULL,
+                notes TEXT,
+                confidence TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
