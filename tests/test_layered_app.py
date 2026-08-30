@@ -25,3 +25,28 @@ def test_agriculture_advisory_route_generates_actionable_recommendations():
     assert "recommendations" in payload
     assert isinstance(payload["recommendations"], list)
     assert payload["recommendations"]
+
+
+def test_irrigation_plan_route_generates_crop_and_water_schedule():
+    response = client.get(
+        "/api/v1/operations/irrigation-plan?crop=rice&soil_moisture_percent=42&rainfall_forecast_mm=6&field_area_ha=2.5"
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["crop"] == "rice"
+    assert payload["recommended_start"]
+    assert payload["water_liters_per_ha"] > 0
+    assert isinstance(payload["recommendations"], list)
+    assert payload["recommendations"]
+
+
+def test_soil_health_route_returns_nutrient_plan():
+    response = client.get(
+        "/api/v1/soil/health?crop=groundnut&ph=5.6&nitrogen=24&phosphorus=18&potassium=152"
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["crop"] == "groundnut"
+    assert payload["soil_status"]
+    assert isinstance(payload["nutrient_actions"], list)
+    assert payload["nutrient_actions"]
