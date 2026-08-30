@@ -141,3 +141,11 @@ def test_user_can_view_profile_and_reset_password():
     )
     assert re_login.status_code == 200
     assert re_login.json()["role"] == "operator"
+
+
+def test_agriculture_dashboard_pages_render_for_users():
+    dashboard = client.get("/dashboard")
+    assert dashboard.status_code == 200
+    assert "Field overview" in dashboard.text
+    assert "Weather" in dashboard.text
+    assert "Farmer Field Dashboard" in dashboard.text

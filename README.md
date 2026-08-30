@@ -1,23 +1,61 @@
 # Digital Farming Support Center
 
-This repository contains a product-to-engineering package for the Digital Farming Support Center, including:
+A mature agriculture and sustainability platform prototype for farmer support, agronomy advisory, weather intelligence, market data, and scheme guidance.
 
-- PM/TPO personas and planning prompts
-- Product strategy and architecture generation
-- MVP backend blueprint for a rural agriculture support platform
-- FastAPI application scaffold with farming APIs
-- SQLite-backed service layer and role-based access handling
-- Docker and Docker Compose deployment setup
+This repository has been reviewed and reorganized toward a more production-ready Python project structure while retaining compatibility with the earlier prototype modules.
 
-## Included modules
+## Repository structure
 
-- `tech_pm_agent.py` — PM/TPO agent prompt registry and document generation helpers
-- `digital_farming_mvp.py` — MVP backend blueprint and service definitions
-- `app.py` — FastAPI application entry point
-- `routes.py` — API routes for farmers, soil tests, weather, and market data
-- `services.py` — business logic and persistence support
-- `database.py` — SQLite initialization and storage layer
-- `auth.py` — role-based access control helpers
+```text
+.
+├── .github/
+│   └── agents/
+│       ├── ui-ux-designer-agent.agent.md
+│       ├── agriculture-farming-sustainability-master-engineer.agent.md
+│       ├── agriculture-farming-sustainability-domain-reliability-commander.agent.md
+│       ├── agri-data-engineer.agent.md
+│       ├── farm-operations-analyst.agent.md
+│       └── sustainability-carbon-reporting-specialist.agent.md
+├── digital_farming/
+│   ├── __init__.py
+│   ├── app.py
+│   ├── config.py
+│   ├── database.py
+│   ├── diagnostics.py
+│   ├── routes.py
+│   ├── schemas.py
+│   ├── schemas_auth.py
+│   ├── security.py
+│   └── services.py
+├── tests/
+│   └── test_auth_ai.py
+├── app.py
+├── auth.py
+├── database.py
+├── diagnostics.py
+├── digital_farming_mvp.py
+├── routes.py
+├── schemas.py
+├── schemas_auth.py
+├── security.py
+├── services.py
+├── tech_pm_agent.py
+├── .env.example
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+├── pyproject.toml
+├── README.md
+└── digital_farming.db
+```
+
+## Architectural direction
+
+- Domain-oriented service boundaries for agriculture operations, advisory workflows, and auth
+- Configuration-driven app settings via a central config module
+- FastAPI app entrypoint intentionally kept stable for compatibility with the earlier implementation
+- SQLite-backed persistence for MVP validation with future extension paths toward PostgreSQL and service isolation
+- Clear separation between app runtime, domain logic, and prototype compatibility shims
 
 ## Run locally
 
@@ -39,6 +77,14 @@ Or with Docker Compose:
 docker-compose up --build
 ```
 
+## Quality standards applied
+
+- Secure password hashing using PBKDF2
+- Authentication and role checks enforced at API boundaries
+- Explicit validation for user creation and password reset flows
+- Structured response envelopes for API actions
+- Backward compatibility for the existing flat-module app layout during transition
+
 ## Usage example
 
 ```python
@@ -52,5 +98,5 @@ print(generate_roadmap("Digital Farming Support Center"))
 ## Running tests
 
 ```bash
-pytest -q
+py -3.13 -m pytest -q
 ```

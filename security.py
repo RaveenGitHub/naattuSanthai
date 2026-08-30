@@ -35,14 +35,22 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain_password: str, stored_password: str) -> bool:
-    if not stored_password.startswith(HASH_PREFIX):
-        return hmac.compare_digest(plain_password, stored_password)
+    if not stored_password or not stored_password.startswith(HASH_PREFIX):
+        return hmac.compare_digest(plain_password, stored_password or "")
 
-    _, iterations_str, salt_b64, digest_b64 = stored_password.split("$")
-    salt = base64.b64decode(salt_b64.encode("ascii"))
-    expected = base64.b64decode(digest_b64.encode("ascii"))
-    actual = hashlib.pbkdf2_hmac("sha256", plain_password.encode("utf-8"), salt, int(iterations_str))
-    return hmac.compare_digest(actual, expected)
+    try:
+        _, iterations_str, salt_b64, digest_b64 = stored_password.split("$", 3)
+        salt = base64.b64decode(salt_b64.encode("ascii"))
+        expected = base64.b64decode(digest_b64.encode("ascii"))
+        actual = hashlib.pbkdf2_hmac(
+            "sha256",
+            plain_password.encode("utf-8"),
+            salt,
+            int(iterations_str),
+        )
+        return hmac.compare_digest(actual, expected)
+    except (ValueError, TypeError):
+        return False
 
 
 def create_user(username: str, password: str, role: str) -> Dict[str, str]:
@@ -121,10 +129,27 @@ def _get_user(username: str) -> Dict[str, str] | None:
 def seed_default_users() -> None:
     with get_connection() as conn:
         count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-    if count > 0:
+
+    if count == 0:
+        for username, details in DEFAULT_USERS.items():
+            create_user(username, details["password"], details["role"])
         return
+
     for username, details in DEFAULT_USERS.items():
-        create_user(username, details["password"], details["role"])
+        with get_connection() as conn:
+            row = conn.execute(
+                "SELECT password FROM users WHERE username = ?",
+                (username,),
+            ).fetchone()
+        if row is None:
+            create_user(username, details["password"], details["role"])
+            continue
+        if not verify_password(details["password"], row["password"]):
+            with get_connection() as conn:
+                conn.execute(
+                    "UPDATE users SET password = ? WHERE username = ?",
+                    (hash_password(details["password"]), username),
+                )
 
 
 seed_default_users()

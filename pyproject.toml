@@ -1,0 +1,17 @@
+[project]
+name = "digital-farming-support-center"
+version = "0.2.0"
+description = "Agriculture, farming, and sustainability support platform"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+  "fastapi==0.115.0",
+  "uvicorn==0.30.6",
+  "pydantic==2.8.2",
+  "PyJWT==2.8.0",
+  "pytest==8.4.2",
+]
+
+[tool.pytest.ini_options]
+pythonpath = "."
+testpaths = ["tests"]
