@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi.testclient import TestClient
 
 from app import app
@@ -61,7 +63,7 @@ def test_ai_diagnosis_history_is_available_to_authorized_user():
 
 
 def test_new_user_can_be_created_and_authenticated_from_database():
-    username = "newoperator"
+    username = f"newoperator_{uuid.uuid4().hex[:8]}"
     result = create_user(username, "secretpass", "operator")
 
     assert result["username"] == username
@@ -73,3 +75,15 @@ def test_new_user_can_be_created_and_authenticated_from_database():
     )
     assert login.status_code == 200
     assert login.json()["role"] == "operator"
+
+
+def test_password_is_stored_hashed_in_database():
+    username = f"hashuser_{uuid.uuid4().hex[:8]}"
+    create_user(username, "verysecret", "operator")
+
+    with __import__("sqlite3").connect("digital_farming.db") as conn:
+        row = conn.execute("SELECT password FROM users WHERE username = ?", (username,)).fetchone()
+
+    assert row is not None
+    assert row[0] != "verysecret"
+    assert row[0].startswith("pbkdf2_sha256$")

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Dict
 from uuid import uuid4
@@ -10,12 +14,35 @@ from database import get_connection
 
 SECRET_KEY = "digital-farming-support-center-secret-key"
 ALGORITHM = "HS256"
+HASH_PREFIX = "pbkdf2_sha256$"
 
 DEFAULT_USERS = {
     "operator1": {"password": "password123", "role": "operator"},
     "admin1": {"password": "admin123", "role": "admin"},
     "farmer1": {"password": "farmer123", "role": "farmer"},
 }
+
+
+def hash_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    iterations = 200000
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+    return (
+        f"{HASH_PREFIX}{iterations}$"
+        f"{base64.b64encode(salt).decode('ascii')}$"
+        f"{base64.b64encode(digest).decode('ascii')}"
+    )
+
+
+def verify_password(plain_password: str, stored_password: str) -> bool:
+    if not stored_password.startswith(HASH_PREFIX):
+        return hmac.compare_digest(plain_password, stored_password)
+
+    _, iterations_str, salt_b64, digest_b64 = stored_password.split("$")
+    salt = base64.b64decode(salt_b64.encode("ascii"))
+    expected = base64.b64decode(digest_b64.encode("ascii"))
+    actual = hashlib.pbkdf2_hmac("sha256", plain_password.encode("utf-8"), salt, int(iterations_str))
+    return hmac.compare_digest(actual, expected)
 
 
 def create_user(username: str, password: str, role: str) -> Dict[str, str]:
@@ -31,7 +58,7 @@ def create_user(username: str, password: str, role: str) -> Dict[str, str]:
 
         conn.execute(
             "INSERT INTO users (id, username, password, role, created_at) VALUES (?, ?, ?, ?, ?)",
-            (f"USR-{uuid4().hex}", username, password, role, datetime.now(timezone.utc).isoformat()),
+            (f"USR-{uuid4().hex}", username, hash_password(password), role, datetime.now(timezone.utc).isoformat()),
         )
 
     return {"username": username, "role": role}
@@ -45,7 +72,15 @@ def _get_user(username: str) -> Dict[str, str] | None:
         ).fetchone()
     if row is None:
         return None
-    return {"username": row["username"], "password": row["password"], "role": row["role"]}
+
+    stored_password = row["password"]
+    if not stored_password.startswith(HASH_PREFIX):
+        migrated = hash_password(stored_password)
+        with get_connection() as conn:
+            conn.execute("UPDATE users SET password = ? WHERE username = ?", (migrated, username))
+        stored_password = migrated
+
+    return {"username": row["username"], "password": stored_password, "role": row["role"]}
 
 
 def seed_default_users() -> None:
@@ -78,6 +113,6 @@ def verify_token(token: str) -> Dict[str, str]:
 
 def authenticate(username: str, password: str) -> Dict[str, str]:
     user = _get_user(username)
-    if user is None or user["password"] != password:
+    if user is None or not verify_password(password, user["password"]):
         raise ValueError("Invalid username or password")
     return {"token": create_token(username), "role": user["role"]}
