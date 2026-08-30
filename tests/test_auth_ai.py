@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app import app
+from security import create_user
 
 client = TestClient(app)
 
@@ -57,3 +58,18 @@ def test_ai_diagnosis_history_is_available_to_authorized_user():
     assert body["success"] is True
     assert isinstance(body["data"], list)
     assert any(item["crop_type"] == "Groundnut" for item in body["data"])
+
+
+def test_new_user_can_be_created_and_authenticated_from_database():
+    username = "newoperator"
+    result = create_user(username, "secretpass", "operator")
+
+    assert result["username"] == username
+    assert result["role"] == "operator"
+
+    login = client.post(
+        "/auth/login",
+        json={"username": username, "password": "secretpass"},
+    )
+    assert login.status_code == 200
+    assert login.json()["role"] == "operator"
