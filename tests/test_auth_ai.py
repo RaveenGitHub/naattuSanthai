@@ -87,3 +87,27 @@ def test_password_is_stored_hashed_in_database():
     assert row is not None
     assert row[0] != "verysecret"
     assert row[0].startswith("pbkdf2_sha256$")
+
+
+def test_admin_can_list_and_create_users():
+    admin_login = client.post(
+        "/auth/login",
+        json={"username": "admin1", "password": "admin123"},
+    )
+    token = admin_login.json()["token"]
+
+    list_response = client.get(
+        "/api/users",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert list_response.status_code == 200
+    assert any(item["username"] == "operator1" for item in list_response.json()["data"])
+
+    new_username = f"adminuser_{uuid.uuid4().hex[:8]}"
+    create_response = client.post(
+        "/api/users",
+        json={"username": new_username, "password": "securepass", "role": "farmer"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert create_response.status_code == 200
+    assert create_response.json()["data"]["username"] == new_username

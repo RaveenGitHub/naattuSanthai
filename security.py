@@ -64,6 +64,17 @@ def create_user(username: str, password: str, role: str) -> Dict[str, str]:
     return {"username": username, "role": role}
 
 
+def list_users() -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT username, role, created_at FROM users ORDER BY created_at ASC"
+        ).fetchall()
+    return [
+        {"username": row["username"], "role": row["role"], "created_at": row["created_at"]}
+        for row in rows
+    ]
+
+
 def _get_user(username: str) -> Dict[str, str] | None:
     with get_connection() as conn:
         row = conn.execute(
