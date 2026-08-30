@@ -50,3 +50,16 @@ def test_soil_health_route_returns_nutrient_plan():
     assert payload["soil_status"]
     assert isinstance(payload["nutrient_actions"], list)
     assert payload["nutrient_actions"]
+
+
+def test_pest_monitoring_route_returns_risk_and_actions():
+    response = client.get(
+        "/api/v1/field/pest-monitor?crop=rice&field_condition=high_humidity&severity=moderate"
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["crop"] == "rice"
+    assert "risk_score" in payload
+    assert payload["risk_score"] >= 0
+    assert isinstance(payload["action_plan"], list)
+    assert payload["action_plan"]

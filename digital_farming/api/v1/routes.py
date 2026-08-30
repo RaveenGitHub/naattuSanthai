@@ -4,6 +4,7 @@ from fastapi import APIRouter, Query
 
 from digital_farming.services.advisory import get_field_advisory
 from digital_farming.services.irrigation import build_irrigation_plan
+from digital_farming.services.pest_monitoring import evaluate_pest_risk
 from digital_farming.services.soil_health import assess_soil_health
 
 router = APIRouter(tags=["v1"])
@@ -66,4 +67,21 @@ def soil_health(
         "phosphorus_status": result["phosphorus_status"],
         "potassium_status": result["potassium_status"],
         "nutrient_actions": result["nutrient_actions"],
+    }
+
+
+@router.get("/field/pest-monitor")
+def pest_monitor(
+    crop: str = Query(..., description="Crop type under field monitoring"),
+    field_condition: str = Query("normal", description="Current field condition such as high_humidity or dry"),
+    severity: str = Query("low", description="Observed pest or disease severity"),
+) -> dict:
+    result = evaluate_pest_risk(crop=crop, field_condition=field_condition, severity=severity)
+    return {
+        "crop": result["crop"],
+        "field_condition": result["field_condition"],
+        "severity": result["severity"],
+        "dominant_issue": result["dominant_issue"],
+        "risk_score": result["risk_score"],
+        "action_plan": result["action_plan"],
     }
