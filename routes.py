@@ -4,7 +4,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
-from auth import require_role
+from auth import get_user_role
 from schemas import FarmCreate, FarmerCreate, SoilTestCreate
 from services import (
     create_farm,
@@ -20,6 +20,19 @@ from services import (
 
 router = APIRouter(prefix="/api")
 
+ROLE_HIERARCHY = {
+    "farmer": {"farmer", "operator", "admin"},
+    "operator": {"operator", "admin"},
+    "admin": {"admin"},
+}
+
+
+def require_route_role(request: Request, required_role: str) -> None:
+    role = get_user_role(request)
+    allowed_roles = ROLE_HIERARCHY.get(required_role, {required_role})
+    if role not in allowed_roles:
+        raise HTTPException(status_code=403, detail=f"{required_role.capitalize()} access required")
+
 
 @router.get("/farmers")
 def get_farmers():
@@ -28,9 +41,7 @@ def get_farmers():
 
 @router.post("/farmers")
 def post_farmer(request: Request, payload: FarmerCreate):
-    role = request.headers.get("X-User-Role", "farmer")
-    if role not in {"farmer", "operator", "admin"}:
-        raise HTTPException(status_code=403, detail="Role not allowed")
+    require_route_role(request, "farmer")
     farmer = create_farmer(payload.model_dump())
     return {"success": True, "data": farmer.model_dump(), "error": None}
 
@@ -42,9 +53,7 @@ def get_farms(farmer_id: Optional[str] = Query(default=None)):
 
 @router.post("/farms")
 def post_farm(request: Request, payload: FarmCreate):
-    role = request.headers.get("X-User-Role", "farmer")
-    if role not in {"operator", "admin"}:
-        raise HTTPException(status_code=403, detail="Operator/Admin access required")
+    require_route_role(request, "operator")
     farm = create_farm(payload.model_dump())
     return {"success": True, "data": farm.model_dump(), "error": None}
 
@@ -56,9 +65,7 @@ def get_soil_tests(farm_id: Optional[str] = Query(default=None)):
 
 @router.post("/soil-tests")
 def post_soil_test(request: Request, payload: SoilTestCreate):
-    role = request.headers.get("X-User-Role", "farmer")
-    if role not in {"operator", "admin"}:
-        raise HTTPException(status_code=403, detail="Operator/Admin access required")
+    require_route_role(request, "operator")
     record = create_soil_test(payload.model_dump())
     return {"success": True, "data": record.model_dump(), "error": None}
 
@@ -76,9 +83,7 @@ def get_market_prices(crop_name: Optional[str] = Query(default=None)):
 
 @router.get("/schemes")
 def get_schemes(request: Request, farmer_id: Optional[str] = Query(default=None)):
-    role = request.headers.get("X-User-Role", "farmer")
-    if role not in {"farmer", "operator", "admin"}:
-        raise HTTPException(status_code=403, detail="Role not allowed")
+    require_route_role(request, "farmer")
     if farmer_id is None:
         raise HTTPException(status_code=400, detail="farmer_id is required")
     return {

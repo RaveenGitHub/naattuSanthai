@@ -1,5 +1,5 @@
+import datetime
 import importlib
-import os
 
 
 def test_settings_reads_environment_overrides(monkeypatch):
@@ -30,3 +30,17 @@ def test_security_uses_environment_secret(monkeypatch):
     importlib.reload(security)
 
     assert security.SECRET_KEY == "security-secret"
+
+
+def test_create_token_uses_configured_jwt_expiry(monkeypatch):
+    monkeypatch.setenv("JWT_EXPIRY_HOURS", "24")
+
+    import security
+    importlib.reload(security)
+
+    token = security.create_token("operator1")
+    payload = security.verify_token(token)
+    expires_at = datetime.datetime.fromtimestamp(payload["exp"], tz=datetime.timezone.utc)
+    delta_seconds = (expires_at - datetime.datetime.now(datetime.timezone.utc)).total_seconds()
+
+    assert 86000 <= delta_seconds <= 90000

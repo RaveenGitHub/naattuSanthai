@@ -143,6 +143,24 @@ def test_user_can_view_profile_and_reset_password():
     assert re_login.json()["role"] == "operator"
 
 
+def test_admin_can_view_audit_logs_for_privileged_actions():
+    admin_login = client.post(
+        "/auth/login",
+        json={"username": "admin1", "password": "admin123"},
+    )
+    token = admin_login.json()["token"]
+
+    response = client.get(
+        "/api/audit/logs",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert isinstance(body["data"], list)
+    assert any(item["action"] == "login" for item in body["data"])
+
+
 def test_agriculture_dashboard_pages_render_for_users():
     dashboard = client.get("/dashboard")
     assert dashboard.status_code == 200

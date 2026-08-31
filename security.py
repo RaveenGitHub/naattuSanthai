@@ -71,6 +71,7 @@ def create_user(username: str, password: str, role: str) -> Dict[str, str]:
             (f"USR-{uuid4().hex}", username, hash_password(password), role, datetime.now(timezone.utc).isoformat()),
         )
 
+    record_audit_log(username, "user_created", "users", "success", f"Created user with role {role}")
     return {"username": username, "role": role}
 
 
@@ -106,6 +107,7 @@ def reset_password(username: str, current_password: str, new_password: str) -> D
             (hash_password(new_password), username),
         )
 
+    record_audit_log(username, "password_reset", "users", "success", "Password reset completed")
     return {"username": username, "status": "updated"}
 
 
@@ -157,6 +159,45 @@ def seed_default_users() -> None:
 seed_default_users()
 
 
+def record_audit_log(username: str, action: str, resource: str, outcome: str, details: Optional[str] = None) -> Dict[str, str]:
+    event_id = f"AUD-{uuid4().hex}"
+    record = {
+        "id": event_id,
+        "username": username,
+        "action": action,
+        "resource": resource,
+        "outcome": outcome,
+        "details": details,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO audit_logs (id, username, action, resource, outcome, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (record["id"], record["username"], record["action"], record["resource"], record["outcome"], record["details"], record["created_at"]),
+        )
+    return record
+
+
+def list_audit_logs(limit: int = 100) -> List[Dict[str, str]]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT id, username, action, resource, outcome, details, created_at FROM audit_logs ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [
+        {
+            "id": row["id"],
+            "username": row["username"],
+            "action": row["action"],
+            "resource": row["resource"],
+            "outcome": row["outcome"],
+            "details": row["details"],
+            "created_at": row["created_at"],
+        }
+        for row in rows
+    ]
+
+
 def create_token(username: str) -> str:
     user = _get_user(username)
     if user is None:
@@ -164,7 +205,7 @@ def create_token(username: str) -> str:
     payload = {
         "sub": username,
         "role": user["role"],
-        "exp": datetime.now(timezone.utc) + timedelta(hours=12),
+        "exp": datetime.now(timezone.utc) + timedelta(hours=settings.jwt_expiry_hours),
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -176,5 +217,8 @@ def verify_token(token: str) -> Dict[str, str]:
 def authenticate(username: str, password: str) -> Dict[str, str]:
     user = _get_user(username)
     if user is None or not verify_password(password, user["password"]):
+        record_audit_log(username or "unknown", "login", "auth", "failure", "Invalid username or password")
         raise ValueError("Invalid username or password")
-    return {"token": create_token(username), "role": user["role"]}
+    token = create_token(username)
+    record_audit_log(username, "login", "auth", "success", "JWT token issued")
+    return {"token": token, "role": user["role"]}

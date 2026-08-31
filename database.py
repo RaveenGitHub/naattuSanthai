@@ -101,3 +101,16 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id TEXT PRIMARY KEY,
+                username TEXT NOT NULL,
+                action TEXT NOT NULL,
+                resource TEXT NOT NULL,
+                outcome TEXT NOT NULL,
+                details TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
