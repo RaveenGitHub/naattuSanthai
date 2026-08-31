@@ -5,6 +5,7 @@ from digital_farming.services.market_intelligence import get_market_intelligence
 from digital_farming.services.pest_monitoring import evaluate_pest_risk
 from digital_farming.services.soil_health import assess_soil_health
 from digital_farming.services.sustainability import assess_carbon_and_sustainability
+from digital_farming.services.traceability import build_traceability_summary
 
 __all__ = [
     "get_field_advisory",
@@ -14,4 +15,5 @@ __all__ = [
     "build_crop_calendar",
     "get_market_intelligence",
     "assess_carbon_and_sustainability",
+    "build_traceability_summary",
 ]

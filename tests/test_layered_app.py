@@ -97,3 +97,30 @@ def test_sustainability_report_route_returns_carbon_and_regeneration_summary():
     assert payload["carbon_status"]
     assert isinstance(payload["recommendations"], list)
     assert payload["recommendations"]
+
+
+def test_procurement_traceability_route_returns_lot_status_and_verification():
+    response = client.get(
+        "/api/v1/procurement/traceability?crop=rice&lot_id=RICE-2041&batch_quality=good"
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["crop"] == "rice"
+    assert payload["lot_id"] == "RICE-2041"
+    assert payload["batch_status"]
+    assert isinstance(payload["verification_steps"], list)
+    assert payload["verification_steps"]
+
+
+def test_traceability_route_returns_origin_and_procurement_summary():
+    response = client.get(
+        "/api/v1/procurement/traceability?farmer=Kumaran&batch=RICE-24A&location=Kallakurichi&quality_grade=A"
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["farmer"] == "Kumaran"
+    assert payload["batch"] == "RICE-24A"
+    assert payload["quality_grade"] == "A"
+    assert payload["traceability_status"]
+    assert isinstance(payload["procurement_steps"], list)
+    assert payload["procurement_steps"]

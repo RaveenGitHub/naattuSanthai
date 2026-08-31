@@ -9,6 +9,7 @@ from digital_farming.services.market_intelligence import get_market_intelligence
 from digital_farming.services.pest_monitoring import evaluate_pest_risk
 from digital_farming.services.soil_health import assess_soil_health
 from digital_farming.services.sustainability import assess_carbon_and_sustainability
+from digital_farming.services.traceability import build_traceability_summary
 
 router = APIRouter(tags=["v1"])
 
@@ -142,4 +143,27 @@ def sustainability_carbon_report(
         "water_efficiency_m3_per_ha": report["water_efficiency_m3_per_ha"],
         "energy_use_kwh_per_ha": report["energy_use_kwh_per_ha"],
         "recommendations": report["recommendations"],
+    }
+
+
+@router.get("/procurement/traceability")
+def procurement_traceability(
+    farmer: str = Query(..., description="Farmer or producer name"),
+    batch: str = Query(..., description="Batch or lot identifier"),
+    location: str = Query(..., description="Origin village or farm location"),
+    quality_grade: str = Query("B", description="Quality grade such as A, B, or C"),
+) -> dict:
+    traceability = build_traceability_summary(
+        farmer=farmer,
+        batch=batch,
+        location=location,
+        quality_grade=quality_grade,
+    )
+    return {
+        "farmer": traceability["farmer"],
+        "batch": traceability["batch"],
+        "location": traceability["location"],
+        "quality_grade": traceability["quality_grade"],
+        "traceability_status": traceability["traceability_status"],
+        "procurement_steps": traceability["procurement_steps"],
     }
