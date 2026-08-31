@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Dict, List
 
 
-def assess_soil_health(crop: str, ph: float, nitrogen: float, phosphorus: float, potassium: float) -> dict[str, Any]:
+def assess_soil_health(crop: str, ph: float, nitrogen: float, phosphorus: float, potassium: float) -> Dict[str, Any]:
     crop_name = (crop or "crop").strip().lower()
 
     if ph < 5.8:
@@ -27,7 +27,7 @@ def assess_soil_health(crop: str, ph: float, nitrogen: float, phosphorus: float,
         potassium_status = "Adequate" if potassium >= 180 else "Moderate"
         base_status = "Generally healthy"
 
-    actions: list[str] = [ph_action]
+    actions: List[str] = [ph_action]
     if nitrogen_status != "Adequate":
         actions.append("Apply a targeted nitrogen application based on the crop stage and soil test trend.")
     if phosphorus_status != "Adequate":

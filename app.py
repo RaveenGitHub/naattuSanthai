@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
@@ -529,7 +531,7 @@ def login(payload: LoginRequest):
 
 
 @app.post("/api/diagnose")
-def diagnose(request: DiagnoseRequest, authorization: str | None = Header(default=None)):
+def diagnose(request: DiagnoseRequest, authorization: Optional[str] = Header(default=None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
     token = authorization.split(" ", 1)[1]
@@ -544,7 +546,7 @@ def diagnose(request: DiagnoseRequest, authorization: str | None = Header(defaul
 
 
 @app.get("/api/diagnose/history")
-def diagnose_history(authorization: str | None = Header(default=None)):
+def diagnose_history(authorization: Optional[str] = Header(default=None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
     token = authorization.split(" ", 1)[1]
@@ -558,7 +560,7 @@ def diagnose_history(authorization: str | None = Header(default=None)):
 
 
 @app.get("/api/users")
-def get_users(authorization: str | None = Header(default=None)):
+def get_users(authorization: Optional[str] = Header(default=None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
     token = authorization.split(" ", 1)[1]
@@ -572,7 +574,7 @@ def get_users(authorization: str | None = Header(default=None)):
 
 
 @app.post("/api/users")
-def create_user_endpoint(payload: UserCreateRequest, authorization: str | None = Header(default=None)):
+def create_user_endpoint(payload: UserCreateRequest, authorization: Optional[str] = Header(default=None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
     token = authorization.split(" ", 1)[1]
@@ -590,7 +592,7 @@ def create_user_endpoint(payload: UserCreateRequest, authorization: str | None =
 
 
 @app.get("/api/profile")
-def get_user_profile(authorization: str | None = Header(default=None)):
+def get_user_profile(authorization: Optional[str] = Header(default=None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
     token = authorization.split(" ", 1)[1]
@@ -606,7 +608,7 @@ def get_user_profile(authorization: str | None = Header(default=None)):
 
 
 @app.post("/api/profile/reset-password")
-def reset_user_password(payload: PasswordResetRequest, authorization: str | None = Header(default=None)):
+def reset_user_password(payload: PasswordResetRequest, authorization: Optional[str] = Header(default=None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
     token = authorization.split(" ", 1)[1]

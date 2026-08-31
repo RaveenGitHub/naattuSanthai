@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Dict
 
 
-def build_crop_calendar(crop: str, season: str) -> dict[str, Any]:
+def build_crop_calendar(crop: str, season: str) -> Dict[str, Any]:
     crop_name = (crop or "crop").strip().lower()
     season_name = (season or "Kharif").strip().title()
 

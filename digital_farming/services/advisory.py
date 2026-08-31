@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Dict
 
 
-def get_field_advisory(crop: str, village: str = "general") -> dict[str, Any]:
+def get_field_advisory(crop: str, village: str = "general") -> Dict[str, Any]:
     crop_name = (crop or "crop").strip().lower()
     village_name = village or "general"
 

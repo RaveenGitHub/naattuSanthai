@@ -134,6 +134,9 @@ class DigitalFarmingMVP:
 
 def generate_backend_mvp_plan(product_name: str) -> str:
     blueprint = DigitalFarmingMVP(product_name)
+    module_lines = [f"- {name}: {', '.join(features)}" for name, features in blueprint.modules().items()]
+    implementation_steps = [f"{index + 1}. {step}" for index, step in enumerate(blueprint.implementation_plan())]
+
     return f"""{product_name} MVP Backend Blueprint
 
 Product Goal:
@@ -145,13 +148,13 @@ Technology Stack:
 - Integrations: {', '.join(blueprint.backend_stack()['integrations'])}
 
 Core Modules:
-{chr(10).join(f'- {name}: {', '.join(features)}' for name, features in blueprint.modules().items())}
+{chr(10).join(module_lines)}
 
 Primary API Endpoints:
 {chr(10).join(f'- {endpoint}' for endpoint in blueprint.endpoints())}
 
 Implementation Plan:
-{chr(10).join(f'{index + 1}. {step}' for index, step in enumerate(blueprint.implementation_plan()))}
+{chr(10).join(implementation_steps)}
 
 Operational Notes:
 - Design for low-connectivity environments and offline field capture.

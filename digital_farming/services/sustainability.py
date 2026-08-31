@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Dict
 
 
-def assess_carbon_and_sustainability(farm_size_ha: float, soil_carbon_tons: float, water_use_liters: float, energy_use_kwh: float) -> dict[str, Any]:
+def assess_carbon_and_sustainability(farm_size_ha: float, soil_carbon_tons: float, water_use_liters: float, energy_use_kwh: float) -> Dict[str, Any]:
     carbon_score = (soil_carbon_tons / max(farm_size_ha, 1.0)) * 10.0
     water_efficiency = (water_use_liters / max(farm_size_ha, 1.0)) / 1000.0
     energy_efficiency = energy_use_kwh / max(farm_size_ha, 1.0)

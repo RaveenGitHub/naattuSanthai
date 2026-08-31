@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Dict
 
 
-def evaluate_pest_risk(crop: str, field_condition: str, severity: str = "low") -> dict[str, Any]:
+def evaluate_pest_risk(crop: str, field_condition: str, severity: str = "low") -> Dict[str, Any]:
     crop_name = (crop or "crop").strip().lower()
     condition = (field_condition or "normal").strip().lower()
     severity_value = (severity or "low").strip().lower()

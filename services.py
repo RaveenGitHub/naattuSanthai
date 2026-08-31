@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 
 from database import get_connection, init_db
 from schemas import Farmer, Farm, MarketPrice, SoilTestRecord, WeatherAlert
@@ -46,7 +46,7 @@ def create_farmer(payload: dict) -> Farmer:
     return farmer
 
 
-def list_farms(farmer_id: str | None = None) -> List[Farm]:
+def list_farms(farmer_id: Optional[str] = None) -> List[Farm]:
     query = "SELECT id, farmer_id, acreage_hectares, location, soil_type FROM farms"
     params = []
     if farmer_id is not None:
@@ -83,7 +83,7 @@ def create_farm(payload: dict) -> Farm:
     return farm
 
 
-def list_soil_tests(farm_id: str | None = None) -> List[SoilTestRecord]:
+def list_soil_tests(farm_id: Optional[str] = None) -> List[SoilTestRecord]:
     query = "SELECT id, farm_id, ph, moisture_percent, nitrogen, phosphorus, potassium, fertility_status, tested_at FROM soil_tests"
     params = []
     if farm_id is not None:
@@ -128,7 +128,7 @@ def create_soil_test(payload: dict) -> SoilTestRecord:
     return record
 
 
-def list_weather_alerts(village: str | None = None) -> List[WeatherAlert]:
+def list_weather_alerts(village: Optional[str] = None) -> List[WeatherAlert]:
     with get_connection() as conn:
         rows = conn.execute(
             "SELECT id, village, alert_type, severity, message FROM weather_alerts"
@@ -147,7 +147,7 @@ def list_weather_alerts(village: str | None = None) -> List[WeatherAlert]:
     return [alert for alert in alerts if alert.village.lower() == village.lower()]
 
 
-def list_market_prices(crop_name: str | None = None) -> List[MarketPrice]:
+def list_market_prices(crop_name: Optional[str] = None) -> List[MarketPrice]:
     with get_connection() as conn:
         rows = conn.execute(
             "SELECT id, crop_name, market_name, price_per_kg, source, updated_at FROM market_prices ORDER BY updated_at DESC"

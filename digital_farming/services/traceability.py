@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Dict
 
 
-def build_traceability_summary(farmer: str, batch: str, location: str, quality_grade: str) -> dict[str, Any]:
+def build_traceability_summary(farmer: str, batch: str, location: str, quality_grade: str) -> Dict[str, Any]:
     grade = (quality_grade or "B").upper()
     status = "Traceability verified" if grade in {"A", "B"} else "Grade requires review"
 

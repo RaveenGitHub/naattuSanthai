@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from auth import require_role
@@ -34,7 +36,7 @@ def post_farmer(request: Request, payload: FarmerCreate):
 
 
 @router.get("/farms")
-def get_farms(farmer_id: str | None = Query(default=None)):
+def get_farms(farmer_id: Optional[str] = Query(default=None)):
     return {"success": True, "data": list_farms(farmer_id), "error": None}
 
 
@@ -48,7 +50,7 @@ def post_farm(request: Request, payload: FarmCreate):
 
 
 @router.get("/soil-tests")
-def get_soil_tests(farm_id: str | None = Query(default=None)):
+def get_soil_tests(farm_id: Optional[str] = Query(default=None)):
     return {"success": True, "data": list_soil_tests(farm_id), "error": None}
 
 
@@ -62,18 +64,18 @@ def post_soil_test(request: Request, payload: SoilTestCreate):
 
 
 @router.get("/weather/alerts")
-def get_weather_alerts(village: str | None = Query(default=None)):
+def get_weather_alerts(village: Optional[str] = Query(default=None)):
     return {"success": True, "data": list_weather_alerts(village), "error": None}
 
 
 @router.get("/market-prices")
-def get_market_prices(crop_name: str | None = Query(default=None)):
+def get_market_prices(crop_name: Optional[str] = Query(default=None)):
     seed_market_data()
     return {"success": True, "data": list_market_prices(crop_name), "error": None}
 
 
 @router.get("/schemes")
-def get_schemes(request: Request, farmer_id: str | None = Query(default=None)):
+def get_schemes(request: Request, farmer_id: Optional[str] = Query(default=None)):
     role = request.headers.get("X-User-Role", "farmer")
     if role not in {"farmer", "operator", "admin"}:
         raise HTTPException(status_code=403, detail="Role not allowed")

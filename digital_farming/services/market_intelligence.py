@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Dict
 
 
-def get_market_intelligence(crop: str, market: str) -> dict[str, Any]:
+def get_market_intelligence(crop: str, market: str) -> Dict[str, Any]:
     crop_name = (crop or "crop").strip().lower()
     market_name = (market or "local").strip().title()
 

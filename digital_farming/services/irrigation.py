@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Dict
 
 
 def build_irrigation_plan(
@@ -8,7 +8,7 @@ def build_irrigation_plan(
     soil_moisture_percent: float,
     rainfall_forecast_mm: float = 0.0,
     field_area_ha: float = 1.0,
-) -> dict[str, Any]:
+) -> Dict[str, Any]:
     crop_name = (crop or "crop").strip().lower()
 
     if "rice" in crop_name:

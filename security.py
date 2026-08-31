@@ -5,7 +5,7 @@ import hashlib
 import hmac
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Dict
+from typing import Dict, List, Optional
 from uuid import uuid4
 
 import jwt
@@ -72,7 +72,7 @@ def create_user(username: str, password: str, role: str) -> Dict[str, str]:
     return {"username": username, "role": role}
 
 
-def list_users() -> list[dict]:
+def list_users() -> List[dict]:
     with get_connection() as conn:
         rows = conn.execute(
             "SELECT username, role, created_at FROM users ORDER BY created_at ASC"
@@ -107,7 +107,7 @@ def reset_password(username: str, current_password: str, new_password: str) -> D
     return {"username": username, "status": "updated"}
 
 
-def _get_user(username: str) -> Dict[str, str] | None:
+def _get_user(username: str) -> Optional[Dict[str, str]]:
     with get_connection() as conn:
         row = conn.execute(
             "SELECT username, password, role FROM users WHERE username = ?",
