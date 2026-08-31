@@ -63,10 +63,20 @@ Use the implementation tracking guide in [docs/implementation-guide.md](docs/imp
 
 ## Run locally
 
+1. Copy `.env.example` to `.env` and adjust the values for your local or deployment environment.
+2. Install dependencies:
+
 ```bash
 python -m pip install -r requirements.txt
+```
+
+3. Start the app:
+
+```bash
 python -m uvicorn app:app --host 0.0.0.0 --port 8000
 ```
+
+The app reads configuration values from the environment, including `APP_NAME`, `APP_VERSION`, `APP_DEBUG`, `DATABASE_PATH`, `SECRET_KEY`, `JWT_ALGORITHM`, and `JWT_EXPIRY_HOURS`.
 
 ## Run with Docker
 

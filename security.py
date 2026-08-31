@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
@@ -11,9 +12,10 @@ from uuid import uuid4
 import jwt
 
 from database import get_connection
+from digital_farming.config import settings
 
-SECRET_KEY = "digital-farming-support-center-secret-key"
-ALGORITHM = "HS256"
+SECRET_KEY = os.getenv("SECRET_KEY", settings.secret_key)
+ALGORITHM = os.getenv("JWT_ALGORITHM", settings.jwt_algorithm)
 HASH_PREFIX = "pbkdf2_sha256$"
 
 DEFAULT_USERS = {
