@@ -1,0 +1,54 @@
+project:
+  name: Digital Farming Support Center
+  type: agritech-fastapi-platform
+  status: active-development
+  maturity: working-prototype
+  last_verified: 2026-08-31
+  validated_test_command: ".venv\\Scripts\\python.exe -m pytest -q"
+  test_result: 45-passed
+
+runtime:
+  language: Python
+  version_target: "3.8+"
+  framework: FastAPI
+  persistence: SQLite
+  deployment_target: local-dev-and-docker
+
+repository:
+  primary_entry: app.py
+  versioned_api: digital_farming/api/v1/routes.py
+  services_dir: digital_farming/services
+  tests_dir: tests
+  docs_dir: docs
+
+implementation:
+  current_focus: stability-and-production-readiness
+  next_priority: security-and-deployment-hardening
+  risk_level: medium
+  notes: >-
+    The application is functionally working in the configured environment,
+    but production-readiness work remains in environment handling,
+    secrets management, observability, and deeper domain model coverage.
+
+tracked_areas:
+  - app-routing
+  - auth-and-rbac
+  - agriculture-service-logic
+  - market-and-traceability
+  - sustainability-and-carbon
+  - testing-and-validation
+  - deployment-and-operations
+
+prerequisites:
+  - python-3_8-compatible-environment
+  - repo-local-venv
+  - requirements-installed
+  - pytest-available
+  - git-state-reviewed-before-commit
+
+next_steps:
+  - review-rbac-and-auth-hardening
+  - document-deployment-environment-variables
+  - add-structured-audit-logs
+  - expand-domain-traceability-models
+  - formalize-migration-and-backup-plans

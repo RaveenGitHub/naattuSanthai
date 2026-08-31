@@ -4,6 +4,10 @@ A mature agriculture and sustainability platform prototype for farmer support, a
 
 This repository has been reviewed and reorganized toward a more production-ready Python project structure while retaining compatibility with the earlier prototype modules.
 
+## Implementation guide and project metadata
+
+Use the implementation tracking guide in [docs/implementation-guide.md](docs/implementation-guide.md) and the repo metadata file at [project-metadata.yaml](project-metadata.yaml) to track the current status, next steps, prerequisites, and impacted implementation areas.
+
 ## Repository structure
 
 ```text
