@@ -3,6 +3,7 @@ from typing import Optional
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from database import get_connection
 from digital_farming_mvp import generate_backend_mvp_plan
 from diagnostics import diagnose_crop_issue, list_diagnosis_history
 from routes import router
@@ -652,7 +653,18 @@ def dashboard():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy"}
+    try:
+        with get_connection() as conn:
+            conn.execute("SELECT 1")
+        database_status = "healthy"
+    except Exception:
+        database_status = "unhealthy"
+
+    return {
+        "status": "healthy",
+        "service": "digital-farming-support-center",
+        "database": {"status": database_status},
+    }
 
 
 @app.get("/mvp-plan")

@@ -14,7 +14,11 @@ def test_root_endpoint():
 def test_health_endpoint():
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json()["status"] == "healthy"
+    body = response.json()
+    assert body["status"] == "healthy"
+    assert body["service"] == "digital-farming-support-center"
+    assert "database" in body
+    assert body["database"]["status"] == "healthy"
 
 
 def test_farmer_creation_and_listing():
