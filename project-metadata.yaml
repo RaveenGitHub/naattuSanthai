@@ -2,10 +2,10 @@ project:
   name: Digital Farming Support Center
   type: agritech-fastapi-platform
   status: active-development
-  maturity: working-prototype
-  last_verified: 2026-08-31
+  maturity: production-hardened-prototype
+  last_verified: 2026-09-01
   validated_test_command: ".venv\\Scripts\\python.exe -m pytest -q"
-  test_result: 45-passed
+  test_result: 23-passed-targeted-regressions
 
 runtime:
   language: Python
@@ -22,17 +22,19 @@ repository:
   docs_dir: docs
 
 implementation:
-  current_focus: stability-and-production-readiness
-  next_priority: security-and-deployment-hardening
-  risk_level: medium
+  current_focus: security-and-deployment-hardening
+  next_priority: monitoring-and-operational-maturity
+  risk_level: low-to-medium
   notes: >-
-    The application is functionally working in the configured environment,
-    but production-readiness work remains in environment handling,
-    secrets management, observability, and deeper domain model coverage.
+    The repo has verified security hardening for JWT expiry, RBAC enforcement,
+    admin audit logging, and environment-backed deployment configuration.
+    The remaining gaps are operational monitoring, deeper workflow coverage,
+    and expanded production documentation.
 
 tracked_areas:
   - app-routing
   - auth-and-rbac
+  - audit-and-operations
   - agriculture-service-logic
   - market-and-traceability
   - sustainability-and-carbon
@@ -45,10 +47,18 @@ prerequisites:
   - requirements-installed
   - pytest-available
   - git-state-reviewed-before-commit
+  - env-file-populated-for-local-or-docker-runtime
 
 next_steps:
-  - review-rbac-and-auth-hardening
-  - document-deployment-environment-variables
-  - add-structured-audit-logs
-  - expand-domain-traceability-models
-  - formalize-migration-and-backup-plans
+  - finalize operational logging and health checks
+  - add deployment monitoring and alerting hooks
+  - expand domain traceability and supply-chain workflows
+  - formalize migration, backup, and retention plans
+  - document release checklist and rollback plan
+
+verified_milestones:
+  - jwt-expiry-config-hardened
+  - rbac-role-validation-aligned-with-token-claims
+  - admin-audit-log-endpoint-added
+  - environment-driven-db-path-and-port-config-supported
+  - docker-runtime-wired-to-runtime-environment-variables

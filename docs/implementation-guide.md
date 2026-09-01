@@ -12,14 +12,15 @@
 ### Status summary
 
 - Runtime baseline: validated in the project venv
-- Test status: 45 tests passing via the repo-local Python environment
-- Main architecture: FastAPI app, modular agriculture services, SQLite-backed data layer, role-based access patterns
-- Active implementation posture: transition from prototype to structured production-readiness plan
+- Test status: 23 focused validation checks passing across auth, RBAC, deployment, and env-config regressions
+- Main architecture: FastAPI app, modular agriculture services, SQLite-backed data layer, role-based access patterns, admin audit logging
+- Active implementation posture: production-hardening pass with verified environment and security controls
 
 ### Signal areas
 
-- Stable: API route structure, service modules, auth flows, layered app route compatibility
-- Needs attention: deployment configuration, secrets handling, production hardening, traceability and procurement workflow depth, observability
+- Stable: API route structure, service modules, auth flows, layered app route compatibility, environment-driven config resolution
+- Improved: JWT expiry configuration, RBAC enforcement, deployment config, Docker runtime wiring, admin audit visibility
+- Needs attention: deeper operational metric collection, release monitoring, and extended traceability/sustainability workflows
 
 ## 3. Repo metadata
 
@@ -112,10 +113,10 @@ Impact: runtime behavior, environment state, dependency consistency, database re
 
 ### Phase 2: Harden production behavior
 
-- Move secrets to environment variables
-- Add audit logs for privileged actions
-- Standardize error handling and validation contracts
-- Define a full role matrix for operators, farmers, admins, agronomists, and procurement staff
+- Move secrets to environment variables - completed via config-backed runtime settings
+- Add audit logs for privileged actions - completed via admin audit log endpoint and DB-backed event tracking
+- Standardize error handling and validation contracts - in place for auth and config surfaces
+- Define a full role matrix for operators, farmers, admins, agronomists, and procurement staff - in progress with expanded RBAC guardrails
 
 ### Phase 3: Expand domain depth
 
@@ -126,10 +127,10 @@ Impact: runtime behavior, environment state, dependency consistency, database re
 
 ### Phase 4: Operational maturity
 
-- Add metrics, logs, and health checks
-- Plan DB migrations and backup strategy
-- Define deployment, rollback, and monitoring procedures
-- Prepare release review and trial deployment criteria
+- Add metrics, logs, and health checks - in progress with audit log foundations and deployment config review
+- Plan DB migrations and backup strategy - pending
+- Define deployment, rollback, and monitoring procedures - pending release runbook
+- Prepare release review and trial deployment criteria - pending operational checklist
 
 ## 7. Tracking metadata
 

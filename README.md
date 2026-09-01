@@ -76,7 +76,9 @@ python -m pip install -r requirements.txt
 python -m uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
-The app reads configuration values from the environment, including `APP_NAME`, `APP_VERSION`, `APP_DEBUG`, `DATABASE_PATH`, `SECRET_KEY`, `JWT_ALGORITHM`, and `JWT_EXPIRY_HOURS`.
+The app reads configuration values from the environment, including `APP_NAME`, `APP_VERSION`, `APP_ENV`, `APP_DEBUG`, `PORT`, `DATABASE_PATH`, `SECRET_KEY`, `JWT_ALGORITHM`, and `JWT_EXPIRY_HOURS`.
+
+The Docker runtime and Docker Compose configuration both pass these values through so local development and container deployment remain consistent.
 
 ## Run with Docker
 
