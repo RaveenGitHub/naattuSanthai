@@ -70,6 +70,11 @@ def test_government_scheme_latest_and_archive_endpoints():
     assert fetch_response.status_code == 200
     assert fetch_response.json()["success"] is True
 
+    monitoring_response = client.get("/api/fetch/status", headers={"X-User-Role": "admin"})
+    assert monitoring_response.status_code == 200
+    assert monitoring_response.json()["success"] is True
+    assert isinstance(monitoring_response.json()["data"], dict)
+
     filtered_response = client.get("/api/schemes/archive?category=subsidy")
     assert filtered_response.status_code == 200
     assert filtered_response.json()["success"] is True
@@ -90,3 +95,11 @@ def test_government_scheme_latest_and_archive_endpoints():
     assert "தகுதி" in detailed_page_response.text
     assert "நன்மைகள்" in detailed_page_response.text
     assert "விண்ணப்ப படிகள்" in detailed_page_response.text
+
+
+def test_soil_health_page_renders_farmer_actionable_summary():
+    response = client.get("/soil-health?crop=groundnut&ph=5.6&nitrogen=24&phosphorus=18&potassium=152")
+    assert response.status_code == 200
+    assert "மண் சோதனை" in response.text or "Soil health" in response.text
+    assert "groundnut" in response.text.lower() or "நிலக்கடலை" in response.text
+    assert "உரம்" in response.text or "Fertilizer" in response.text

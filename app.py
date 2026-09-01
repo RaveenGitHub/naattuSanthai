@@ -908,6 +908,124 @@ def advisory_page():
     return ADVISORY_PAGE
 
 
+@app.get("/soil-health", response_class=HTMLResponse)
+def soil_health_page(
+    crop: str = "groundnut",
+    ph: float = 6.5,
+    nitrogen: float = 25,
+    phosphorus: float = 20,
+    potassium: float = 180,
+):
+    from digital_farming.services.soil_health import assess_soil_health
+
+    assessment = assess_soil_health(
+        crop=crop,
+        ph=ph,
+        nitrogen=nitrogen,
+        phosphorus=phosphorus,
+        potassium=potassium,
+    )
+
+    crop_label = escape(str(crop or "பயிர்").strip() or "பயிர்")
+    soil_status = escape(str(assessment.get("soil_status", "")))
+    ph_status = escape(str(assessment.get("ph_status", "")))
+    nitrogen_status = escape(str(assessment.get("nitrogen_status", "")))
+    phosphorus_status = escape(str(assessment.get("phosphorus_status", "")))
+    potassium_status = escape(str(assessment.get("potassium_status", "")))
+    action_items = "".join(
+        f"<li>{escape(str(item))}</li>" for item in assessment.get("nutrient_actions", [])
+    )
+
+    return f"""
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>மண் சோதனை</title>
+  <style>
+    :root {{
+      --bg: #f8f6f0;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --secondary: #4aa6d6;
+      --soil: #8f5e3c;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #deebdf;
+      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(180deg, #eefaf0 0%, #f7f4ec 100%);
+      color: var(--text);
+    }}
+    .container {{ max-width: 1000px; margin: 0 auto; padding: 28px 18px 48px; }}
+    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0 22px; border-bottom: 1px solid var(--line); }}
+    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 700; }}
+    .logo {{ width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--soil)); color: white; }}
+    .nav {{ display: flex; flex-wrap: wrap; gap: 10px; }}
+    .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
+    h1 {{ margin: 28px 0 10px; font-size: clamp(2rem, 4vw, 3rem); }}
+    .lede {{ color: var(--muted); line-height: 1.8; max-width: 75ch; }}
+    .hero {{ display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 18px; margin-top: 24px; }}
+    .panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 22px; box-shadow: var(--shadow); }}
+    .pill {{ display: inline-block; background: #ebf9ed; color: var(--primary); border-radius: 999px; padding: 7px 10px; font-size: 12px; font-weight: 700; margin-bottom: 14px; }}
+    .metrics {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }}
+    .metric {{ background: linear-gradient(180deg, #f7faf6 0%, #edf9f2 100%); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }}
+    .metric span {{ color: var(--muted); font-size: 14px; }}
+    .metric strong {{ display: block; font-size: 1.5rem; margin-top: 8px; }}
+    ul {{ margin: 0; padding-left: 18px; color: var(--muted); line-height: 1.9; }}
+    @media (max-width: 760px) {{ .hero, .metrics {{ grid-template-columns: 1fr; }} .topbar {{ flex-direction: column; align-items: flex-start; }} }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🌱</div>
+        <span>மண் சோதனை &amp; உர மேலாண்மை</span>
+      </div>
+      <nav class="nav" aria-label="மண் சோதனை வழிசெலுத்தல்">
+        <a href="/">முகப்பு</a>
+        <a href="/dashboard">டாஷ்போர்டு</a>
+        <a href="/services">சேவைகள்</a>
+      </nav>
+    </header>
+
+    <h1>{crop_label} பயிருக்கு மண் நிலை அறிக்கை</h1>
+    <p class="lede">
+      மண் pH, நைட்ரஜன், பாஸ்பரஸ் மற்றும் பொட்டாசியம் நிலைகள் அடிப்படையில் தற்போதைய நிலை, ஆபத்து அல்லது தேவையான உர நடவடிக்கைகள் திட்டமிடப்பட்டுள்ளன.
+    </p>
+
+    <section class="hero">
+      <div class="panel">
+        <span class="pill">சோதனை முடிவு</span>
+        <h2>மண் நிலை: {soil_status}</h2>
+        <div class="metrics">
+          <div class="metric"><span>pH நிலை</span><strong>{ph_status}</strong></div>
+          <div class="metric"><span>நைட்ரஜன்</span><strong>{nitrogen_status}</strong></div>
+          <div class="metric"><span>பாஸ்பரஸ்</span><strong>{phosphorus_status}</strong></div>
+          <div class="metric"><span>பொட்டாசியம்</span><strong>{potassium_status}</strong></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <span class="pill">விரைவான பரிந்துரை</span>
+        <h2>உரம் &amp; மேலாண்மை</h2>
+        <ul>
+          {action_items}
+        </ul>
+      </div>
+    </section>
+  </div>
+</body>
+</html>
+"""
+
+
 GOVERNMENT_SCHEMES_PAGE = """
 <!DOCTYPE html>
 <html lang="ta">

@@ -167,3 +167,27 @@ def test_agriculture_dashboard_pages_render_for_users():
     assert "Field overview" in dashboard.text
     assert "Weather" in dashboard.text
     assert "Farmer Field Dashboard" in dashboard.text
+
+
+def test_tamil_farm_services_page_renders_for_users():
+    services = client.get("/services")
+    assert services.status_code == 200
+    assert "மண் பரிசோதனை" in services.text
+    assert "வானிலை" in services.text
+    assert "அரசு திட்டங்கள்" in services.text
+
+
+def test_tamil_crop_advisory_page_renders_for_users():
+    advisory = client.get("/advisory")
+    assert advisory.status_code == 200
+    assert "பயிர் ஆலோசனை" in advisory.text
+    assert "பருவம்" in advisory.text
+    assert "நீர் மேலாண்மை" in advisory.text
+
+
+def test_tamil_weather_market_page_renders_for_users():
+    weather_market = client.get("/weather-market")
+    assert weather_market.status_code == 200
+    assert "வானிலை" in weather_market.text
+    assert "சந்தை விலை" in weather_market.text
+    assert "மண்டி" in weather_market.text

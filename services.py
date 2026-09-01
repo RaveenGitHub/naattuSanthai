@@ -258,6 +258,35 @@ def get_scheme_update_by_id(scheme_id: str) -> Optional[dict]:
     return dict(row)
 
 
+def get_scheme_fetch_status() -> dict:
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    with get_connection() as conn:
+        total_count = conn.execute("SELECT COUNT(*) FROM government_scheme_updates").fetchone()[0]
+        latest_count = conn.execute(
+            "SELECT COUNT(*) FROM government_scheme_updates WHERE created_at >= ? AND is_archived = 0",
+            (cutoff,),
+        ).fetchone()[0]
+        archived_count = conn.execute(
+            "SELECT COUNT(*) FROM government_scheme_updates WHERE (created_at < ? OR is_archived = 1)",
+            (cutoff,),
+        ).fetchone()[0]
+        latest_row = conn.execute(
+            "SELECT source_name, created_at FROM government_scheme_updates ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+        category_rows = conn.execute(
+            "SELECT category, COUNT(*) AS count FROM government_scheme_updates GROUP BY category ORDER BY count DESC"
+        ).fetchall()
+
+    return {
+        "total_schemes": total_count,
+        "latest_count": latest_count,
+        "archived_count": archived_count,
+        "last_source_name": latest_row["source_name"] if latest_row else None,
+        "last_updated_at": latest_row["created_at"] if latest_row else None,
+        "categories": {row["category"]: row["count"] for row in category_rows},
+    }
+
+
 def seed_government_scheme_data() -> None:
     now = datetime.now(timezone.utc)
     recent = now.isoformat()

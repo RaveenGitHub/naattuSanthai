@@ -10,6 +10,7 @@ from services import (
     create_farm,
     create_farmer,
     create_soil_test,
+    get_scheme_fetch_status,
     get_scheme_update_by_id,
     list_archived_scheme_updates,
     list_farms,
@@ -116,6 +117,12 @@ def get_scheme_detail(scheme_id: str):
     if entry is None:
         raise HTTPException(status_code=404, detail="Scheme not found")
     return {"success": True, "data": entry, "error": None}
+
+
+@router.get("/fetch/status")
+def get_scheme_fetch_status_endpoint(request: Request):
+    require_route_role(request, "admin")
+    return {"success": True, "data": get_scheme_fetch_status(), "error": None}
 
 
 @router.post("/fetch/update")
