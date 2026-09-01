@@ -10,8 +10,11 @@ from services import (
     create_farm,
     create_farmer,
     create_soil_test,
+    get_scheme_update_by_id,
+    list_archived_scheme_updates,
     list_farms,
     list_farmers,
+    list_latest_scheme_updates,
     list_market_prices,
     list_soil_tests,
     list_weather_alerts,
@@ -94,3 +97,21 @@ def get_schemes(request: Request, farmer_id: Optional[str] = Query(default=None)
         ],
         "error": None,
     }
+
+
+@router.get("/schemes/latest")
+def get_latest_schemes():
+    return {"success": True, "data": list_latest_scheme_updates(), "error": None}
+
+
+@router.get("/schemes/archive")
+def get_archived_schemes():
+    return {"success": True, "data": list_archived_scheme_updates(), "error": None}
+
+
+@router.get("/scheme/{scheme_id}")
+def get_scheme_detail(scheme_id: str):
+    entry = get_scheme_update_by_id(scheme_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Scheme not found")
+    return {"success": True, "data": entry, "error": None}

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from database import get_connection, init_db
@@ -198,5 +198,107 @@ def seed_weather_alerts() -> None:
             )
 
 
+def list_latest_scheme_updates() -> List[dict]:
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
+                   category, scheme_type, source_name, source_url, created_at, is_archived
+            FROM government_scheme_updates
+            WHERE created_at >= ? AND is_archived = 0
+            ORDER BY created_at DESC
+            """,
+            (cutoff,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def list_archived_scheme_updates() -> List[dict]:
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
+                   category, scheme_type, source_name, source_url, created_at, is_archived
+            FROM government_scheme_updates
+            WHERE created_at < ? OR is_archived = 1
+            ORDER BY created_at DESC
+            """,
+            (cutoff,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_scheme_update_by_id(scheme_id: str) -> Optional[dict]:
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
+                   category, scheme_type, source_name, source_url, created_at, is_archived
+            FROM government_scheme_updates
+            WHERE id = ?
+            """,
+            (scheme_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return dict(row)
+
+
+def seed_government_scheme_data() -> None:
+    with get_connection() as conn:
+        count = conn.execute("SELECT COUNT(*) FROM government_scheme_updates").fetchone()[0]
+    if count > 0:
+        return
+
+    now = datetime.now(timezone.utc)
+    recent = now.isoformat()
+    old = (now - timedelta(days=12)).isoformat()
+
+    entries = [
+        (
+            "SCHEME-NEW-001",
+            "PM-Kisan 16வது தவணை",
+            "சிறு மற்றும் குறைந்த நிலம் கொண்ட விவசாயிகளுக்கு ரூ.2,000 நேரடி நிதி உதவி வழங்கப்படுகிறது.",
+            "2 ஹெக்டேர் வரை நிலம் வைத்திருப்பவர்கள், ஆதார் + e-KYC முடித்தவர்கள்",
+            "நேரடி நிதி தொகை, பயிர் ஆதரவு, வங்கி நேரடி வைப்புத் தொகை",
+            "Aadhaar மற்றும் e-KYC முடிக்கவும்; வங்கி கணக்கை சரிபார்க்கவும்; விண்ணப்ப நிலையை கண்காணிக்கவும்.",
+            "subsidy",
+            "central",
+            "PM-Kisan",
+            "https://pmkisan.gov.in/",
+            0,
+            recent,
+        ),
+        (
+            "SCHEME-ARCH-001",
+            "தமிழ்நாடு பயிர் காப்பீடு மேம்பாடு",
+            "பயிர் இழப்பு ஏற்பட்டால் காப்பீட்டு நிதி மற்றும் நிலையான நிபுணர் ஆலோசனை வழங்கப்படுகிறது.",
+            "செயல்பாட்டின் கீழ் உள்ள பயிர்கள், பதிவு செய்யப்பட்ட விவசாயிகள்",
+            "பயிர் இழப்பு நிவாரணம், காப்பீடு, மருத்துவம் சார்ந்த உதவிகள்",
+            "அறிக்கை சமர்ப்பிக்கவும், விவரங்களை சரிபார்க்கவும், ஆதாரங்களை இணைக்கவும்.",
+            "insurance",
+            "state",
+            "Tamil Nadu Agriculture Department",
+            "https://agri.tn.gov.in/",
+            1,
+            old,
+        ),
+    ]
+
+    with get_connection() as conn:
+        conn.executemany(
+            """
+            INSERT INTO government_scheme_updates (
+                id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
+                category, scheme_type, source_name, source_url, is_archived, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            entries,
+        )
+
+
 seed_weather_alerts()
 seed_market_data()
+seed_government_scheme_data()

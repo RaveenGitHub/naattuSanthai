@@ -6,7 +6,11 @@ This repository has been reviewed and reorganized toward a more production-ready
 
 ## Implementation guide and project metadata
 
-Use the implementation tracking guide in [docs/implementation-guide.md](docs/implementation-guide.md) and the repo metadata file at [project-metadata.yaml](project-metadata.yaml) to track the current status, next steps, prerequisites, and impacted implementation areas.
+Use the implementation tracking guide in [docs/implementation-guide.md](docs/implementation-guide.md), the Tamil UI and backlog tracker in [docs/tamil-ui-backlog.md](docs/tamil-ui-backlog.md), the Government Schemes product PRD in [docs/government-schemes-module-prd.md](docs/government-schemes-module-prd.md), and the repo metadata file at [project-metadata.yaml](project-metadata.yaml) to track the current status, next steps, prerequisites, and impacted implementation areas.
+
+## Tamil-first product direction
+
+This app is being shaped as a Tamil Nadu farmer-first digital agriculture platform with a mobile-ready design system, practical field workflows, and plain-language guidance. The current UI work prioritizes a Tamil-first landing experience, dashboard, services, crop advisory, and weather-market views that map to the most important farmer decisions.
 
 ## Repository structure
 

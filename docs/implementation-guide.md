@@ -104,6 +104,33 @@ Impact: runtime behavior, environment state, dependency consistency, database re
 
 ## 6. Next-step roadmap
 
+### Tamil UI and design backlog status
+
+The UI implementation is now tracked in [tamil-ui-backlog.md](tamil-ui-backlog.md) and organized around the most critical field-use journeys for Tamil Nadu farmers.
+
+Current completed screens:
+
+- home landing page
+- farmer dashboard
+- services catalog
+- crop advisory
+- weather and market page
+
+Current in-progress screens:
+
+- soil health screening
+- disease detection and image review
+- farmer login and profile flow
+- government scheme guidance
+
+Planned screens:
+
+- registration and onboarding
+- profile and farm record management
+- admin control center
+- sustainability dashboard
+- traceability and procurement analytics
+
 ### Phase 1: Stabilize the baseline
 
 - Lock runtime and dependency policy

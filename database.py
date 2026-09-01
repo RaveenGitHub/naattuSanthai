@@ -126,3 +126,21 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS government_scheme_updates (
+                id TEXT PRIMARY KEY,
+                title_ta TEXT NOT NULL,
+                summary_ta TEXT NOT NULL,
+                eligibility_ta TEXT NOT NULL,
+                benefits_ta TEXT NOT NULL,
+                apply_steps_ta TEXT NOT NULL,
+                category TEXT NOT NULL,
+                scheme_type TEXT NOT NULL,
+                source_name TEXT NOT NULL,
+                source_url TEXT NOT NULL,
+                is_archived INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+            )
+            """
+        )

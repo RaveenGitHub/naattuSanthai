@@ -41,3 +41,28 @@ def test_market_prices_endpoint():
     response = client.get("/api/market-prices?crop_name=Rice")
     assert response.status_code == 200
     assert response.json()["success"] is True
+
+
+def test_government_scheme_latest_and_archive_endpoints():
+    latest_response = client.get("/api/schemes/latest")
+    assert latest_response.status_code == 200
+    assert latest_response.json()["success"] is True
+    assert isinstance(latest_response.json()["data"], list)
+
+    archive_response = client.get("/api/schemes/archive")
+    assert archive_response.status_code == 200
+    assert archive_response.json()["success"] is True
+    assert isinstance(archive_response.json()["data"], list)
+
+    compatibility_response = client.get("/api/schemes?farmer_id=FARMER-001", headers={"X-User-Role": "admin"})
+    assert compatibility_response.status_code == 200
+    assert compatibility_response.json()["success"] is True
+
+    detail_response = client.get("/api/scheme/SCHEME-NEW-001")
+    assert detail_response.status_code == 200
+    assert detail_response.json()["success"] is True
+    assert detail_response.json()["data"]["title_ta"]
+
+    page_response = client.get("/government-schemes")
+    assert page_response.status_code == 200
+    assert "புதிய அறிவிப்புகள்" in page_response.text

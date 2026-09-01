@@ -449,6 +449,276 @@ Response conventions:
 """.strip()
 
 
+def generate_government_schemes_prd(product_name: str) -> str:
+    return f"""{product_name} — Requirement & Product PRD (Tamil Version)
+
+## 1. Objective
+
+இந்த Government Schemes module-ன் முதன்மை நோக்கம்:
+- இந்தியா மற்றும் தமிழ்நாடு அரசின் வேளாண்மை சார்ந்த திட்டங்கள், மானியங்கள், காப்பீடு, கடன், பயிற்சி, உபகரண உதவிகள், நிதி உதவிகள் ஆகியவற்றை தானாக கண்டறிதல்
+- அவற்றை AI மூலம் தமிழில் சுருக்கமாக மொழிபெயர்த்து எளிதாக விளக்குதல்
+- வாராந்திர நவீன archive flow-இல் சேமித்தல்
+- விவசாயிகள், புல அலுவலர்கள் மற்றும் நிர்வாகிகள் அனைவருக்கும் ஒரே இடத்தில் பயன்படும் ஒரு நம்பகமான அரசுத் திட்ட தகவல் மையமாக செயல்படுதல்
+
+## 2. Problem Statement
+
+விவசாயிகள் பெரும்பாலும் அதிகாரப்பூர்வ அரசுத் திட்டங்களை சரியான நேரத்தில் அறிந்து கொள்வதில் சிரமப்படுகின்றனர். தகவல்கள் பல்வேறு இணையதளங்களில், PDFகளில், சொற்களில் சிதறிக்கிடக்கின்றன. இதனால்:
+- தகுதி தெரியாமல் திட்டங்களை தவற விடுதல்
+- சிறிய மானியம் அல்லது பயிர் காப்பீடு தகவல் பெற முடியாமை
+- குறைந்த பட்சம் அறிமுகம் இல்லாததால் பயனர் நம்பிக்கை குறைதல்
+- பருவத்திற்கு ஏற்ற திட்டங்களின் காலக்கெடு தவறுதல்
+
+## 3. Target Users
+
+- சிறு மற்றும் குறு விவசாயிகள்
+- புல அலுவலர்கள் / விரிவான ஆதரவு பணியாளர்கள்
+- வேளாண்மை ஆலோசகர்கள்
+- கூட்டுறவு சங்கங்கள்
+- அரசு திட்ட உதவி ஊழியர்கள்
+
+## 4. Core Goals
+
+1. அதிகாரப்பூர்வ திட்டங்களின் புதுப்பிப்புகளை நேரடியாக தரவு மூலம் பெறுதல்
+2. English content-ஐ Tamil summary-ஆக மாற்றுதல்
+3. விவசாயிக்கு புரிந்துகொள்ளும் வகையில் சுருக்கமான, செயல்படக்கூடிய தகவல் வழங்குதல்
+4. கடந்த 7 நாட்கள் புதிய அறிவிப்புகளை “Latest Updates” பகுதியில் மட்டும் காட்டுதல்
+5. பழையவை “Archive” பகுதியில் நகர்த்துதல்
+6. AI summary மற்றும் Tamil text quality மேம்படுத்துதல்
+
+## 5. Success Metrics
+
+- 90% 이상의 அரசு திட்ட தகவல்கள் துல்லியமாக சேகரிக்கப்படுதல்
+- Tamil summary readability score அதிகமாக இருத்தல்
+- AI summary-க்கு 80% மேல் confidence score
+- 7 நாள் update panel இயக்கம் சரியாக செயல்படுதல்
+- ஆண்டுக்கு 2 முறை model + rule validation review
+
+## 6. Functional Requirements
+
+### 6.1 Data Retrieval
+- TN Govt Agriculture Portal, TNAU, PM-Kisan, PMFBY, Agri Infrastructure Fund, NABARD மற்றும் Ministry of Agriculture feeds-ஐ தொடர்ந்து தேடுதல்
+- RSS / API / HTML scraping / official portals மூலம் data pull
+- Raw English content DB-இல் சேமித்தல்
+
+### 6.2 AI Translation and Summarization
+- English document text clean-up
+- AI summarization to extract:
+  - Tamil title
+  - short summary
+  - eligibility
+  - benefits
+  - application steps
+- Rule-based validation: no broken Tamil grammar, no empty summary, no unrelated content
+
+### 6.3 Weekly Update Flow
+- தினசரி அல்லது 12-மணி fetch cycle
+- Fresh records last 7 days are labelled as current
+- Older records moved to archive automatically
+
+### 6.4 Tamil Interface Requirements
+- Large readable Tamil font
+- Easy words and short headings
+- Icons for scheme categories
+- Two-tab design:
+  - புதிய அறிவிப்புகள்
+  - காப்பக அறிவிப்புகள்
+- “மேலும் படிக்க” action with details page
+
+## 7. Non-Functional Requirements
+
+- Low-bandwidth friendly UI
+- Mobile-first experience for farmers
+- Support Tamil and English labels where necessary
+- Privacy-aware storage of public scheme info
+- Strong API fallback and retry logic
+- Audit logs for system fetch failures and processed content quality
+
+## 8. Data Model
+
+### GovSchemeRaw
+- id
+- title_en
+- content_en
+- source_url
+- fetched_date
+
+### GovSchemeProcessed
+- id
+- title_ta
+- summary_ta
+- eligibility_ta
+- benefits_ta
+- apply_steps_ta
+- created_date
+- is_archived
+- category
+- scheme_type
+- source_state
+
+## 9. Archive Logic
+
+```python
+if created_date < today - timedelta(days=7):
+    is_archived = True
+```
+
+## 10. API Endpoints
+
+- GET /schemes/latest
+- GET /schemes/archive
+- GET /scheme/{id}
+- POST /fetch/update
+- GET /schemes?category={category}
+
+## 11. Monitoring & Alerts
+
+- fetch success/failure rate
+- translation quality metric
+- summary quality score
+- Tamil readability validation failure
+- alert on empty or bad data from official sources
+
+## 12. Acceptance Criteria
+
+1. New scheme items are fetched from verified official sources.
+2. Tamil title and summary are generated for each scheme.
+3. Latest updates show only the last 7 days.
+4. Older items move to archive automatically.
+5. AI output quality passes manual review for common farmer schemes.
+6. UI remains readable and mobile-friendly in Tamil.
+7. Admin can trigger manual refresh and monitor fetch health.
+
+## 13. Scope / Out of Scope
+
+### In scope
+- official gov scheme discovery
+- AI summarization and translation
+- Tamil UI display
+- archive process
+- monitoring and admin refresh
+
+### Out of scope
+- direct application submission to government portals
+- full identity verification
+- financial disbursement logic
+- payment gateway integration
+
+## 14. Recommendation
+
+This module should be treated as a trusted information layer for farmers, not a generic content feed. The critical success factor is accuracy, readable Tamil output, and timely updates from official sources. The module should prioritize clarity over complexity and must remain designed for low-literacy, mobile-first, rural users.
+""".strip()
+
+
+def generate_government_schemes_roadmap(product_name: str) -> str:
+    return f"""{product_name} — Product Roadmap (6-Month Rollout)
+
+## Phase 1 — Data Source Integration (Weeks 1–4)
+- Identify official data sources: Tamil Nadu Agriculture Department, TNAU, PM-Kisan, PMFBY, Agri Infrastructure Fund, NABARD, MoA&FW
+- Build automated fetch pipelines for English content
+- Create unified GovSchemeData API
+- Store raw government documents in DB
+
+## Phase 2 — AI Summarization Engine (Weeks 4–8)
+- Build English-to-Tamil translation pipeline
+- Summarize long government docs into:
+  - Tamil title
+  - short Tamil summary
+  - eligibility
+  - benefits
+  - application steps
+- Add rule-based validation for grammar and content completeness
+
+## Phase 3 — Weekly Update Logic (Weeks 8–10)
+- Fetch daily or every 12 hours
+- Save raw English and processed Tamil records
+- Show only last 7 days under Latest Updates
+- Auto-archive older items
+
+## Phase 4 — Tamil UI/UX (Weeks 10–14)
+- Create Tamil-first interface
+- Add tabs: புதிய அறிவிப்புகள் and காப்பக அறிவிப்புகள்
+- Use readable bilingual cards and detail page
+- Add icons by scheme category
+
+## Phase 5 — Testing and Validation (Weeks 14–18)
+- Farmer readability testing
+- AI accuracy audits
+- API reliability tests
+- Archive logic verification
+- UI validation for Tamil rendering issues
+
+## Phase 6 — Deployment and Monitoring (Weeks 18–20)
+- Deploy to production
+- Monitor fetch success rate, translation reliability, summary quality, and Tamil display issues
+- Monthly review of model and rules
+- Rollout and support checklist for live operations
+""".strip()
+
+
+def generate_government_schemes_requirements(product_name: str) -> str:
+    return f"""{product_name} — Implementation Requirements
+
+## 1. Technical Stack
+- Python + FastAPI
+- Celery or cron-based scheduled jobs
+- PostgreSQL / SQLite for MVP
+- HuggingFace summarization models
+- IndicTrans2 or equivalent Tamil translation models
+- Rule-based validation for Tamil quality control
+
+## 2. Components
+
+### Data Fetch Layer
+- official data source connectors
+- normalized raw content fields
+- retry logic and alerting
+
+### AI Processing Layer
+- content cleaning
+- summarization
+- translation
+- metadata tagging
+- validation gates
+
+### Storage Layer
+- GovSchemeRaw table
+- GovSchemeProcessed table
+- admin tracking and archive status
+
+### Presentation Layer
+- Latest Updates panel
+- Archive panel
+- detail view page
+- scheme type filters and search
+
+## 3. Required API Concepts
+
+GET /schemes/latest
+Returns only the latest 7-day relevant Tamil entries
+
+GET /schemes/archive
+Returns archived entries grouped by year/category
+
+GET /scheme/{{id}}
+Returns full Tamil details for a scheme
+
+POST /fetch/update
+Might trigger manual ingestion, admin-only
+
+## 4. Business Rules
+- Only content from official or authorized sources should be published
+- A scheme without a valid Tamil summary is not shown publicly
+- Old content moves to archive after 7 days
+- Users must see only plain-language, trustworthy details
+
+## 5. Operational Requirements
+- job monitoring and health dashboards
+- alert on failed fetches
+- alert on empty summary or poor Tamil translation
+- monthly evaluation of source quality
+""".strip()
+
+
 if __name__ == "__main__":
     print("Available agents:")
     for agent in AGENT_REGISTRY:
