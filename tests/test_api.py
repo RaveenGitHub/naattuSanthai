@@ -62,7 +62,31 @@ def test_government_scheme_latest_and_archive_endpoints():
     assert detail_response.status_code == 200
     assert detail_response.json()["success"] is True
     assert detail_response.json()["data"]["title_ta"]
+    assert "தகுதி" in detail_response.json()["data"]["eligibility_ta"] or "Eligibility" in detail_response.json()["data"]["eligibility_ta"]
+    assert detail_response.json()["data"]["benefits_ta"]
+    assert detail_response.json()["data"]["apply_steps_ta"]
+
+    fetch_response = client.post("/api/fetch/update", headers={"X-User-Role": "admin"})
+    assert fetch_response.status_code == 200
+    assert fetch_response.json()["success"] is True
+
+    filtered_response = client.get("/api/schemes/archive?category=subsidy")
+    assert filtered_response.status_code == 200
+    assert filtered_response.json()["success"] is True
+    assert isinstance(filtered_response.json()["data"], list)
 
     page_response = client.get("/government-schemes")
     assert page_response.status_code == 200
     assert "புதிய அறிவிப்புகள்" in page_response.text
+    assert "காப்பக அறிவிப்புகள்" in page_response.text
+    assert "தேடுக" in page_response.text or "வகை" in page_response.text
+
+    filtered_page_response = client.get("/government-schemes?category=subsidy&search=PM-Kisan")
+    assert filtered_page_response.status_code == 200
+    assert "PM-Kisan" in filtered_page_response.text or "subsidy" in filtered_page_response.text.lower()
+
+    detailed_page_response = client.get("/scheme-page/SCHEME-NEW-001")
+    assert detailed_page_response.status_code == 200
+    assert "தகுதி" in detailed_page_response.text
+    assert "நன்மைகள்" in detailed_page_response.text
+    assert "விண்ணப்ப படிகள்" in detailed_page_response.text

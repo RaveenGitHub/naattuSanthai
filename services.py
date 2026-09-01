@@ -198,23 +198,29 @@ def seed_weather_alerts() -> None:
             )
 
 
-def list_latest_scheme_updates() -> List[dict]:
+def list_latest_scheme_updates(category: Optional[str] = None, search: Optional[str] = None) -> List[dict]:
     cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    query = """
+        SELECT id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
+               category, scheme_type, source_name, source_url, created_at, is_archived
+        FROM government_scheme_updates
+        WHERE created_at >= ? AND is_archived = 0
+    """
+    params: list = [cutoff]
+    if category is not None and category != "":
+        query += " AND LOWER(category) = LOWER(?)"
+        params.append(category)
+    if search is not None and search != "":
+        term = f"%{search.lower()}%"
+        query += " AND (LOWER(title_ta) LIKE ? OR LOWER(summary_ta) LIKE ? OR LOWER(eligibility_ta) LIKE ? OR LOWER(benefits_ta) LIKE ? OR LOWER(apply_steps_ta) LIKE ?)"
+        params.extend([term, term, term, term, term])
+    query += " ORDER BY created_at DESC"
     with get_connection() as conn:
-        rows = conn.execute(
-            """
-            SELECT id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
-                   category, scheme_type, source_name, source_url, created_at, is_archived
-            FROM government_scheme_updates
-            WHERE created_at >= ? AND is_archived = 0
-            ORDER BY created_at DESC
-            """,
-            (cutoff,),
-        ).fetchall()
+        rows = conn.execute(query, params).fetchall()
     return [dict(row) for row in rows]
 
 
-def list_archived_scheme_updates(category: Optional[str] = None) -> List[dict]:
+def list_archived_scheme_updates(category: Optional[str] = None, search: Optional[str] = None) -> List[dict]:
     cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     query = """
         SELECT id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
@@ -223,9 +229,13 @@ def list_archived_scheme_updates(category: Optional[str] = None) -> List[dict]:
         WHERE (created_at < ? OR is_archived = 1)
     """
     params: list = [cutoff]
-    if category is not None:
+    if category is not None and category != "":
         query += " AND LOWER(category) = LOWER(?)"
         params.append(category)
+    if search is not None and search != "":
+        term = f"%{search.lower()}%"
+        query += " AND (LOWER(title_ta) LIKE ? OR LOWER(summary_ta) LIKE ? OR LOWER(eligibility_ta) LIKE ? OR LOWER(benefits_ta) LIKE ? OR LOWER(apply_steps_ta) LIKE ?)"
+        params.extend([term, term, term, term, term])
     query += " ORDER BY created_at DESC"
     with get_connection() as conn:
         rows = conn.execute(query, params).fetchall()

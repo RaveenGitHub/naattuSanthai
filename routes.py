@@ -18,6 +18,7 @@ from services import (
     list_market_prices,
     list_soil_tests,
     list_weather_alerts,
+    seed_government_scheme_data,
     seed_market_data,
 )
 
@@ -100,13 +101,13 @@ def get_schemes(request: Request, farmer_id: Optional[str] = Query(default=None)
 
 
 @router.get("/schemes/latest")
-def get_latest_schemes():
-    return {"success": True, "data": list_latest_scheme_updates(), "error": None}
+def get_latest_schemes(category: Optional[str] = Query(default=None), search: Optional[str] = Query(default=None)):
+    return {"success": True, "data": list_latest_scheme_updates(category=category, search=search), "error": None}
 
 
 @router.get("/schemes/archive")
-def get_archived_schemes():
-    return {"success": True, "data": list_archived_scheme_updates(), "error": None}
+def get_archived_schemes(category: Optional[str] = Query(default=None), search: Optional[str] = Query(default=None)):
+    return {"success": True, "data": list_archived_scheme_updates(category=category, search=search), "error": None}
 
 
 @router.get("/scheme/{scheme_id}")
@@ -115,3 +116,11 @@ def get_scheme_detail(scheme_id: str):
     if entry is None:
         raise HTTPException(status_code=404, detail="Scheme not found")
     return {"success": True, "data": entry, "error": None}
+
+
+@router.post("/fetch/update")
+def trigger_scheme_fetch(request: Request):
+    require_route_role(request, "admin")
+    seed_market_data()
+    seed_government_scheme_data()
+    return {"success": True, "data": {"message": "Government scheme update fetch completed"}, "error": None}

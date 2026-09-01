@@ -1,3 +1,4 @@
+from html import escape
 from typing import Optional
 
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -9,7 +10,7 @@ from diagnostics import diagnose_crop_issue, list_diagnosis_history
 from routes import router
 from schemas_auth import DiagnoseRequest, LoginRequest, PasswordResetRequest, UserCreateRequest
 from security import authenticate, create_user, get_profile, list_audit_logs, list_users, reset_password, verify_token
-from services import get_scheme_update_by_id
+from services import get_scheme_update_by_id, list_archived_scheme_updates, list_latest_scheme_updates
 
 ROOT_PAGE = """
 <!DOCTYPE html>
@@ -945,8 +946,16 @@ GOVERNMENT_SCHEMES_PAGE = """
     }
     h1 { margin: 28px 0 10px; font-size: clamp(2rem, 4vw, 3rem); }
     .intro { color: var(--muted); line-height: 1.8; max-width: 75ch; }
+    .toolbar {
+      display: flex; flex-wrap: wrap; gap: 12px; margin: 20px 0 16px; align-items: center;
+    }
+    .search, .filter {
+      flex: 1; min-width: 180px; max-width: 260px;
+      border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 12px 14px;
+      font-size: 0.95rem; color: var(--text);
+    }
     .tabs {
-      display: flex; gap: 12px; margin: 24px 0 18px; flex-wrap: wrap;
+      display: flex; gap: 12px; margin: 12px 0 18px; flex-wrap: wrap;
     }
     .tab {
       border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 10px 16px; font-weight: 700; color: var(--text);
@@ -968,7 +977,7 @@ GOVERNMENT_SCHEMES_PAGE = """
       display: inline-block; margin-top: 12px; padding: 10px 14px; border-radius: 10px; background: var(--primary); color: #fff; text-decoration: none; font-weight: 700;
     }
     ul { margin: 0; padding-left: 18px; }
-    @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } .topbar { flex-direction: column; align-items: flex-start; } }
+    @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } .topbar { flex-direction: column; align-items: flex-start; } .toolbar { flex-direction: column; align-items: stretch; } .search, .filter { max-width: none; } }
   </style>
 </head>
 <body>
@@ -990,6 +999,15 @@ GOVERNMENT_SCHEMES_PAGE = """
       விவசாயிகளுக்கு கிடைக்கும் புதிய மானியங்கள், பயிர் காப்பீடு, நிதி உதவிகள், பயிற்சி திட்டங்கள் மற்றும் அரசு ஒப்புதல்கள் ஆகியவற்றை தமிழில் எளிதாகப் புரியும் வகையில் வழங்கப்படுகிறது.
     </p>
 
+    <div class="toolbar">
+      <input class="search" type="text" value="தேடுக" aria-label="தேடுக" />
+      <select class="filter" aria-label="வகை">
+        <option>வகை: அனைத்தும்</option>
+        <option>subsidy</option>
+        <option>insurance</option>
+      </select>
+    </div>
+
     <div class="tabs" aria-label="அரசு திட்டங்கள் பட்டிகள்">
       <div class="tab active">புதிய அறிவிப்புகள் (Last 7 Days)</div>
       <div class="tab">காப்பக அறிவிப்புகள் (Archive)</div>
@@ -1004,18 +1022,18 @@ GOVERNMENT_SCHEMES_PAGE = """
           <li>தகுதி: 2 ஹெக்டேர் வரை நிலம்</li>
           <li>விண்ணப்பம்: Aadhaar + e-KYC</li>
         </ul>
-        <a class="cta" href="/api/scheme/SCHEME-NEW-001">மேலும் படிக்க</a>
+        <a class="cta" href="/scheme-page/SCHEME-NEW-001">மேலும் படிக்க</a>
       </article>
 
       <article class="card">
         <span class="pill">காப்பீடு</span>
-        <h3>பயிர் காப்பீடு உதவி</h3>
-        <p>விவசாயிகள் பாதிப்பு ஏற்பட்டால் நிவாரணம், காப்பீடு மற்றும் ஆவண உதவிகளை பெறலாம்.</p>
+        <h3>தமிழ்நாடு பயிர் காப்பீடு மேம்பாடு</h3>
+        <p>பயிர் இழப்பு ஏற்பட்டால் காப்பீட்டு நிதி மற்றும் நிலையான நிபுணர் ஆலோசனை வழங்கப்படுகிறது.</p>
         <ul>
-          <li>குறிப்பிட்ட பயிர் பதிவு வேண்டும்</li>
-          <li>ஆவணங்கள் தேவையான அளவில் இருக்க வேண்டும்</li>
+          <li>தகுதி: பதிவு செய்யப்பட்ட விவசாயிகள்</li>
+          <li>விண்ணப்பம்: அறிக்கை மற்றும் ஆவணங்கள்</li>
         </ul>
-        <a class="cta" href="/api/scheme/SCHEME-NEW-001">மேலும் படிக்க</a>
+        <a class="cta" href="/scheme-page/SCHEME-ARCH-001">மேலும் படிக்க</a>
       </article>
     </section>
   </div>
@@ -1025,8 +1043,153 @@ GOVERNMENT_SCHEMES_PAGE = """
 
 
 @app.get("/government-schemes", response_class=HTMLResponse)
-def government_schemes_page():
-    return GOVERNMENT_SCHEMES_PAGE
+def government_schemes_page(category: Optional[str] = None, search: Optional[str] = None):
+    latest_entries = list_latest_scheme_updates(category=category, search=search)
+    archived_entries = list_archived_scheme_updates(category=category, search=search)
+    category_value = escape(category or "")
+    search_value = escape(search or "")
+
+    def render_cards(items):
+        if not items:
+            return "<div class='card'><h3>உள்ளடக்கம் இல்லை</h3><p>தற்போது தேர்ந்தெடுத்த வடிகட்டி அல்லது தேடல் அளவுருக்களுக்கு பொருந்தும் திட்டங்கள் எதுவும் இல்லை.</p></div>"
+        cards = []
+        for item in items:
+            title = escape(str(item.get("title_ta", "")))
+            summary = escape(str(item.get("summary_ta", "")))
+            scheme_id = escape(str(item.get("id", "")))
+            category_name = escape(str(item.get("category", "")))
+            eligibility = escape(str(item.get("eligibility_ta", "")))
+            steps = escape(str(item.get("apply_steps_ta", "")))
+            cards.append(
+                """
+                <article class='card'>
+                  <span class='pill'>{category_name}</span>
+                  <h3>{title}</h3>
+                  <p>{summary}</p>
+                  <ul>
+                    <li>தகுதி: {eligibility}</li>
+                    <li>விண்ணப்பம்: {steps}</li>
+                  </ul>
+                  <a class='cta' href='/scheme-page/{scheme_id}'>மேலும் படிக்க</a>
+                </article>
+                """.format(
+                    category_name=category_name,
+                    title=title,
+                    summary=summary,
+                    eligibility=eligibility,
+                    steps=steps,
+                    scheme_id=scheme_id,
+                )
+            )
+        return "\n".join(cards)
+
+    latest_html = render_cards(latest_entries)
+    archive_html = render_cards(archived_entries)
+    template = """
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>அரசு திட்டங்கள்</title>
+  <style>
+    :root {{
+      --bg: #f5f9f2;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --secondary: #4aa6d6;
+      --warning: #d97706;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #dfe9df;
+      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%);
+      color: var(--text);
+    }}
+    .container {{ max-width: 1100px; margin: 0 auto; padding: 28px 18px 48px; }}
+    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0 22px; border-bottom: 1px solid var(--line); }}
+    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 700; }}
+    .logo {{ width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
+    .nav {{ display: flex; flex-wrap: wrap; gap: 10px; }}
+    .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
+    h1 {{ margin: 28px 0 10px; font-size: clamp(2rem, 4vw, 3rem); }}
+    .intro {{ color: var(--muted); line-height: 1.8; max-width: 75ch; }}
+    .toolbar {{ display: flex; flex-wrap: wrap; gap: 12px; margin: 20px 0 16px; align-items: center; }}
+    .search, .filter {{ flex: 1; min-width: 180px; max-width: 260px; border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 12px 14px; font-size: 0.95rem; color: var(--text); }}
+    .tabs {{ display: flex; gap: 12px; margin: 12px 0 18px; flex-wrap: wrap; }}
+    .tab {{ border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 10px 16px; font-weight: 700; color: var(--text); }}
+    .tab.active {{ background: linear-gradient(135deg, var(--primary), var(--secondary)); color: #fff; border-color: transparent; }}
+    .grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }}
+    .card {{ background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px; box-shadow: var(--shadow); }}
+    .card h3 {{ margin-top: 0; margin-bottom: 12px; }}
+    .card p, .card li {{ color: var(--muted); line-height: 1.8; }}
+    .pill {{ display: inline-block; background: #ebf9ed; color: var(--primary); border-radius: 999px; padding: 7px 10px; font-size: 12px; font-weight: 700; margin-bottom: 12px; }}
+    .cta {{ display: inline-block; margin-top: 12px; padding: 10px 14px; border-radius: 10px; background: var(--primary); color: #fff; text-decoration: none; font-weight: 700; }}
+    ul {{ margin: 0; padding-left: 18px; }}
+    @media (max-width: 760px) {{ .grid {{ grid-template-columns: 1fr; }} .topbar {{ flex-direction: column; align-items: flex-start; }} .toolbar {{ flex-direction: column; align-items: stretch; }} .search, .filter {{ max-width: none; }} }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">💡</div>
+        <span>அரசுத் திட்டங்கள்</span>
+      </div>
+      <nav class="nav" aria-label="அரசு திட்டங்கள் வழிசெலுத்தல்">
+        <a href="/">முகப்பு</a>
+        <a href="/dashboard">டாஷ்போர்டு</a>
+        <a href="/services">சேவைகள்</a>
+      </nav>
+    </header>
+
+    <h1>அரசு திட்டங்கள் மற்றும் நிதி உதவிகள்</h1>
+    <p class="intro">
+      விவசாயிகளுக்கு கிடைக்கும் புதிய மானியங்கள், பயிர் காப்பீடு, நிதி உதவிகள், பயிற்சி திட்டங்கள் மற்றும் அரசு ஒப்புதல்கள் ஆகியவற்றை தமிழில் எளிதாகப் புரியும் வகையில் வழங்கப்படுகிறது.
+    </p>
+
+    <form class="toolbar" method="get" action="/government-schemes">
+      <input class="search" type="text" name="search" value="__SEARCH__" aria-label="தேடுக" placeholder="தேடுக" />
+      <select class="filter" name="category" aria-label="வகை">
+        <option value="">வகை: அனைத்தும்</option>
+        <option value="subsidy" __SUBSIDY_SELECTED__>subsidy</option>
+        <option value="insurance" __INSURANCE_SELECTED__>insurance</option>
+      </select>
+      <button type="submit" class="cta" style="border:none;cursor:pointer;">வடிகட்டு</button>
+    </form>
+
+    <div class="tabs" aria-label="அரசு திட்டங்கள் பட்டிகள்">
+      <div class="tab active">புதிய அறிவிப்புகள் (Last 7 Days)</div>
+      <div class="tab">காப்பக அறிவிப்புகள் (Archive)</div>
+    </div>
+
+    <section class="grid">
+      __LATEST_HTML__
+    </section>
+
+    <div class="tabs" aria-label="காப்பக அறிவிப்புகள் பட்டிகள்" style="margin-top: 28px;">
+      <div class="tab active">காப்பக அறிவிப்புகள்</div>
+    </div>
+    <section class="grid">
+      __ARCHIVE_HTML__
+    </section>
+  </div>
+</body>
+</html>
+"""
+    return (
+        template
+        .replace("__SEARCH__", search_value)
+        .replace("__SUBSIDY_SELECTED__", "selected" if category_value == "subsidy" else "")
+        .replace("__INSURANCE_SELECTED__", "selected" if category_value == "insurance" else "")
+        .replace("__LATEST_HTML__", latest_html)
+        .replace("__ARCHIVE_HTML__", archive_html)
+    )
 
 
 @app.get("/scheme-page/{scheme_id}", response_class=HTMLResponse)
