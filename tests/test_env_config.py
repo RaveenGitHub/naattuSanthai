@@ -5,7 +5,9 @@ import importlib
 def test_settings_reads_environment_overrides(monkeypatch):
     monkeypatch.setenv("APP_NAME", "Farm Ops")
     monkeypatch.setenv("APP_VERSION", "9.9.9")
+    monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("APP_DEBUG", "true")
+    monkeypatch.setenv("PORT", "9000")
     monkeypatch.setenv("DATABASE_PATH", "/tmp/test-farm.db")
     monkeypatch.setenv("SECRET_KEY", "env-secret")
     monkeypatch.setenv("JWT_ALGORITHM", "HS512")
@@ -16,7 +18,9 @@ def test_settings_reads_environment_overrides(monkeypatch):
 
     assert config.settings.app_name == "Farm Ops"
     assert config.settings.app_version == "9.9.9"
+    assert config.settings.app_env == "production"
     assert config.settings.debug is True
+    assert config.settings.port == 9000
     assert config.settings.database_path == "/tmp/test-farm.db"
     assert config.settings.secret_key == "env-secret"
     assert config.settings.jwt_algorithm == "HS512"

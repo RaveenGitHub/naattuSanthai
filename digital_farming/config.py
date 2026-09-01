@@ -26,7 +26,9 @@ def _get_int(name: str, default: int) -> int:
 class Settings:
     app_name: str = os.getenv("APP_NAME", "Digital Farming Support Center")
     app_version: str = os.getenv("APP_VERSION", "0.2.0")
+    app_env: str = os.getenv("APP_ENV", "development")
     debug: bool = _get_bool("APP_DEBUG", False)
+    port: int = _get_int("PORT", 8000)
     database_path: str = os.getenv("DATABASE_PATH", str(Path(__file__).resolve().parent.parent / "digital_farming.db"))
     secret_key: str = os.getenv("SECRET_KEY", "digital-farming-support-center-secret-key")
     jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
