@@ -1,13 +1,25 @@
 from __future__ import annotations
 
+import os
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path(__file__).with_name("digital_farming.db")
+
+def _resolve_db_path() -> Path:
+    configured_path = os.getenv("DATABASE_PATH")
+    if configured_path:
+        return Path(configured_path).expanduser()
+    return Path(__file__).resolve().with_name("digital_farming.db")
+
+
+DB_PATH = _resolve_db_path()
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 def get_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
+    resolved_path = _resolve_db_path()
+    resolved_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(resolved_path)
     conn.row_factory = sqlite3.Row
     return conn
 

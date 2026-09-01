@@ -44,3 +44,13 @@ def test_create_token_uses_configured_jwt_expiry(monkeypatch):
     delta_seconds = (expires_at - datetime.datetime.now(datetime.timezone.utc)).total_seconds()
 
     assert 86000 <= delta_seconds <= 90000
+
+
+def test_database_uses_environment_database_path(monkeypatch, tmp_path):
+    target = tmp_path / "runtime.db"
+    monkeypatch.setenv("DATABASE_PATH", str(target))
+
+    import database
+    importlib.reload(database)
+
+    assert str(database.DB_PATH) == str(target)
