@@ -7,4 +7,11 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - PYTHONUNBUFFERED=1
+      PYTHONUNBUFFERED: "1"
+      APP_ENV: "development"
+      APP_DEBUG: "true"
+      PORT: "8000"
+      DATABASE_PATH: "/app/digital_farming.db"
+      SECRET_KEY: "change-me-in-production"
+      JWT_ALGORITHM: "HS256"
+      JWT_EXPIRY_HOURS: "12"
