@@ -9,6 +9,7 @@ from diagnostics import diagnose_crop_issue, list_diagnosis_history
 from routes import router
 from schemas_auth import DiagnoseRequest, LoginRequest, PasswordResetRequest, UserCreateRequest
 from security import authenticate, create_user, get_profile, list_audit_logs, list_users, reset_password, verify_token
+from services import get_scheme_update_by_id
 
 ROOT_PAGE = """
 <!DOCTYPE html>
@@ -1026,6 +1027,88 @@ GOVERNMENT_SCHEMES_PAGE = """
 @app.get("/government-schemes", response_class=HTMLResponse)
 def government_schemes_page():
     return GOVERNMENT_SCHEMES_PAGE
+
+
+@app.get("/scheme-page/{scheme_id}", response_class=HTMLResponse)
+def scheme_detail_page(scheme_id: str):
+    entry = get_scheme_update_by_id(scheme_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Scheme not found")
+    return f"""
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{entry['title_ta']}</title>
+  <style>
+    :root {{
+      --bg: #f5f9f2;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --secondary: #4aa6d6;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #dfe9df;
+      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%);
+      color: var(--text);
+    }}
+    .container {{ max-width: 950px; margin: 0 auto; padding: 28px 18px 48px; }}
+    .panel {{
+      background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 24px; box-shadow: var(--shadow);
+    }}
+    .tag {{
+      display: inline-block; background: #ebf9ed; color: var(--primary); border-radius: 999px; padding: 7px 10px; font-size: 12px; font-weight: 700; margin-bottom: 12px;
+    }}
+    h1 {{ font-size: clamp(1.9rem, 4vw, 2.7rem); margin: 10px 0 18px; }}
+    p, li {{ color: var(--muted); line-height: 1.8; }}
+    ul {{ padding-left: 20px; }}
+    .section {{ margin-top: 20px; }}
+    .section h2 {{ margin-bottom: 10px; font-size: 1.2rem; }}
+    .nav {{ margin-bottom: 18px; }}
+    .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="/government-schemes">← அரசுத் திட்டங்கள்</a>
+    </div>
+    <div class="panel">
+      <span class="tag">{entry['category']}</span>
+      <h1>{entry['title_ta']}</h1>
+      <p><strong>சுருக்கம்:</strong> {entry['summary_ta']}</p>
+
+      <div class="section">
+        <h2>தகுதி</h2>
+        <p>{entry['eligibility_ta']}</p>
+      </div>
+
+      <div class="section">
+        <h2>நன்மைகள்</h2>
+        <p>{entry['benefits_ta']}</p>
+      </div>
+
+      <div class="section">
+        <h2>விண்ணப்ப படிகள்</h2>
+        <p>{entry['apply_steps_ta']}</p>
+      </div>
+
+      <div class="section">
+        <h2>மூலம்</h2>
+        <p>{entry['source_name']}</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+"""
 
 
 WEATHER_MARKET_PAGE = """

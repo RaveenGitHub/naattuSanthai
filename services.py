@@ -214,19 +214,21 @@ def list_latest_scheme_updates() -> List[dict]:
     return [dict(row) for row in rows]
 
 
-def list_archived_scheme_updates() -> List[dict]:
+def list_archived_scheme_updates(category: Optional[str] = None) -> List[dict]:
     cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    query = """
+        SELECT id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
+               category, scheme_type, source_name, source_url, created_at, is_archived
+        FROM government_scheme_updates
+        WHERE (created_at < ? OR is_archived = 1)
+    """
+    params: list = [cutoff]
+    if category is not None:
+        query += " AND LOWER(category) = LOWER(?)"
+        params.append(category)
+    query += " ORDER BY created_at DESC"
     with get_connection() as conn:
-        rows = conn.execute(
-            """
-            SELECT id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
-                   category, scheme_type, source_name, source_url, created_at, is_archived
-            FROM government_scheme_updates
-            WHERE created_at < ? OR is_archived = 1
-            ORDER BY created_at DESC
-            """,
-            (cutoff,),
-        ).fetchall()
+        rows = conn.execute(query, params).fetchall()
     return [dict(row) for row in rows]
 
 
@@ -247,11 +249,6 @@ def get_scheme_update_by_id(scheme_id: str) -> Optional[dict]:
 
 
 def seed_government_scheme_data() -> None:
-    with get_connection() as conn:
-        count = conn.execute("SELECT COUNT(*) FROM government_scheme_updates").fetchone()[0]
-    if count > 0:
-        return
-
     now = datetime.now(timezone.utc)
     recent = now.isoformat()
     old = (now - timedelta(days=12)).isoformat()
@@ -261,9 +258,9 @@ def seed_government_scheme_data() -> None:
             "SCHEME-NEW-001",
             "PM-Kisan 16வது தவணை",
             "சிறு மற்றும் குறைந்த நிலம் கொண்ட விவசாயிகளுக்கு ரூ.2,000 நேரடி நிதி உதவி வழங்கப்படுகிறது.",
-            "2 ஹெக்டேர் வரை நிலம் வைத்திருப்பவர்கள், ஆதார் + e-KYC முடித்தவர்கள்",
-            "நேரடி நிதி தொகை, பயிர் ஆதரவு, வங்கி நேரடி வைப்புத் தொகை",
-            "Aadhaar மற்றும் e-KYC முடிக்கவும்; வங்கி கணக்கை சரிபார்க்கவும்; விண்ணப்ப நிலையை கண்காணிக்கவும்.",
+            "தகுதி: 2 ஹெக்டேர் வரை நிலம் வைத்திருப்பவர்கள்; ஆதார் + e-KYC முடித்தவர்கள்",
+            "நன்மைகள்: நேரடி நிதி தொகை, பயிர் ஆதரவு, வங்கி நேரடி வைப்புத் தொகை",
+            "விண்ணப்ப படிகள்: Aadhaar மற்றும் e-KYC முடிக்கவும்; வங்கி கணக்கை சரிபார்க்கவும்; விண்ணப்ப நிலையை கண்காணிக்கவும்.",
             "subsidy",
             "central",
             "PM-Kisan",
@@ -275,9 +272,9 @@ def seed_government_scheme_data() -> None:
             "SCHEME-ARCH-001",
             "தமிழ்நாடு பயிர் காப்பீடு மேம்பாடு",
             "பயிர் இழப்பு ஏற்பட்டால் காப்பீட்டு நிதி மற்றும் நிலையான நிபுணர் ஆலோசனை வழங்கப்படுகிறது.",
-            "செயல்பாட்டின் கீழ் உள்ள பயிர்கள், பதிவு செய்யப்பட்ட விவசாயிகள்",
-            "பயிர் இழப்பு நிவாரணம், காப்பீடு, மருத்துவம் சார்ந்த உதவிகள்",
-            "அறிக்கை சமர்ப்பிக்கவும், விவரங்களை சரிபார்க்கவும், ஆதாரங்களை இணைக்கவும்.",
+            "தகுதி: செயல்பாட்டின் கீழ் உள்ள பயிர்கள்; பதிவு செய்யப்பட்ட விவசாயிகள்",
+            "நன்மைகள்: பயிர் இழப்பு நிவாரணம், காப்பீடு, மருத்துவம் சார்ந்த உதவிகள்",
+            "விண்ணப்ப படிகள்: அறிக்கை சமர்ப்பிக்கவும்; விவரங்களை சரிபார்க்கவும்; ஆதாரங்களை இணைக்கவும்.",
             "insurance",
             "state",
             "Tamil Nadu Agriculture Department",
@@ -288,15 +285,29 @@ def seed_government_scheme_data() -> None:
     ]
 
     with get_connection() as conn:
-        conn.executemany(
-            """
-            INSERT INTO government_scheme_updates (
-                id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
-                category, scheme_type, source_name, source_url, is_archived, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            entries,
-        )
+        existing_ids = {row[0] for row in conn.execute("SELECT id FROM government_scheme_updates").fetchall()}
+        for entry in entries:
+            scheme_id = entry[0]
+            if scheme_id in existing_ids:
+                conn.execute(
+                    """
+                    UPDATE government_scheme_updates
+                    SET title_ta = ?, summary_ta = ?, eligibility_ta = ?, benefits_ta = ?, apply_steps_ta = ?,
+                        category = ?, scheme_type = ?, source_name = ?, source_url = ?, is_archived = ?, created_at = ?
+                    WHERE id = ?
+                    """,
+                    (*entry[1:], scheme_id),
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO government_scheme_updates (
+                        id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
+                        category, scheme_type, source_name, source_url, is_archived, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    entry,
+                )
 
 
 seed_weather_alerts()
