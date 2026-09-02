@@ -158,6 +158,42 @@ def get_scheme_fetch_status_endpoint(request: Request):
     return {"success": True, "data": get_scheme_fetch_status(), "error": None}
 
 
+@router.get("/admin/quality-gate")
+def get_admin_quality_gate(request: Request):
+    require_route_role(request, "admin")
+    weather_status = get_weather_fetch_status()
+    scheme_status = get_scheme_fetch_status()
+
+    weather_ok = weather_status.get("total_records", 0) > 0 and weather_status.get("daily_records", 0) > 0
+    scheme_ok = scheme_status.get("total_schemes", 0) > 0 and scheme_status.get("latest_count", 0) > 0
+    source_check = {
+        "weather_sources_verified": bool(weather_status.get("last_source_name")),
+        "scheme_sources_verified": bool(scheme_status.get("last_source_name")),
+        "trusted_feed_names": [
+            weather_status.get("last_source_name"),
+            scheme_status.get("last_source_name"),
+        ],
+    }
+    quality_gate = {
+        "overall_status": "healthy" if weather_ok and scheme_ok and source_check["weather_sources_verified"] and source_check["scheme_sources_verified"] else "warning",
+        "weather": {
+            "status": "healthy" if weather_ok else "warning",
+            "total_records": weather_status.get("total_records", 0),
+            "last_updated_at": weather_status.get("last_updated_at"),
+            "regions": weather_status.get("regions", {}),
+        },
+        "schemes": {
+            "status": "healthy" if scheme_ok else "warning",
+            "total_schemes": scheme_status.get("total_schemes", 0),
+            "latest_count": scheme_status.get("latest_count", 0),
+            "last_updated_at": scheme_status.get("last_updated_at"),
+            "categories": scheme_status.get("categories", {}),
+        },
+        "source_check": source_check,
+    }
+    return {"success": True, "data": quality_gate, "error": None}
+
+
 @router.post("/fetch/update")
 def trigger_scheme_fetch(request: Request):
     require_route_role(request, "admin")

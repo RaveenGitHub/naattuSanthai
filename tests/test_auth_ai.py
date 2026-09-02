@@ -212,6 +212,26 @@ def test_admin_overview_page_renders_monitoring_metrics():
     assert "வானிலை" in response.text or "Weather" in response.text
 
 
+def test_admin_quality_gate_api_reports_source_and_fetch_checks():
+    admin_login = client.post(
+        "/auth/login",
+        json={"username": "admin1", "password": "admin123"},
+    )
+    token = admin_login.json()["token"]
+
+    response = client.get(
+        "/api/admin/quality-gate",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert "overall_status" in body["data"]
+    assert "weather" in body["data"]
+    assert "schemes" in body["data"]
+    assert "source_check" in body["data"]
+
+
 def test_tamil_weather_market_page_renders_for_users():
     weather_market = client.get("/weather-market")
     assert weather_market.status_code == 200
