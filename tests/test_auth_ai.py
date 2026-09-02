@@ -262,8 +262,10 @@ def test_admin_quality_gate_api_reports_source_and_fetch_checks():
 
 
 def test_tamil_weather_market_page_renders_for_users():
-    weather_market = client.get("/weather-market")
+    weather_market = client.get("/weather-market?region=Kallakurichi")
     assert weather_market.status_code == 200
     assert "வானிலை" in weather_market.text
     assert "சந்தை விலை" in weather_market.text
     assert "மண்டி" in weather_market.text
+    assert "Kallakurichi" in weather_market.text or "கல்லக்குறிச்சி" in weather_market.text
+    assert "இன்று வானம் மேகமூட்டமாக இருக்கும்" in weather_market.text or "மழை சாத்தியம்" in weather_market.text

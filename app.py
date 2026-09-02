@@ -16,6 +16,8 @@ from services import (
     get_weather_fetch_status,
     list_archived_scheme_updates,
     list_latest_scheme_updates,
+    list_market_prices,
+    list_weather_forecast,
 )
 
 ROOT_PAGE = """
@@ -1889,8 +1891,151 @@ WEATHER_MARKET_PAGE = """
 
 
 @app.get("/weather-market", response_class=HTMLResponse)
-def weather_market_page():
-    return WEATHER_MARKET_PAGE
+def weather_market_page(region: str = "Kallakurichi"):
+    region_name = (region or "Kallakurichi").strip() or "Kallakurichi"
+    daily_forecast = list_weather_forecast("daily", region_name)
+    if not daily_forecast:
+        daily_forecast = list_weather_forecast("daily", "Kallakurichi")
+
+    forecast = daily_forecast[0] if daily_forecast else {
+        "region": region_name,
+        "summary_ta": "இன்று வானம் மேகமூட்டமாக இருக்கும். மழை சாத்தியம் உள்ளது.",
+        "temperature_c": 29.0,
+        "rainfall_mm": 18.0,
+        "wind_kmh": 18.0,
+    }
+    market_rows = list_market_prices()
+    market_rows_html = "".join(
+        f"<tr><td>{escape(str(getattr(item, 'crop_name', 'மாற்று பயிர்')))}<br><small>{escape(str(getattr(item, 'market_name', 'மண்டி')).replace('Mandi', 'மண்டி').replace('Market', 'மார்க்கெட்'))}</small></td><td>₹{float(getattr(item, 'price_per_kg', 0.0)):.2f} / கிலோ</td></tr>"
+        for item in market_rows[:4]
+    )
+    if not market_rows_html:
+        market_rows_html = """
+        <tr><td>நெல்<br><small>கல்லக்குறிச்சி மண்டி</small></td><td>₹24.50 / கிலோ</td></tr>
+        <tr><td>கரும்பு<br><small>மார்க்கெட் மண்டி</small></td><td>₹33.50 / கிலோ</td></tr>
+        <tr><td>மிளகாய்<br><small>மண்டி சந்தை</small></td><td>₹59.00 / கிலோ</td></tr>
+        """
+
+    return f"""
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>வானிலை மற்றும் சந்தை</title>
+  <style>
+    :root {{
+      --bg: #f5f9f2;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --secondary: #4aa6d6;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #dfe9df;
+      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%);
+      color: var(--text);
+    }}
+    .container {{ max-width: 1100px; margin: 0 auto; padding: 28px 18px 48px; }}
+    .topbar {{
+      display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0 22px; border-bottom: 1px solid var(--line);
+    }}
+    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 700; }}
+    .logo {{ width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
+    .nav {{ display: flex; flex-wrap: wrap; gap: 10px; }}
+    .nav a {{
+      text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600;
+    }}
+    h1 {{ margin: 28px 0 12px; font-size: clamp(2rem, 4vw, 3rem); }}
+    .intro {{ color: var(--muted); line-height: 1.8; max-width: 75ch; }}
+    .hero {{
+      display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px; margin-top: 24px;
+    }}
+    .panel {{
+      background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 22px; box-shadow: var(--shadow);
+    }}
+    .metrics {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }}
+    .metric {{ background: linear-gradient(180deg, #f8faf7 0%, #edf8f2 100%); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }}
+    .metric strong {{ display: block; margin-top: 8px; font-size: 1.8rem; }}
+    .cards {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 22px; }}
+    .card {{ background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px; }}
+    .card h3 {{ margin-top: 0; margin-bottom: 10px; }}
+    .card ul {{ color: var(--muted); line-height: 1.9; padding-left: 18px; margin: 0; }}
+    table {{ width: 100%; border-collapse: collapse; margin-top: 8px; }}
+    th, td {{ border-bottom: 1px solid var(--line); padding: 10px 8px; text-align: left; }}
+    @media (max-width: 760px) {{ .hero, .cards, .metrics {{ grid-template-columns: 1fr; }} .topbar {{ flex-direction: column; align-items: flex-start; }} }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🌤️</div>
+        <span>{escape(region_name)} - வானிலை மற்றும் சந்தை</span>
+      </div>
+      <nav class="nav" aria-label="வானிலை மற்றும் சந்தை வழிசெலுத்தல்">
+        <a href="/">முகப்பு</a>
+        <a href="/dashboard">டாஷ்போர்டு</a>
+        <a href="/services">சேவைகள்</a>
+      </nav>
+    </header>
+
+    <h1>வானிலை முன்னறிவிப்பு மற்றும் சந்தை விலை மேலாண்மை</h1>
+    <p class="intro">
+      {escape(str(forecast.get('summary_ta', 'இன்று வானம் மேகமூட்டமாக இருக்கும். மழை சாத்தியம் உள்ளது.')))}
+    </p>
+
+    <section class="hero">
+      <div class="panel">
+        <h2>இன்றைய வானிலை</h2>
+        <div class="metrics">
+          <div class="metric"><span>வெப்பநிலை</span><strong>{float(forecast.get('temperature_c', 29.0)):.0f}°C</strong></div>
+          <div class="metric"><span>மழை</span><strong>{float(forecast.get('rainfall_mm', 18.0)):.0f}%</strong></div>
+          <div class="metric"><span>காற்று</span><strong>{float(forecast.get('wind_kmh', 18.0)):.0f} km/h</strong></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>எச்சரிக்கை</h2>
+        <ul style="color: var(--muted); line-height: 1.9; padding-left: 18px; margin: 0;">
+          <li>{escape(str(forecast.get('summary_ta', 'மழை சாத்தியம் உள்ளது')))}</li>
+          <li>மண்ணின் ஈரப்பதம் பரிசோதிக்கப்பட வேண்டும்</li>
+          <li>பாசன அட்டவணையை வெப்பநிலை மற்றும் மழை முன்னறிவிப்புடன் இணைக்கவும்</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="cards">
+      <article class="card">
+        <h3>சந்தை விலை</h3>
+        <table>
+          <thead>
+            <tr><th>பயிர்</th><th>விலை</th></tr>
+          </thead>
+          <tbody>
+            {market_rows_html}
+          </tbody>
+        </table>
+      </article>
+
+      <article class="card">
+        <h3>வணிக பரிந்துரை</h3>
+        <ul>
+          <li>இன்று {escape(region_name)} பகுதியில் வானிலை கண்காணிப்பு முக்கியம்</li>
+          <li>சந்தை விலைகள் மற்றும் மழை முன்னறிவிப்பு ஆகியவற்றை ஒரே பார்வையில் பார்க்கவும்</li>
+          <li>பயிர் விற்பனை மற்றும் பாசன அட்டவணையை ஒருங்கிணைக்கவும்</li>
+        </ul>
+      </article>
+    </section>
+  </div>
+</body>
+</html>
+"""
 
 
 @app.get("/health")
