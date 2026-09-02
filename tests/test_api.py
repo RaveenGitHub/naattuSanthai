@@ -116,6 +116,7 @@ def test_government_scheme_latest_and_archive_endpoints():
     assert "source_compliance" in scheme_status_payload
     assert "retention_days" in scheme_status_payload
     assert "quality_gate" in scheme_status_payload
+    assert "ai_validation" in scheme_status_payload
     assert scheme_status_payload["retention_days"] >= 7
 
     filtered_response = client.get("/api/schemes/archive?category=subsidy")
