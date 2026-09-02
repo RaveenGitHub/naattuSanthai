@@ -53,6 +53,12 @@ def test_soil_health_route_returns_nutrient_plan():
     assert payload["recommendation_summary"]
     assert isinstance(payload["fertilizer_plan"], list)
     assert payload["fertilizer_plan"]
+    assert isinstance(payload.get("crop_recommendations"), list)
+    assert payload["crop_recommendations"]
+    assert isinstance(payload.get("soil_improvement_actions"), list)
+    assert payload["soil_improvement_actions"]
+    assert isinstance(payload.get("irrigation_guidance"), list)
+    assert payload["irrigation_guidance"]
 
 
 def test_pest_monitoring_route_returns_risk_and_actions():
