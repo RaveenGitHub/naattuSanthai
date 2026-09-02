@@ -112,6 +112,12 @@ def test_government_scheme_latest_and_archive_endpoints():
     assert monitoring_response.json()["success"] is True
     assert isinstance(monitoring_response.json()["data"], dict)
 
+    scheme_status_payload = monitoring_response.json()["data"]
+    assert "source_compliance" in scheme_status_payload
+    assert "retention_days" in scheme_status_payload
+    assert "quality_gate" in scheme_status_payload
+    assert scheme_status_payload["retention_days"] >= 7
+
     filtered_response = client.get("/api/schemes/archive?category=subsidy")
     assert filtered_response.status_code == 200
     assert filtered_response.json()["success"] is True

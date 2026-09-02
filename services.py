@@ -389,13 +389,30 @@ def get_scheme_fetch_status() -> dict:
             "SELECT category, COUNT(*) AS count FROM government_scheme_updates GROUP BY category ORDER BY count DESC"
         ).fetchall()
 
+    last_source_name = latest_row["source_name"] if latest_row else None
+    trusted_sources = {"PM-Kisan", "Tamil Nadu Agriculture Department", "National Portal"}
+    source_compliance = {
+        "status": "pass" if last_source_name in trusted_sources or (last_source_name and last_source_name.lower() in {name.lower() for name in trusted_sources}) else "warning",
+        "trusted_sources": sorted(trusted_sources),
+        "current_source": last_source_name,
+    }
+    retention_days = 14
+    quality_gate = {
+        "status": "pass" if total_count >= 1 and latest_count > 0 else "warning",
+        "required_records": 1,
+        "actual_records": total_count,
+    }
+
     return {
         "total_schemes": total_count,
         "latest_count": latest_count,
         "archived_count": archived_count,
-        "last_source_name": latest_row["source_name"] if latest_row else None,
+        "last_source_name": last_source_name,
         "last_updated_at": latest_row["created_at"] if latest_row else None,
         "categories": {row["category"]: row["count"] for row in category_rows},
+        "source_compliance": source_compliance,
+        "retention_days": retention_days,
+        "quality_gate": quality_gate,
     }
 
 
