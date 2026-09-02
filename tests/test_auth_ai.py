@@ -211,6 +211,27 @@ def test_disease_detection_flags_low_confidence_results_for_manual_review():
     assert "Low" in response.text or "குறைந்த" in response.text or "manual review" in response.text.lower() or "கைமுறை" in response.text
 
 
+def test_disease_history_page_lists_previous_scans():
+    username = f"historyoperator_{uuid.uuid4().hex[:8]}"
+    create_user(username, "historypass", "operator")
+
+    login = client.post(
+        "/auth/login",
+        json={"username": username, "password": "historypass"},
+    )
+    token = login.json()["token"]
+    client.post(
+        "/api/diagnose",
+        json={"crop_type": "Tomato", "image_url": "https://example.com/tomato.jpg", "notes": "Leaf curl and poor growth"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    response = client.get("/disease-history")
+    assert response.status_code == 200
+    assert "கண்டறிதல் வரலாறு" in response.text or "Diagnosis History" in response.text
+    assert "Tomato" in response.text or "தக்காளி" in response.text
+
+
 def test_admin_overview_page_renders_monitoring_metrics():
     response = client.get("/admin/overview")
     assert response.status_code == 200

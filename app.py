@@ -1194,6 +1194,92 @@ def disease_detection_page(
 """
 
 
+@app.get("/disease-history", response_class=HTMLResponse)
+def disease_history_page():
+    records = list_diagnosis_history(limit=20)
+    if not records:
+        rows_html = "<tr><td colspan='4'>No diagnosis history available yet.</td></tr>"
+    else:
+        rows_html = "".join(
+            f"<tr><td>{escape(str(item.get('crop_type', '')))}</td><td>{escape(str(item.get('diagnosis', '')))}</td><td>{escape(str(item.get('confidence', '')))}</td><td>{escape(str(item.get('created_at', '')))}</td></tr>"
+            for item in records
+        )
+
+    return f"""
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>கண்டறிதல் வரலாறு</title>
+  <style>
+    :root {{
+      --bg: #f4f8f1;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --secondary: #4aa6d6;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #dfe9df;
+      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(180deg, #eefaf0 0%, #f7f4ef 100%);
+      color: var(--text);
+    }}
+    .container {{ max-width: 1100px; margin: 0 auto; padding: 28px 18px 48px; }}
+    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0 22px; border-bottom: 1px solid var(--line); }}
+    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 700; }}
+    .logo {{ width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
+    .nav {{ display: flex; flex-wrap: wrap; gap: 10px; }}
+    .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
+    .panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 22px; box-shadow: var(--shadow); margin-top: 24px; }}
+    table {{ width: 100%; border-collapse: collapse; margin-top: 18px; }}
+    th, td {{ padding: 12px 10px; border-bottom: 1px solid var(--line); text-align: left; }}
+    th {{ color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }}
+    @media (max-width: 760px) {{ .topbar {{ flex-direction: column; align-items: flex-start; }} }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🩺</div>
+        <span>கண்டறிதல் வரலாறு / Diagnosis History</span>
+      </div>
+      <nav class="nav" aria-label="History navigation">
+        <a href="/">முகப்பு</a>
+        <a href="/disease-detection">நோய் கண்டறிதல்</a>
+        <a href="/dashboard">டாஷ்போர்டு</a>
+      </nav>
+    </header>
+
+    <section class="panel">
+      <h1>கண்டறிதல் வரலாறு</h1>
+      <p style="color: var(--muted); line-height: 1.8;">முன்னர் செய்யப்பட்ட நோய்/அழுத்த கணிப்புகள் இங்கே காண்பிக்கப்படுகின்றன. குறைந்த நம்பிக்கை முடிவுகள் கைமுறை மதிப்பாய்வு பரிந்துரைக்கப்படுகின்றன.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>பயிர்</th>
+            <th>கணிப்பு</th>
+            <th>நம்பிக்கை</th>
+            <th>முடிவு நேரம்</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows_html}
+        </tbody>
+      </table>
+    </section>
+  </div>
+</body>
+</html>
+"""
+
+
 @app.get("/soil-health", response_class=HTMLResponse)
 def soil_health_page(
     crop: str = "groundnut",
