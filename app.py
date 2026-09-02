@@ -908,6 +908,147 @@ def advisory_page():
     return ADVISORY_PAGE
 
 
+@app.get("/disease-detection", response_class=HTMLResponse)
+def disease_detection_page():
+    return """
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>நோய் கண்டறிதல்</title>
+  <style>
+    :root {
+      --bg: #fffaf3;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --secondary: #d97706;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #e9dfd0;
+      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(180deg, #f9f6ef 0%, #f5f7f1 100%);
+      color: var(--text);
+    }
+    .container { max-width: 1100px; margin: 0 auto; padding: 28px 18px 48px; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0 22px; border-bottom: 1px solid var(--line); }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; }
+    .logo { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }
+    .nav { display: flex; flex-wrap: wrap; gap: 10px; }
+    .nav a {
+      text-decoration: none; color: var(--text); background: #f5f7f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600;
+    }
+    h1 { margin: 28px 0 12px; font-size: clamp(2rem, 4vw, 3rem); }
+    .intro { color: var(--muted); line-height: 1.8; max-width: 75ch; }
+    .hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px; margin-top: 24px; }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 22px; box-shadow: var(--shadow); }
+    .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }
+    .stat { background: linear-gradient(180deg, #fbfaf7 0%, #f4f8f3 100%); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+    .stat strong { display: block; font-size: 1.8rem; margin-top: 8px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px; }
+    .card h3 { margin-top: 0; margin-bottom: 12px; }
+    .card ul { color: var(--muted); line-height: 1.9; padding-left: 18px; margin: 0; }
+    form { display: grid; gap: 12px; }
+    label { display: grid; gap: 6px; font-weight: 600; }
+    input, textarea, select { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font: inherit; color: var(--text); background: #fff; }
+    textarea { min-height: 120px; resize: vertical; }
+    button {
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      color: white; border: none; border-radius: 12px; padding: 12px 18px; font-weight: 700; cursor: pointer;
+    }
+    @media (max-width: 760px) { .hero, .grid, .stats { grid-template-columns: 1fr; } .topbar { flex-direction: column; align-items: flex-start; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🩺</div>
+        <span>நோய் கண்டறிதல்</span>
+      </div>
+      <nav class="nav" aria-label="நோய் கண்டறிதல் வழிசெலுத்தல்">
+        <a href="/">முகப்பு</a>
+        <a href="/dashboard">டாஷ்போர்டு</a>
+        <a href="/services">சேவைகள்</a>
+      </nav>
+    </header>
+
+    <h1>பயிரின் நோய் மற்றும் அழுத்த நிலையை விரைவாக கண்டறியுங்கள்</h1>
+    <p class="intro">
+      இலை, தண்டு அல்லது பழம் படங்களை பதிவேற்றுவதன் மூலம் நிச்சயமற்ற அல்லது சாத்தியமான நோய், பூச்சி தாக்குதல், அல்லது ஊட்டச்சத்து குறைபாட்டை ஆரம்பத்தில் கண்டறிந்து, தமிழில் செயல்படக்கூடிய சிகிச்சை வழிமுறைகளை வழங்குகிறது.
+    </p>
+
+    <section class="hero">
+      <div class="panel">
+        <h2>படத்தை பதிவேற்று</h2>
+        <form>
+          <label>
+            பயிர் வகை
+            <select>
+              <option>நெல்</option>
+              <option>மிளகாய்</option>
+              <option>நிலக்கடலை</option>
+              <option>கரும்பு</option>
+            </select>
+          </label>
+          <label>
+            பட URL
+            <input type="text" value="https://example.com/crop-scan.jpg" />
+          </label>
+          <label>
+            அவதானிப்பு குறிப்புகள்
+            <textarea>இலைகள் மஞ்சள் நிறமாக மாறி, ஓரிரு இடங்களில் புள்ளிகள் தென்படுகின்றன.</textarea>
+          </label>
+          <button type="button">கண்டறிதலை ஆரம்பி</button>
+        </form>
+      </div>
+
+      <div class="panel">
+        <h2>முன்னோட்ட முடிவு</h2>
+        <div class="stats">
+          <div class="stat"><span>கணிப்பு</span><strong>Leaf blast</strong></div>
+          <div class="stat"><span>நம்பிக்கை</span><strong>High</strong></div>
+          <div class="stat"><span>முன்னெச்சரிக்கை</span><strong>48h</strong></div>
+        </div>
+        <ul style="margin-top: 18px;">
+          <li>மாசுபட்ட நீரைத் தவிர்க்கவும்.</li>
+          <li>முன்னெச்சரிக்கை பூச்சிக்கொல்லி தெளிப்பை பரிந்துரைக்கவும்.</li>
+          <li>மறு 3 நாட்களில் இலை நிலையை மீண்டும் மதிப்பீடு செய்யவும்.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <h3>சிகிச்சை</h3>
+        <ul>
+          <li>மாற்று பூச்சிக்கொல்லி அல்லது பரிந்துரைக்கப்பட்ட Fungicide பயன்படுத்தவும்.</li>
+          <li>தண்ணீர் தேங்காமல் பார்த்துக் கொள்ளுங்கள்.</li>
+          <li>நோய் பரவலை குறைக்க நெருங்கிய இலைகளை அகற்றவும்.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>தடுப்பு</h3>
+        <ul>
+          <li>பயிர் இடைவெளியை சாதகமாக பராமரிக்கவும்.</li>
+          <li>காற்றோட்டத்தை மேம்படுத்தவும்.</li>
+          <li>மண் மற்றும் நீர் மேலாண்மையை தொடர்ந்து கண்காணிக்கவும்.</li>
+        </ul>
+      </article>
+    </section>
+  </div>
+</body>
+</html>
+"""
+
+
 @app.get("/soil-health", response_class=HTMLResponse)
 def soil_health_page(
     crop: str = "groundnut",

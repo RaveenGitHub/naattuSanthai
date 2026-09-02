@@ -37,6 +37,33 @@ def test_weather_alerts_endpoint():
     assert response.json()["success"] is True
 
 
+def test_weather_forecast_and_fetch_routes():
+    daily_response = client.get("/api/weather/daily?region=Kallakurichi")
+    assert daily_response.status_code == 200
+    assert daily_response.json()["success"] is True
+    assert isinstance(daily_response.json()["data"], list)
+
+    weekly_response = client.get("/api/weather/weekly?region=Kallakurichi")
+    assert weekly_response.status_code == 200
+    assert weekly_response.json()["success"] is True
+    assert isinstance(weekly_response.json()["data"], list)
+
+    monthly_response = client.get("/api/weather/monthly?region=Kallakurichi")
+    assert monthly_response.status_code == 200
+    assert monthly_response.json()["success"] is True
+    assert isinstance(monthly_response.json()["data"], list)
+
+    fetch_response = client.post("/api/weather/fetch", headers={"X-User-Role": "admin"})
+    assert fetch_response.status_code == 200
+    assert fetch_response.json()["success"] is True
+    assert isinstance(fetch_response.json()["data"], dict)
+
+    status_response = client.get("/api/weather/fetch/status", headers={"X-User-Role": "admin"})
+    assert status_response.status_code == 200
+    assert status_response.json()["success"] is True
+    assert isinstance(status_response.json()["data"], dict)
+
+
 def test_market_prices_endpoint():
     response = client.get("/api/market-prices?crop_name=Rice")
     assert response.status_code == 200

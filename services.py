@@ -147,6 +147,100 @@ def list_weather_alerts(village: Optional[str] = None) -> List[WeatherAlert]:
     return [alert for alert in alerts if alert.village.lower() == village.lower()]
 
 
+def list_weather_forecast(period: str, region: Optional[str] = None) -> List[dict]:
+    query = "SELECT * FROM weather_forecasts WHERE period = ?"
+    params: list = [period]
+    if region is not None and region != "":
+        query += " AND LOWER(region) = LOWER(?)"
+        params.append(region)
+    query += " ORDER BY forecast_date ASC"
+    with get_connection() as conn:
+        rows = conn.execute(query, params).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_weather_fetch_status() -> dict:
+    with get_connection() as conn:
+        total_count = conn.execute("SELECT COUNT(*) FROM weather_forecasts").fetchone()[0]
+        last_row = conn.execute(
+            "SELECT region, source_name, created_at FROM weather_forecasts ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+        daily_count = conn.execute("SELECT COUNT(*) FROM weather_forecasts WHERE period = 'daily'").fetchone()[0]
+        weekly_count = conn.execute("SELECT COUNT(*) FROM weather_forecasts WHERE period = 'weekly'").fetchone()[0]
+        monthly_count = conn.execute("SELECT COUNT(*) FROM weather_forecasts WHERE period = 'monthly'").fetchone()[0]
+        region_rows = conn.execute(
+            "SELECT region, COUNT(*) AS count FROM weather_forecasts GROUP BY region ORDER BY count DESC"
+        ).fetchall()
+    return {
+        "total_records": total_count,
+        "daily_records": daily_count,
+        "weekly_records": weekly_count,
+        "monthly_records": monthly_count,
+        "last_region": last_row["region"] if last_row else None,
+        "last_source_name": last_row["source_name"] if last_row else None,
+        "last_updated_at": last_row["created_at"] if last_row else None,
+        "regions": {row["region"]: row["count"] for row in region_rows},
+    }
+
+
+def seed_weather_forecast_data() -> None:
+    with get_connection() as conn:
+        count = conn.execute("SELECT COUNT(*) FROM weather_forecasts").fetchone()[0]
+    if count > 0:
+        return
+
+    now = datetime.now(timezone.utc).isoformat()
+    entries = [
+        (
+            "WX-F-001",
+            "Kallakurichi",
+            "daily",
+            now,
+            29.2,
+            12.5,
+            68.0,
+            18.0,
+            "இன்று வானம் மேகமூட்டமாக இருக்கும். மழை சாத்தியம் உள்ளது.",
+            "காலையில் நீர்ப்பாசன நேரம் குறைந்தபட்சமாக பராமரிக்கவும்; மாலை மழை இருந்தால் பாசனம் தள்ளிப்போடவும்.",
+            "IMD",
+            now,
+        ),
+        (
+            "WX-F-002",
+            "Kallakurichi",
+            "weekly",
+            (datetime.now(timezone.utc) + timedelta(days=4)).isoformat(),
+            30.1,
+            18.0,
+            72.0,
+            17.0,
+            "இந்த வாரத்தில் மிதமான மழை மற்றும் சுட்டெரிக்கும் வெப்பநிலை நிலவக்கூடும்.",
+            "தோட்டத்தில் நீர் தேவை அதிகரிக்கும் என்பதால் மண்ணின் ஈரப்பதத்தை தொடர்ந்து கண்காணிக்கவும்.",
+            "IMD",
+            now,
+        ),
+        (
+            "WX-F-003",
+            "Kallakurichi",
+            "monthly",
+            (datetime.now(timezone.utc) + timedelta(days=20)).isoformat(),
+            31.5,
+            41.0,
+            74.0,
+            16.0,
+            "மாத இறுதியில் மழை வழங்கல் சற்று அதிகரிக்க வாய்ப்பு உள்ளது.",
+            "பயிர் வளர்ச்சி கட்டத்தை கருத்தில் கொண்டு உரமிடும் நேரத்தை திட்டமிடலாம்.",
+            "IMD",
+            now,
+        ),
+    ]
+    with get_connection() as conn:
+        conn.executemany(
+            "INSERT INTO weather_forecasts (id, region, period, forecast_date, temperature_c, rainfall_mm, humidity_pct, wind_kmh, summary_ta, advisory_ta, source_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            entries,
+        )
+
+
 def list_market_prices(crop_name: Optional[str] = None) -> List[MarketPrice]:
     with get_connection() as conn:
         rows = conn.execute(
@@ -350,5 +444,6 @@ def seed_government_scheme_data() -> None:
 
 
 seed_weather_alerts()
+seed_weather_forecast_data()
 seed_market_data()
 seed_government_scheme_data()

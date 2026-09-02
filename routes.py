@@ -12,6 +12,7 @@ from services import (
     create_soil_test,
     get_scheme_fetch_status,
     get_scheme_update_by_id,
+    get_weather_fetch_status,
     list_archived_scheme_updates,
     list_farms,
     list_farmers,
@@ -19,8 +20,11 @@ from services import (
     list_market_prices,
     list_soil_tests,
     list_weather_alerts,
+    list_weather_forecast,
     seed_government_scheme_data,
     seed_market_data,
+    seed_weather_alerts,
+    seed_weather_forecast_data,
 )
 
 router = APIRouter(prefix="/api")
@@ -78,6 +82,35 @@ def post_soil_test(request: Request, payload: SoilTestCreate):
 @router.get("/weather/alerts")
 def get_weather_alerts(village: Optional[str] = Query(default=None)):
     return {"success": True, "data": list_weather_alerts(village), "error": None}
+
+
+@router.get("/weather/daily")
+def get_daily_weather(region: Optional[str] = Query(default="Kallakurichi")):
+    return {"success": True, "data": list_weather_forecast("daily", region), "error": None}
+
+
+@router.get("/weather/weekly")
+def get_weekly_weather(region: Optional[str] = Query(default="Kallakurichi")):
+    return {"success": True, "data": list_weather_forecast("weekly", region), "error": None}
+
+
+@router.get("/weather/monthly")
+def get_monthly_weather(region: Optional[str] = Query(default="Kallakurichi")):
+    return {"success": True, "data": list_weather_forecast("monthly", region), "error": None}
+
+
+@router.get("/weather/fetch/status")
+def get_weather_fetch_status_endpoint(request: Request):
+    require_route_role(request, "admin")
+    return {"success": True, "data": get_weather_fetch_status(), "error": None}
+
+
+@router.post("/weather/fetch")
+def trigger_weather_fetch(request: Request):
+    require_route_role(request, "admin")
+    seed_weather_alerts()
+    seed_weather_forecast_data()
+    return {"success": True, "data": {"message": "Weather forecast refresh completed"}, "error": None}
 
 
 @router.get("/market-prices")

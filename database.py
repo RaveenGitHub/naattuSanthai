@@ -78,6 +78,24 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS weather_forecasts (
+                id TEXT PRIMARY KEY,
+                region TEXT NOT NULL,
+                period TEXT NOT NULL,
+                forecast_date TEXT NOT NULL,
+                temperature_c REAL NOT NULL,
+                rainfall_mm REAL NOT NULL,
+                humidity_pct REAL NOT NULL,
+                wind_kmh REAL NOT NULL,
+                summary_ta TEXT NOT NULL,
+                advisory_ta TEXT NOT NULL,
+                source_name TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS market_prices (
                 id TEXT PRIMARY KEY,
                 crop_name TEXT NOT NULL,

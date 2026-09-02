@@ -185,6 +185,14 @@ def test_tamil_crop_advisory_page_renders_for_users():
     assert "நீர் மேலாண்மை" in advisory.text
 
 
+def test_disease_detection_page_renders_for_users():
+    response = client.get("/disease-detection")
+    assert response.status_code == 200
+    assert "நோய் கண்டறிதல்" in response.text or "Disease Detection" in response.text
+    assert "படத்தை பதிவேற்று" in response.text or "Upload image" in response.text
+    assert "சிகிச்சை" in response.text or "Treatment" in response.text
+
+
 def test_tamil_weather_market_page_renders_for_users():
     weather_market = client.get("/weather-market")
     assert weather_market.status_code == 200
