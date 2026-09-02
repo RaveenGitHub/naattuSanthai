@@ -203,6 +203,14 @@ def test_disease_detection_page_shows_live_recommendation_from_query_params():
     assert "Apply" in response.text or "சிகிச்சை" in response.text
 
 
+def test_disease_detection_flags_low_confidence_results_for_manual_review():
+    response = client.get(
+        "/disease-detection?crop_type=Unknown&image_url=https://example.com/unknown.jpg&notes=No clear symptoms, unclear pattern"
+    )
+    assert response.status_code == 200
+    assert "Low" in response.text or "குறைந்த" in response.text or "manual review" in response.text.lower() or "கைமுறை" in response.text
+
+
 def test_admin_overview_page_renders_monitoring_metrics():
     response = client.get("/admin/overview")
     assert response.status_code == 200

@@ -8,16 +8,33 @@ from database import get_connection
 
 
 def diagnose_crop_issue(crop_type: str, image_url: str, notes: str) -> Dict[str, str]:
-    crop_name = crop_type.lower()
+    crop_name = (crop_type or "").lower()
+    note_text = (notes or "").lower()
+    low_confidence = (
+        "unknown" in crop_name
+        or "unclear" in note_text
+        or "no clear symptoms" in note_text
+        or "uncertain" in note_text
+        or "not clear" in note_text
+        or len(note_text.strip()) < 8
+    )
+
     if "rice" in crop_name:
         diagnosis = "Leaf blast / fungal infection"
         recommendation = "Apply recommended fungicide spray and avoid waterlogging for 48 hours."
+        confidence = "Low" if low_confidence else "High"
     elif "groundnut" in crop_name:
         diagnosis = "Leaf spot disease"
         recommendation = "Use balanced nitrogen and inspect for fungal spread around the lower canopy."
+        confidence = "Low" if low_confidence else "High"
     else:
         diagnosis = "General stress pattern detected"
-        recommendation = "Review irrigation and nutrient balance; schedule agronomist review if symptoms persist."
+        recommendation = (
+            "Manual review recommended. Capture a clearer close-up image or consult an agronomist before treatment."
+            if low_confidence
+            else "Review irrigation and nutrient balance; schedule agronomist review if symptoms persist."
+        )
+        confidence = "Low" if low_confidence else "Medium"
 
     result = {
         "crop_type": crop_type,
@@ -25,7 +42,7 @@ def diagnose_crop_issue(crop_type: str, image_url: str, notes: str) -> Dict[str,
         "diagnosis": diagnosis,
         "recommendation": recommendation,
         "notes": notes,
-        "confidence": "High",
+        "confidence": confidence,
     }
     save_diagnosis_record(result)
     return result

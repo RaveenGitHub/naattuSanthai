@@ -1057,6 +1057,7 @@ def disease_detection_page(
     diagnosis = escape(str(result.get("diagnosis", "General stress pattern detected")))
     recommendation = escape(str(result.get("recommendation", "Inspect the field and review nutrient balance.")))
     confidence = escape(str(result.get("confidence", "High")))
+    manual_review = "Manual review required" if str(result.get("confidence", "High")).lower() in {"low", "medium"} else "Assessment ready"
     crop_label = escape(str(crop_type or "Rice"))
     notes_text = escape(str(notes or "No additional notes provided."))
     image_text = escape(str(image_url or "https://example.com/crop-scan.jpg"))
@@ -1162,7 +1163,7 @@ def disease_detection_page(
         <div class="stats">
           <div class="stat"><span>கணிப்பு</span><strong>{diagnosis}</strong></div>
           <div class="stat"><span>நம்பிக்கை</span><strong>{confidence}</strong></div>
-          <div class="stat"><span>முன்னெச்சரிக்கை</span><strong>48h</strong></div>
+          <div class="stat"><span>முன்னெச்சரிக்கை</span><strong>{manual_review}</strong></div>
         </div>
         <p style="color: var(--muted); line-height: 1.8; margin-top: 18px;"><strong>சிகிச்சை:</strong> {recommendation}</p>
       </div>
