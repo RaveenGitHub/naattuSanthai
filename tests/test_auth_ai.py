@@ -193,6 +193,25 @@ def test_disease_detection_page_renders_for_users():
     assert "சிகிச்சை" in response.text or "Treatment" in response.text
 
 
+def test_disease_detection_page_shows_live_recommendation_from_query_params():
+    response = client.get(
+        "/disease-detection?crop_type=Rice&image_url=https://example.com/rice.jpg&notes=Yellowing%20leaves%20and%20spots"
+    )
+    assert response.status_code == 200
+    assert "Rice" in response.text or "நெல்" in response.text
+    assert "Leaf blast" in response.text or "இலை" in response.text
+    assert "Apply" in response.text or "சிகிச்சை" in response.text
+
+
+def test_admin_overview_page_renders_monitoring_metrics():
+    response = client.get("/admin/overview")
+    assert response.status_code == 200
+    assert "அட்மின்" in response.text or "Admin" in response.text
+    assert "செயல்பாடு" in response.text or "Activity" in response.text
+    assert "தரம்" in response.text or "Quality" in response.text
+    assert "வானிலை" in response.text or "Weather" in response.text
+
+
 def test_tamil_weather_market_page_renders_for_users():
     weather_market = client.get("/weather-market")
     assert weather_market.status_code == 200

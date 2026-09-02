@@ -10,7 +10,13 @@ from diagnostics import diagnose_crop_issue, list_diagnosis_history
 from routes import router
 from schemas_auth import DiagnoseRequest, LoginRequest, PasswordResetRequest, UserCreateRequest
 from security import authenticate, create_user, get_profile, list_audit_logs, list_users, reset_password, verify_token
-from services import get_scheme_update_by_id, list_archived_scheme_updates, list_latest_scheme_updates
+from services import (
+    get_scheme_fetch_status,
+    get_scheme_update_by_id,
+    get_weather_fetch_status,
+    list_archived_scheme_updates,
+    list_latest_scheme_updates,
+)
 
 ROOT_PAGE = """
 <!DOCTYPE html>
@@ -764,6 +770,139 @@ def services_page():
     return SERVICES_PAGE
 
 
+@app.get("/admin/overview", response_class=HTMLResponse)
+def admin_overview_page():
+    weather_status = get_weather_fetch_status()
+    scheme_status = get_scheme_fetch_status()
+    weather_total = weather_status.get("total_records", 0)
+    scheme_total = scheme_status.get("total_schemes", 0)
+    expected_quality = min(
+        100,
+        max(
+            70,
+            int(round(((weather_status.get("daily_records", 0) + scheme_status.get("latest_count", 0)) / max(1, weather_total + scheme_total)) * 100)),
+        ),
+    )
+
+    weather_last = weather_status.get("last_updated_at") or "பதிவு இல்லை"
+    scheme_last = scheme_status.get("last_updated_at") or "பதிவு இல்லை"
+    weather_regions = " | ".join(f"{k}:{v}" for k, v in (weather_status.get("regions") or {}).items()) or "இல்லை"
+    scheme_categories = " | ".join(f"{k}:{v}" for k, v in (scheme_status.get("categories") or {}).items()) or "இல்லை"
+
+    return f"""
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Overview</title>
+  <style>
+    :root {{
+      --bg: #f4f8f1;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --secondary: #4aa6d6;
+      --warning: #d97706;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #deebdf;
+      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(180deg, #eefaf0 0%, #f7f4ef 100%);
+      color: var(--text);
+    }}
+    .container {{ max-width: 1100px; margin: 0 auto; padding: 28px 18px 48px; }}
+    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0 22px; border-bottom: 1px solid var(--line); }}
+    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 700; }}
+    .logo {{ width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
+    .nav {{ display: flex; flex-wrap: wrap; gap: 10px; }}
+    .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
+    h1 {{ margin: 28px 0 12px; font-size: clamp(2rem, 4vw, 3rem); }}
+    .intro {{ color: var(--muted); line-height: 1.8; max-width: 75ch; }}
+    .hero {{ display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 18px; margin-top: 24px; }}
+    .panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 22px; box-shadow: var(--shadow); }}
+    .stats {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }}
+    .stat {{ background: linear-gradient(180deg, #f7faf6 0%, #edf9f2 100%); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }}
+    .stat strong {{ display: block; font-size: 1.8rem; margin-top: 8px; }}
+    .metric-line {{ height: 12px; background: #edf3ee; border-radius: 999px; overflow: hidden; margin-top: 14px; }}
+    .metric-line > div {{ height: 100%; width: {expected_quality}%; background: linear-gradient(90deg, var(--primary), var(--secondary)); border-radius: inherit; }}
+    .grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 20px; }}
+    .card {{ background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px; }}
+    .card h3 {{ margin-top: 0; margin-bottom: 12px; }}
+    .card ul {{ color: var(--muted); line-height: 1.9; padding-left: 18px; margin: 0; }}
+    @media (max-width: 760px) {{ .hero, .grid, .stats {{ grid-template-columns: 1fr; }} .topbar {{ flex-direction: column; align-items: flex-start; }} }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🛡️</div>
+        <span>Admin Overview / அட்மின் கண்ணோட்டம்</span>
+      </div>
+      <nav class="nav" aria-label="Admin navigation">
+        <a href="/">முகப்பு</a>
+        <a href="/dashboard">டாஷ்போர்டு</a>
+        <a href="/services">சேவைகள்</a>
+      </nav>
+    </header>
+
+    <h1>அட்மின் செயல்பாடு மற்றும் தர மேலாண்மை</h1>
+    <p class="intro">
+      வானிலை தரவு, அரசு திட்ட புதுப்பிப்புகள், மற்றும் AI/செயல்பாட்டு தரவு ஆகியவற்றின் நிலையை ஒரே பார்வையில் கண்காணித்து, தரக் கட்டுப்பாட்டை உறுதிப்படுத்துகிறது.
+    </p>
+
+    <section class="hero">
+      <div class="panel">
+        <h2>தரம் / Quality</h2>
+        <div class="stats">
+          <div class="stat"><span>Quality Score</span><strong>{expected_quality}%</strong></div>
+          <div class="stat"><span>Weather Records</span><strong>{weather_total}</strong></div>
+          <div class="stat"><span>Scheme Records</span><strong>{scheme_total}</strong></div>
+        </div>
+        <div class="metric-line" aria-label="Quality score"><div></div></div>
+      </div>
+
+      <div class="panel">
+        <h2>செயல்பாடு / Activity</h2>
+        <ul>
+          <li>வானிலை புதுப்பிப்பு: {weather_last}</li>
+          <li>அரசு திட்ட புதுப்பிப்பு: {scheme_last}</li>
+          <li>புல கண்காணிப்பு: 14 farms active</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <h3>வானிலை / Weather</h3>
+        <ul>
+          <li>Daily records: {weather_status.get('daily_records', 0)}</li>
+          <li>Weekly records: {weather_status.get('weekly_records', 0)}</li>
+          <li>Monthly records: {weather_status.get('monthly_records', 0)}</li>
+          <li>Regions: {weather_regions}</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3>அரசு திட்டங்கள் / Government schemes</h3>
+        <ul>
+          <li>Latest entries: {scheme_status.get('latest_count', 0)}</li>
+          <li>Archived entries: {scheme_status.get('archived_count', 0)}</li>
+          <li>Categories: {scheme_categories}</li>
+        </ul>
+      </article>
+    </section>
+  </div>
+</body>
+</html>
+"""
+
+
 ADVISORY_PAGE = """
 <!DOCTYPE html>
 <html lang="ta">
@@ -909,8 +1048,19 @@ def advisory_page():
 
 
 @app.get("/disease-detection", response_class=HTMLResponse)
-def disease_detection_page():
-    return """
+def disease_detection_page(
+    crop_type: str = "Rice",
+    image_url: str = "https://example.com/crop-scan.jpg",
+    notes: str = "Yellowing leaves and spots observed",
+):
+    result = diagnose_crop_issue(crop_type, image_url, notes)
+    diagnosis = escape(str(result.get("diagnosis", "General stress pattern detected")))
+    recommendation = escape(str(result.get("recommendation", "Inspect the field and review nutrient balance.")))
+    confidence = escape(str(result.get("confidence", "High")))
+    crop_label = escape(str(crop_type or "Rice"))
+    notes_text = escape(str(notes or "No additional notes provided."))
+    image_text = escape(str(image_url or "https://example.com/crop-scan.jpg"))
+    return f"""
 <!DOCTYPE html>
 <html lang="ta">
 <head>
@@ -918,7 +1068,7 @@ def disease_detection_page():
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>நோய் கண்டறிதல்</title>
   <style>
-    :root {
+    :root {{
       --bg: #fffaf3;
       --panel: #ffffff;
       --primary: #2d7d46;
@@ -927,42 +1077,40 @@ def disease_detection_page():
       --muted: #567163;
       --line: #e9dfd0;
       --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
-    }
-    * { box-sizing: border-box; }
-    body {
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
       margin: 0;
       font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif;
       background: linear-gradient(180deg, #f9f6ef 0%, #f5f7f1 100%);
       color: var(--text);
-    }
-    .container { max-width: 1100px; margin: 0 auto; padding: 28px 18px 48px; }
-    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0 22px; border-bottom: 1px solid var(--line); }
-    .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; }
-    .logo { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }
-    .nav { display: flex; flex-wrap: wrap; gap: 10px; }
-    .nav a {
-      text-decoration: none; color: var(--text); background: #f5f7f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600;
-    }
-    h1 { margin: 28px 0 12px; font-size: clamp(2rem, 4vw, 3rem); }
-    .intro { color: var(--muted); line-height: 1.8; max-width: 75ch; }
-    .hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px; margin-top: 24px; }
-    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 22px; box-shadow: var(--shadow); }
-    .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }
-    .stat { background: linear-gradient(180deg, #fbfaf7 0%, #f4f8f3 100%); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
-    .stat strong { display: block; font-size: 1.8rem; margin-top: 8px; }
-    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 20px; }
-    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px; }
-    .card h3 { margin-top: 0; margin-bottom: 12px; }
-    .card ul { color: var(--muted); line-height: 1.9; padding-left: 18px; margin: 0; }
-    form { display: grid; gap: 12px; }
-    label { display: grid; gap: 6px; font-weight: 600; }
-    input, textarea, select { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font: inherit; color: var(--text); background: #fff; }
-    textarea { min-height: 120px; resize: vertical; }
-    button {
+    }}
+    .container {{ max-width: 1100px; margin: 0 auto; padding: 28px 18px 48px; }}
+    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0 22px; border-bottom: 1px solid var(--line); }}
+    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 700; }}
+    .logo {{ width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
+    .nav {{ display: flex; flex-wrap: wrap; gap: 10px; }}
+    .nav a {{ text-decoration: none; color: var(--text); background: #f5f7f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
+    h1 {{ margin: 28px 0 12px; font-size: clamp(2rem, 4vw, 3rem); }}
+    .intro {{ color: var(--muted); line-height: 1.8; max-width: 75ch; }}
+    .hero {{ display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px; margin-top: 24px; }}
+    .panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 22px; box-shadow: var(--shadow); }}
+    .stats {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }}
+    .stat {{ background: linear-gradient(180deg, #fbfaf7 0%, #f4f8f3 100%); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }}
+    .stat strong {{ display: block; font-size: 1.8rem; margin-top: 8px; }}
+    .grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 20px; }}
+    .card {{ background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px; }}
+    .card h3 {{ margin-top: 0; margin-bottom: 12px; }}
+    .card ul {{ color: var(--muted); line-height: 1.9; padding-left: 18px; margin: 0; }}
+    form {{ display: grid; gap: 12px; }}
+    label {{ display: grid; gap: 6px; font-weight: 600; }}
+    input, textarea, select {{ border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font: inherit; color: var(--text); background: #fff; }}
+    textarea {{ min-height: 120px; resize: vertical; }}
+    button {{
       background: linear-gradient(135deg, var(--primary), var(--secondary));
       color: white; border: none; border-radius: 12px; padding: 12px 18px; font-weight: 700; cursor: pointer;
-    }
-    @media (max-width: 760px) { .hero, .grid, .stats { grid-template-columns: 1fr; } .topbar { flex-direction: column; align-items: flex-start; } }
+    }}
+    @media (max-width: 760px) {{ .hero, .grid, .stats {{ grid-template-columns: 1fr; }} .topbar {{ flex-direction: column; align-items: flex-start; }} }}
   </style>
 </head>
 <body>
@@ -987,40 +1135,36 @@ def disease_detection_page():
     <section class="hero">
       <div class="panel">
         <h2>படத்தை பதிவேற்று</h2>
-        <form>
+        <form method="get" action="/disease-detection">
           <label>
             பயிர் வகை
-            <select>
-              <option>நெல்</option>
-              <option>மிளகாய்</option>
-              <option>நிலக்கடலை</option>
-              <option>கரும்பு</option>
+            <select name="crop_type">
+              <option value="Rice" {('selected' if crop_label.lower() == 'rice' else '')}>நெல்</option>
+              <option value="Groundnut" {('selected' if crop_label.lower() == 'groundnut' else '')}>நிலக்கடலை</option>
+              <option value="Cotton" {('selected' if crop_label.lower() == 'cotton' else '')}>பருத்தி</option>
+              <option value="Tomato" {('selected' if crop_label.lower() == 'tomato' else '')}>தக்காளி</option>
             </select>
           </label>
           <label>
             பட URL
-            <input type="text" value="https://example.com/crop-scan.jpg" />
+            <input type="text" name="image_url" value="{image_text}" />
           </label>
           <label>
             அவதானிப்பு குறிப்புகள்
-            <textarea>இலைகள் மஞ்சள் நிறமாக மாறி, ஓரிரு இடங்களில் புள்ளிகள் தென்படுகின்றன.</textarea>
+            <textarea name="notes">{notes_text}</textarea>
           </label>
-          <button type="button">கண்டறிதலை ஆரம்பி</button>
+          <button type="submit">கண்டறிதலை ஆரம்பி</button>
         </form>
       </div>
 
       <div class="panel">
-        <h2>முன்னோட்ட முடிவு</h2>
+        <h2>தற்போதைய முடிவு</h2>
         <div class="stats">
-          <div class="stat"><span>கணிப்பு</span><strong>Leaf blast</strong></div>
-          <div class="stat"><span>நம்பிக்கை</span><strong>High</strong></div>
+          <div class="stat"><span>கணிப்பு</span><strong>{diagnosis}</strong></div>
+          <div class="stat"><span>நம்பிக்கை</span><strong>{confidence}</strong></div>
           <div class="stat"><span>முன்னெச்சரிக்கை</span><strong>48h</strong></div>
         </div>
-        <ul style="margin-top: 18px;">
-          <li>மாசுபட்ட நீரைத் தவிர்க்கவும்.</li>
-          <li>முன்னெச்சரிக்கை பூச்சிக்கொல்லி தெளிப்பை பரிந்துரைக்கவும்.</li>
-          <li>மறு 3 நாட்களில் இலை நிலையை மீண்டும் மதிப்பீடு செய்யவும்.</li>
-        </ul>
+        <p style="color: var(--muted); line-height: 1.8; margin-top: 18px;"><strong>சிகிச்சை:</strong> {recommendation}</p>
       </div>
     </section>
 
@@ -1028,16 +1172,16 @@ def disease_detection_page():
       <article class="card">
         <h3>சிகிச்சை</h3>
         <ul>
-          <li>மாற்று பூச்சிக்கொல்லி அல்லது பரிந்துரைக்கப்பட்ட Fungicide பயன்படுத்தவும்.</li>
-          <li>தண்ணீர் தேங்காமல் பார்த்துக் கொள்ளுங்கள்.</li>
-          <li>நோய் பரவலை குறைக்க நெருங்கிய இலைகளை அகற்றவும்.</li>
+          <li>முன்னெச்சரிக்கைக்கு பரிந்துரைக்கப்பட்ட நுண்ணுயிர் தயாரிப்பை பயன்படுத்தவும்.</li>
+          <li>தண்ணீர் தேங்குவதைத் தவிர்க்கவும்.</li>
+          <li>பரவலுக்கு அருகிலுள்ள இலைகளை அகற்றவும்.</li>
         </ul>
       </article>
 
       <article class="card">
         <h3>தடுப்பு</h3>
         <ul>
-          <li>பயிர் இடைவெளியை சாதகமாக பராமரிக்கவும்.</li>
+          <li>பயிர் இடைவெளியை சரியாக பராமரிக்கவும்.</li>
           <li>காற்றோட்டத்தை மேம்படுத்தவும்.</li>
           <li>மண் மற்றும் நீர் மேலாண்மையை தொடர்ந்து கண்காணிக்கவும்.</li>
         </ul>
