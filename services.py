@@ -171,15 +171,33 @@ def get_weather_fetch_status() -> dict:
         region_rows = conn.execute(
             "SELECT region, COUNT(*) AS count FROM weather_forecasts GROUP BY region ORDER BY count DESC"
         ).fetchall()
+
+    last_source_name = last_row["source_name"] if last_row else None
+    sources = {"IMD", "India Meteorological Department", "Tamil Nadu Weather Office"}
+    source_compliance = {
+        "status": "pass" if last_source_name in sources else "warning",
+        "trusted_sources": sorted(sources),
+        "current_source": last_source_name,
+    }
+    retention_days = 14
+    quality_gate = {
+        "status": "pass" if total_count >= 3 and daily_count > 0 else "warning",
+        "required_records": 3,
+        "actual_records": total_count,
+    }
+
     return {
         "total_records": total_count,
         "daily_records": daily_count,
         "weekly_records": weekly_count,
         "monthly_records": monthly_count,
         "last_region": last_row["region"] if last_row else None,
-        "last_source_name": last_row["source_name"] if last_row else None,
+        "last_source_name": last_source_name,
         "last_updated_at": last_row["created_at"] if last_row else None,
         "regions": {row["region"]: row["count"] for row in region_rows},
+        "source_compliance": source_compliance,
+        "retention_days": retention_days,
+        "quality_gate": quality_gate,
     }
 
 

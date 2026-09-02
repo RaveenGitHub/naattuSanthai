@@ -64,6 +64,16 @@ def test_weather_forecast_and_fetch_routes():
     assert isinstance(status_response.json()["data"], dict)
 
 
+def test_weather_fetch_status_contains_source_and_retention_metadata():
+    response = client.get("/api/weather/fetch/status", headers={"X-User-Role": "admin"})
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert "source_compliance" in payload
+    assert "retention_days" in payload
+    assert "quality_gate" in payload
+    assert payload["retention_days"] >= 7
+
+
 def test_market_prices_endpoint():
     response = client.get("/api/market-prices?crop_name=Rice")
     assert response.status_code == 200
