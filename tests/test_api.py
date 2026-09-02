@@ -71,7 +71,10 @@ def test_weather_fetch_status_contains_source_and_retention_metadata():
     assert "source_compliance" in payload
     assert "retention_days" in payload
     assert "quality_gate" in payload
+    assert "archive_policy" in payload
     assert payload["retention_days"] >= 7
+    assert payload["archive_policy"]["latest_window_days"] == 7
+    assert payload["archive_policy"]["monthly_retention_months"] >= 12
 
 
 def test_market_prices_endpoint():

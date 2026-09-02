@@ -180,6 +180,12 @@ def get_weather_fetch_status() -> dict:
         "current_source": last_source_name,
     }
     retention_days = 14
+    archive_policy = {
+        "latest_window_days": 7,
+        "archive_after_days": 7,
+        "monthly_retention_months": 12,
+    }
+    archive_policy["status"] = "pass" if retention_days >= 7 and archive_policy["monthly_retention_months"] >= 12 else "warning"
     quality_gate = {
         "status": "pass" if total_count >= 3 and daily_count > 0 else "warning",
         "required_records": 3,
@@ -197,6 +203,7 @@ def get_weather_fetch_status() -> dict:
         "regions": {row["region"]: row["count"] for row in region_rows},
         "source_compliance": source_compliance,
         "retention_days": retention_days,
+        "archive_policy": archive_policy,
         "quality_gate": quality_gate,
     }
 
