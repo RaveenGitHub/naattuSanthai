@@ -18,14 +18,30 @@ def assess_soil_health(crop: str, ph: float, nitrogen: float, phosphorus: float,
 
     if "groundnut" in crop_name:
         nitrogen_status = "Moderate" if nitrogen >= 20 else "Low"
-        phosphorus_status = "Low" if phosphorus < 20 else "Adequate"
+        phosphorus_status = "Adequate" if phosphorus >= 18 else "Low"
         potassium_status = "Adequate" if potassium >= 150 else "Low"
         base_status = "Needs nutrient balancing"
+        recommendation_summary = (
+            "Groundnut soil needs a corrective nutrient plan with liming support and a split-dose fertilizer strategy for pod filling and root growth."
+        )
+        fertilizer_plan = [
+            {"nutrient": "Nitrogen", "dose": "Apply 20-25 kg N/acre in split doses", "reason": "Supports vegetative growth and pod development."},
+            {"nutrient": "Phosphorus", "dose": "Add phosphorus-rich fertilizer if below 18 ppm", "reason": "Improves root formation and pegging."},
+            {"nutrient": "Potassium", "dose": "Maintain 150-200 ppm with potash application", "reason": "Improves drought tolerance and pod quality."},
+        ]
     else:
         nitrogen_status = "Adequate" if nitrogen >= 28 else "Moderate"
         phosphorus_status = "Adequate" if phosphorus >= 20 else "Low"
         potassium_status = "Adequate" if potassium >= 180 else "Moderate"
         base_status = "Generally healthy"
+        recommendation_summary = (
+            f"{crop_name.title()} soil is stable enough for routine management, but the current nutrient profile should be monitored to avoid stress during the next growth phase."
+        )
+        fertilizer_plan = [
+            {"nutrient": "Nitrogen", "dose": "Apply a moderate split nitrogen application", "reason": "Maintains canopy vigor without excess vegetative growth."},
+            {"nutrient": "Phosphorus", "dose": "Top up phosphorus where soil value is below crop target", "reason": "Supports root establishment and early growth."},
+            {"nutrient": "Potassium", "dose": "Use potash if potassium falls below the crop threshold", "reason": "Improves stress tolerance and grain filling."},
+        ]
 
     actions: List[str] = [ph_action]
     if nitrogen_status != "Adequate":
@@ -48,4 +64,6 @@ def assess_soil_health(crop: str, ph: float, nitrogen: float, phosphorus: float,
         "phosphorus_status": phosphorus_status,
         "potassium_status": potassium_status,
         "nutrient_actions": actions,
+        "recommendation_summary": recommendation_summary,
+        "fertilizer_plan": fertilizer_plan,
     }

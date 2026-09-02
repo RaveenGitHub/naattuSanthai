@@ -73,6 +73,8 @@ def soil_health(
         "phosphorus_status": result["phosphorus_status"],
         "potassium_status": result["potassium_status"],
         "nutrient_actions": result["nutrient_actions"],
+        "recommendation_summary": result["recommendation_summary"],
+        "fertilizer_plan": result["fertilizer_plan"],
     }
 
 
