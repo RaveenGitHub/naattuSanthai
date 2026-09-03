@@ -2015,6 +2015,104 @@ def weather_page(region: str = "Kallakurichi", period: str = "daily"):
 """
 
 
+@app.get("/market-intelligence", response_class=HTMLResponse)
+def market_intelligence_page(crop: str = "rice", market: str = "Kallakurichi"):
+    from digital_farming.services.market_intelligence import get_market_intelligence
+
+    intelligence = get_market_intelligence(crop=crop, market=market)
+    crop_name = escape(str(crop or "நெல்").strip() or "நெல்")
+    market_name = escape(str(market or "கல்லக்குறிச்சி"))
+    trend = escape(str(intelligence.get("market_trend", "Moderate")))
+    base_price = float(intelligence.get("base_price_per_kg", 0.0))
+    recommendation = escape(str(intelligence.get("recommended_action", "Monitor local buyer demand and negotiate before the next supply surge.")))
+    buyer_insights = "".join(f"<li>{escape(str(item))}</li>" for item in intelligence.get("buyer_insights", []))
+
+    return f"""
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>சந்தை நுண்ணறிவு</title>
+  <style>
+    :root {{
+      --bg: #f5f9f2;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --secondary: #4aa6d6;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #dfe9df;
+      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif; background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%); color: var(--text); }}
+    .container {{ max-width: 1000px; margin: 0 auto; padding: 28px 18px 48px; }}
+    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }}
+    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 700; }}
+    .logo {{ width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
+    .nav {{ display: flex; gap: 10px; flex-wrap: wrap; }}
+    .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
+    h1 {{ margin: 28px 0 10px; font-size: clamp(2rem, 4vw, 3rem); }}
+    .lede {{ color: var(--muted); line-height: 1.8; max-width: 75ch; }}
+    .hero {{ display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px; margin-top: 24px; }}
+    .panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 22px; box-shadow: var(--shadow); }}
+    .stats {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }}
+    .stat {{ background: linear-gradient(180deg, #f7faf6 0%, #edf9f2 100%); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }}
+    .stat span {{ color: var(--muted); }}
+    .stat strong {{ display: block; margin-top: 8px; font-size: 1.8rem; }}
+    ul {{ margin: 0; padding-left: 18px; color: var(--muted); line-height: 1.9; }}
+    @media (max-width: 760px) {{ .hero, .stats {{ grid-template-columns: 1fr; }} .topbar {{ flex-direction: column; align-items: flex-start; }} }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">📈</div>
+        <span>{market_name} சந்தை / Market</span>
+      </div>
+      <nav class="nav">
+        <a href="/">முகப்பு</a>
+        <a href="/dashboard">டாஷ்போர்டு</a>
+        <a href="/services">சேவைகள்</a>
+      </nav>
+    </header>
+
+    <h1>{crop_name} பயிர் சந்தை நுண்ணறிவு</h1>
+    <p class="lede">சந்தை போக்கு, விலை நிலை, மற்றும் விற்பனை முடிவுகளுக்கு தேவையான குறிப்புகளை தமிழில் காண்பிக்கிறது.</p>
+
+    <section class="hero">
+      <div class="panel">
+        <h2>விலை நிலை / Price</h2>
+        <div class="stats">
+          <div class="stat"><span>விலை</span><strong>₹{base_price:.2f} / கிலோ</strong></div>
+          <div class="stat"><span>போக்கு</span><strong>{trend}</strong></div>
+          <div class="stat"><span>சந்தை</span><strong>{market_name}</strong></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>பரிந்துரை / Recommendation</h2>
+        <ul>
+          <li>{recommendation}</li>
+          <li>விற்பனை நேரம், தரம், மற்றும் திரட்டு செலவுகளை ஒரே பார்வையில் மதிப்பிடவும்.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="panel" style="margin-top: 20px;">
+      <h2>கையகப்படுத்துபவர் குறிப்புகள் / Buyer insights</h2>
+      <ul>
+        {buyer_insights}
+      </ul>
+    </section>
+  </div>
+</body>
+</html>
+"""
+
+
 @app.get("/weather-market", response_class=HTMLResponse)
 def weather_market_page(region: str = "Kallakurichi"):
     region_name = (region or "Kallakurichi").strip() or "Kallakurichi"

@@ -161,3 +161,12 @@ def test_weather_page_renders_region_forecast_and_guidance():
     assert "Kallakurichi" in response.text or "கல்லக்குறிச்சி" in response.text
     assert "பரிந்துரை" in response.text or "Advisory" in response.text
     assert "மழை" in response.text or "Rain" in response.text
+
+
+def test_market_intelligence_page_renders_price_trend_and_action():
+    response = client.get("/market-intelligence?crop=rice&market=Kallakurichi")
+    assert response.status_code == 200
+    assert "சந்தை" in response.text or "Market" in response.text
+    assert "rice" in response.text.lower() or "நெல்" in response.text
+    assert "விலை" in response.text or "Price" in response.text
+    assert "பரிந்துரை" in response.text or "Recommendation" in response.text
