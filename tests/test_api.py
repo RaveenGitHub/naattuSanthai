@@ -152,3 +152,12 @@ def test_soil_health_page_renders_farmer_actionable_summary():
     assert "உரம்" in response.text or "Fertilizer" in response.text
     assert "பரிந்துரை" in response.text or "Recommendation" in response.text
     assert "உர திட்டம்" in response.text or "Fertilizer plan" in response.text or "fertilizer" in response.text.lower()
+
+
+def test_weather_page_renders_region_forecast_and_guidance():
+    response = client.get("/weather?region=Kallakurichi&period=daily")
+    assert response.status_code == 200
+    assert "வானிலை" in response.text
+    assert "Kallakurichi" in response.text or "கல்லக்குறிச்சி" in response.text
+    assert "பரிந்துரை" in response.text or "Advisory" in response.text
+    assert "மழை" in response.text or "Rain" in response.text

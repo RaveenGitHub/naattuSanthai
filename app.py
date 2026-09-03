@@ -1901,6 +1901,120 @@ WEATHER_MARKET_PAGE = """
 """
 
 
+@app.get("/weather", response_class=HTMLResponse)
+def weather_page(region: str = "Kallakurichi", period: str = "daily"):
+    region_name = (region or "Kallakurichi").strip() or "Kallakurichi"
+    period_name = (period or "daily").strip().lower() or "daily"
+    forecasts = list_weather_forecast(period_name, region_name)
+    if not forecasts:
+        forecasts = list_weather_forecast(period_name, "Kallakurichi")
+    if not forecasts:
+        forecasts = [{
+            "region": region_name,
+            "period": period_name,
+            "summary_ta": "இன்று வானம் மேகமூட்டமாக இருக்கும். மழை சாத்தியம் உள்ளது.",
+            "temperature_c": 29.0,
+            "rainfall_mm": 18.0,
+            "humidity_pct": 68,
+            "wind_kmh": 18.0,
+            "advisory_ta": "மண்ணின் ஈரப்பதத்தை பரிசோதித்து, குறைந்தபட்ச பாசன அட்டவணையை பின்பற்றவும்.",
+        }]
+
+    forecast = forecasts[0]
+    summary = escape(str(forecast.get("summary_ta", "இன்று வானம் மேகமூட்டமாக இருக்கும். மழை சாத்தியம் உள்ளது.")))
+    advisory = escape(str(forecast.get("advisory_ta", "மண்ணின் ஈரப்பதத்தை பரிசோதித்து, குறைந்தபட்ச பாசன அட்டவணையை பின்பற்றவும்.")))
+    temp = float(forecast.get("temperature_c", 29.0))
+    rainfall = float(forecast.get("rainfall_mm", 18.0))
+    humidity = float(forecast.get("humidity_pct", 68.0))
+    wind = float(forecast.get("wind_kmh", 18.0))
+
+    return f"""
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>வானிலை முன்னறிவிப்பு</title>
+  <style>
+    :root {{
+      --bg: #f4f8f2;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --secondary: #4aa6d6;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #dfe9df;
+      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0; font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif; background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%); color: var(--text);
+    }}
+    .container {{ max-width: 1000px; margin: 0 auto; padding: 28px 18px 48px; }}
+    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }}
+    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 700; }}
+    .logo {{ width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
+    .nav {{ display: flex; gap: 10px; flex-wrap: wrap; }}
+    .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
+    h1 {{ margin: 28px 0 10px; font-size: clamp(2rem, 4vw, 3rem); }}
+    .lede {{ color: var(--muted); line-height: 1.8; max-width: 75ch; }}
+    .hero {{ display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px; margin-top: 24px; }}
+    .panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 22px; box-shadow: var(--shadow); }}
+    .metrics {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }}
+    .metric {{ background: linear-gradient(180deg, #f7faf6 0%, #edf9f2 100%); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }}
+    .metric span {{ color: var(--muted); }}
+    .metric strong {{ display: block; margin-top: 8px; font-size: 1.8rem; }}
+    ul {{ margin: 0; padding-left: 18px; color: var(--muted); line-height: 1.9; }}
+    @media (max-width: 760px) {{ .hero, .metrics {{ grid-template-columns: 1fr; }} .topbar {{ flex-direction: column; align-items: flex-start; }} }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🌤️</div>
+        <span>{escape(region_name)} வானிலை / Weather</span>
+      </div>
+      <nav class="nav">
+        <a href="/">முகப்பு</a>
+        <a href="/dashboard">டாஷ்போர்டு</a>
+        <a href="/services">சேவைகள்</a>
+      </nav>
+    </header>
+
+    <h1>வானிலை முன்னறிவிப்பு</h1>
+    <p class="lede">{summary}</p>
+
+    <section class="hero">
+      <div class="panel">
+        <h2>இன்றைய நிலை / Current Status</h2>
+        <div class="metrics">
+          <div class="metric"><span>வெப்பநிலை</span><strong>{temp:.0f}°C</strong></div>
+          <div class="metric"><span>மழை</span><strong>{rainfall:.0f} mm</strong></div>
+          <div class="metric"><span>ஈரப்பதம்</span><strong>{humidity:.0f}%</strong></div>
+        </div>
+        <div class="metrics" style="margin-top:14px;">
+          <div class="metric"><span>காற்று</span><strong>{wind:.0f} km/h</strong></div>
+          <div class="metric"><span>காலம்</span><strong>{period_name.upper()}</strong></div>
+          <div class="metric"><span>மண்டலம்</span><strong>{escape(region_name)}</strong></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>பரிந்துரை / Advisory</h2>
+        <ul>
+          <li>{advisory}</li>
+          <li>மண் ஈரப்பதத்தை தொடர்ந்து கண்காணிக்கவும்.</li>
+          <li>பாசன அட்டவணையை மழை முன்னறிவிப்புடன் பொருத்தி சரிசெய்யவும்.</li>
+        </ul>
+      </div>
+    </section>
+  </div>
+</body>
+</html>
+"""
+
+
 @app.get("/weather-market", response_class=HTMLResponse)
 def weather_market_page(region: str = "Kallakurichi"):
     region_name = (region or "Kallakurichi").strip() or "Kallakurichi"
