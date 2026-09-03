@@ -2261,6 +2261,214 @@ def weather_market_page(region: str = "Kallakurichi"):
 """
 
 
+@app.get("/sustainability", response_class=HTMLResponse)
+def sustainability_page(
+    farm_size_ha: float = 5.0,
+    soil_carbon_tons: float = 2.4,
+    water_use_liters: float = 4200.0,
+    energy_use_kwh: float = 320.0,
+):
+    from digital_farming.services.sustainability import assess_carbon_and_sustainability
+
+    report = assess_carbon_and_sustainability(
+        farm_size_ha=farm_size_ha,
+        soil_carbon_tons=soil_carbon_tons,
+        water_use_liters=water_use_liters,
+        energy_use_kwh=energy_use_kwh,
+    )
+
+    recommendations = "".join(f"<li>{escape(str(item))}</li>" for item in report.get("recommendations", []))
+    return f"""
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>நிலையான விவசாயம்</title>
+  <style>
+    :root {{
+      --bg: #f4f8f2;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --secondary: #4aa6d6;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #dfe9df;
+      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif; background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%); color: var(--text); }}
+    .container {{ max-width: 1000px; margin: 0 auto; padding: 28px 18px 48px; }}
+    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }}
+    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 700; }}
+    .logo {{ width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
+    .nav {{ display: flex; gap: 10px; flex-wrap: wrap; }}
+    .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
+    h1 {{ margin: 28px 0 10px; font-size: clamp(2rem, 4vw, 3rem); }}
+    .lede {{ color: var(--muted); line-height: 1.8; max-width: 75ch; }}
+    .hero {{ display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px; margin-top: 24px; }}
+    .panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 22px; box-shadow: var(--shadow); }}
+    .stats {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }}
+    .stat {{ background: linear-gradient(180deg, #f7faf6 0%, #edf9f2 100%); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }}
+    .stat span {{ color: var(--muted); }}
+    .stat strong {{ display: block; margin-top: 8px; font-size: 1.8rem; }}
+    ul {{ margin: 0; padding-left: 18px; color: var(--muted); line-height: 1.9; }}
+    @media (max-width: 760px) {{ .hero, .stats {{ grid-template-columns: 1fr; }} .topbar {{ flex-direction: column; align-items: flex-start; }} }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🌱</div>
+        <span>நிலையான விவசாயம்</span>
+      </div>
+      <nav class="nav">
+        <a href="/">முகப்பு</a>
+        <a href="/dashboard">டாஷ்போர்டு</a>
+        <a href="/services">சேவைகள்</a>
+      </nav>
+    </header>
+
+    <h1>நிலையான விவசாய மதிப்பீடு</h1>
+    <p class="lede">மண்ணின் கார்பன், நீர் பயன்பாடு மற்றும் ஆற்றல் திறன் ஆகியவற்றை ஒரே பார்வையில் மதிப்பிட்டு, அடுத்த பருவத்திற்கான முன்னேற்றத்தை திட்டமிடுகிறது.</p>
+
+    <section class="hero">
+      <div class="panel">
+        <h2>கார்பன் மற்றும் நீர் செயல்திறன்</h2>
+        <div class="stats">
+          <div class="stat"><span>கார்பன் ஸ்கோர்</span><strong>{report['carbon_score']}</strong></div>
+          <div class="stat"><span>நீர் திறன்</span><strong>{report['water_efficiency_m3_per_ha']} m³/ha</strong></div>
+          <div class="stat"><span>ஆற்றல்</span><strong>{report['energy_use_kwh_per_ha']} kWh/ha</strong></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>நிலை / Status</h2>
+        <ul>
+          <li>{escape(str(report.get('carbon_status', 'Carbon status available')))}</li>
+          <li>குடும்ப அல்லது குழு நிலை: {float(report.get('farm_size_ha', 0.0))} ஹெக்டேர்ஸ்</li>
+          <li>மண் கார்பன்: {float(report.get('soil_carbon_tons', 0.0))} டன்</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="panel" style="margin-top: 20px;">
+      <h2>பரிந்துரை / Recommendation</h2>
+      <ul>
+        {recommendations}
+      </ul>
+    </section>
+  </div>
+</body>
+</html>
+"""
+
+
+@app.get("/traceability", response_class=HTMLResponse)
+def traceability_page(
+    farmer: str = "Kumaran",
+    batch: str = "RICE-24A",
+    location: str = "Kallakurichi",
+    quality_grade: str = "A",
+):
+    from digital_farming.services.traceability import build_traceability_summary
+
+    traceability = build_traceability_summary(
+        farmer=farmer,
+        batch=batch,
+        location=location,
+        quality_grade=quality_grade,
+    )
+
+    steps = "".join(f"<li>{escape(str(step))}</li>" for step in traceability.get("procurement_steps", []))
+    return f"""
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>குழு மற்றும் லாட் கண்காணிப்பு</title>
+  <style>
+    :root {{
+      --bg: #f4f8f2;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --secondary: #4aa6d6;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #dfe9df;
+      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif; background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%); color: var(--text); }}
+    .container {{ max-width: 1000px; margin: 0 auto; padding: 28px 18px 48px; }}
+    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }}
+    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 700; }}
+    .logo {{ width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
+    .nav {{ display: flex; gap: 10px; flex-wrap: wrap; }}
+    .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
+    h1 {{ margin: 28px 0 10px; font-size: clamp(2rem, 4vw, 3rem); }}
+    .lede {{ color: var(--muted); line-height: 1.8; max-width: 75ch; }}
+    .hero {{ display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px; margin-top: 24px; }}
+    .panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 22px; box-shadow: var(--shadow); }}
+    .stats {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }}
+    .stat {{ background: linear-gradient(180deg, #f7faf6 0%, #edf9f2 100%); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }}
+    .stat span {{ color: var(--muted); }}
+    .stat strong {{ display: block; margin-top: 8px; font-size: 1.8rem; }}
+    ul {{ margin: 0; padding-left: 18px; color: var(--muted); line-height: 1.9; }}
+    @media (max-width: 760px) {{ .hero, .stats {{ grid-template-columns: 1fr; }} .topbar {{ flex-direction: column; align-items: flex-start; }} }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">📦</div>
+        <span>கால்நடை/பயிர் கண்காணிப்பு</span>
+      </div>
+      <nav class="nav">
+        <a href="/">முகப்பு</a>
+        <a href="/dashboard">டாஷ்போர்டு</a>
+        <a href="/services">சேவைகள்</a>
+      </nav>
+    </header>
+
+    <h1>கால்காணிப்பு மற்றும் லாட் கண்காணிப்பு</h1>
+    <p class="lede">பயிர், விவசாயி, இருப்பிடம் மற்றும் தரம் ஆகியவற்றை ஒரே வரிசையில் புரிந்து கொண்டு, கொள்முதல் மற்றும் பரிமாற்ற செயல்முறையை தெளிவாக்குகிறது.</p>
+
+    <section class="hero">
+      <div class="panel">
+        <h2>லாட் விவரம் / Batch</h2>
+        <div class="stats">
+          <div class="stat"><span>விவசாயி</span><strong>{escape(str(traceability.get('farmer', farmer)))}</strong></div>
+          <div class="stat"><span>பேட்ச்</span><strong>{escape(str(traceability.get('batch', batch)))}</strong></div>
+          <div class="stat"><span>வகுப்பு / Grade</span><strong>{escape(str(traceability.get('quality_grade', quality_grade)))}</strong></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>நிலை / Status</h2>
+        <ul>
+          <li>{escape(str(traceability.get('traceability_status', 'Traceability verified')))}</li>
+          <li>இடம்: {escape(str(traceability.get('location', location)))}</li>
+          <li>தொடர்பு முறை: lot trace confirmed</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="panel" style="margin-top: 20px;">
+      <h2>விளையாட்டு / Procurement steps</h2>
+      <ul>
+        {steps}
+      </ul>
+    </section>
+  </div>
+</body>
+</html>
+"""
+
+
 @app.get("/health")
 def health_check():
     try:

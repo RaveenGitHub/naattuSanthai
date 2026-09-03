@@ -170,3 +170,17 @@ def test_market_intelligence_page_renders_price_trend_and_action():
     assert "rice" in response.text.lower() or "நெல்" in response.text
     assert "விலை" in response.text or "Price" in response.text
     assert "பரிந்துரை" in response.text or "Recommendation" in response.text
+
+
+def test_sustainability_and_traceability_pages_render_farmer_summary():
+    sustainability_response = client.get("/sustainability?farm_size_ha=5&soil_carbon_tons=2.4&water_use_liters=4200&energy_use_kwh=320")
+    assert sustainability_response.status_code == 200
+    assert "நிலையான" in sustainability_response.text or "Sustainability" in sustainability_response.text
+    assert "கார்பன்" in sustainability_response.text or "Carbon" in sustainability_response.text
+    assert "பரிந்துரை" in sustainability_response.text or "Recommendation" in sustainability_response.text
+
+    traceability_response = client.get("/traceability?farmer=Kumaran&batch=RICE-24A&location=Kallakurichi&quality_grade=A")
+    assert traceability_response.status_code == 200
+    assert "கயிறு" in traceability_response.text or "Traceability" in traceability_response.text
+    assert "Kumaran" in traceability_response.text or "குமரன்" in traceability_response.text
+    assert "வகுப்பு" in traceability_response.text or "Grade" in traceability_response.text
