@@ -203,6 +203,30 @@ def test_disease_detection_page_shows_live_recommendation_from_query_params():
     assert "Apply" in response.text or "சிகிச்சை" in response.text
 
 
+def test_disease_upload_route_accepts_image_file_for_ai_diagnosis():
+    username = f"uploadoperator_{uuid.uuid4().hex[:8]}"
+    create_user(username, "uploadpass", "operator")
+
+    login = client.post(
+        "/auth/login",
+        json={"username": username, "password": "uploadpass"},
+    )
+    token = login.json()["token"]
+
+    response = client.post(
+        "/api/diagnose/upload",
+        files={"file": ("leaf-scan.jpg", b"fake-image-bytes", "image/jpeg")},
+        data={"crop_type": "Rice", "notes": "Yellowing leaves and spots"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert "diagnosis" in body["data"]
+    assert "recommendation" in body["data"]
+
+
 def test_disease_detection_flags_low_confidence_results_for_manual_review():
     response = client.get(
         "/disease-detection?crop_type=Unknown&image_url=https://example.com/unknown.jpg&notes=No clear symptoms, unclear pattern"

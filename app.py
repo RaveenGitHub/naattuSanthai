@@ -1,7 +1,7 @@
 from html import escape
 from typing import Optional
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from database import get_connection
@@ -659,6 +659,31 @@ def diagnose(request: DiagnoseRequest, authorization: Optional[str] = Header(def
     if payload.get("role") not in {"operator", "admin"}:
         raise HTTPException(status_code=403, detail="Operator/Admin access required")
     result = diagnose_crop_issue(request.crop_type, request.image_url, request.notes)
+    return {"success": True, "data": result, "error": None}
+
+
+@app.post("/api/diagnose/upload")
+def diagnose_upload(
+    crop_type: str = Form(...),
+    notes: str = Form(""),
+    file: UploadFile = File(...),
+    authorization: Optional[str] = Header(default=None),
+):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    token = authorization.split(" ", 1)[1]
+    try:
+        payload = verify_token(token)
+    except Exception as exc:  # pragma: no cover - security exception path
+        raise HTTPException(status_code=401, detail="Invalid token") from exc
+    if payload.get("role") not in {"operator", "admin"}:
+        raise HTTPException(status_code=403, detail="Operator/Admin access required")
+
+    image_url = file.filename or "uploaded-crop-image"
+    if file.content_type:
+        image_url = f"{image_url}::{file.content_type}"
+
+    result = diagnose_crop_issue(crop_type, image_url, notes)
     return {"success": True, "data": result, "error": None}
 
 
