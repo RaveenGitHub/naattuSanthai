@@ -1309,6 +1309,11 @@ def soil_health_page(
     action_items = "".join(
         f"<li>{escape(str(item))}</li>" for item in assessment.get("nutrient_actions", [])
     )
+    recommendation_summary = escape(str(assessment.get("recommendation_summary", "")))
+    fertilizer_plan_items = "".join(
+        f"<li><strong>{escape(str(item.get('nutrient', 'உரம்')))}:</strong> {escape(str(item.get('dose', '')))} — {escape(str(item.get('reason', '')))}</li>"
+        for item in assessment.get("fertilizer_plan", [])
+    )
 
     return f"""
 <!DOCTYPE html>
@@ -1389,6 +1394,12 @@ def soil_health_page(
       <div class="panel">
         <span class="pill">விரைவான பரிந்துரை</span>
         <h2>உரம் &amp; மேலாண்மை</h2>
+        <p><strong>பரிந்துரை:</strong> {recommendation_summary}</p>
+        <h3>உர திட்டம்</h3>
+        <ul>
+          {fertilizer_plan_items}
+        </ul>
+        <h3>நடவடிக்கை பட்டியல்</h3>
         <ul>
           {action_items}
         </ul>

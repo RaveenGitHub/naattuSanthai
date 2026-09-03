@@ -150,3 +150,5 @@ def test_soil_health_page_renders_farmer_actionable_summary():
     assert "மண் சோதனை" in response.text or "Soil health" in response.text
     assert "groundnut" in response.text.lower() or "நிலக்கடலை" in response.text
     assert "உரம்" in response.text or "Fertilizer" in response.text
+    assert "பரிந்துரை" in response.text or "Recommendation" in response.text
+    assert "உர திட்டம்" in response.text or "Fertilizer plan" in response.text or "fertilizer" in response.text.lower()
