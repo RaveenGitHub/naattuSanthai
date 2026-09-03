@@ -2469,6 +2469,125 @@ def traceability_page(
 """
 
 
+@app.get("/admin/quality-gate", response_class=HTMLResponse)
+def admin_quality_gate_page():
+    weather_status = get_weather_fetch_status()
+    scheme_status = get_scheme_fetch_status()
+    quality_gate = {
+        "overall_status": "healthy" if weather_status.get("total_records", 0) > 0 and scheme_status.get("total_schemes", 0) > 0 else "warning",
+        "weather": weather_status,
+        "schemes": scheme_status,
+    }
+
+    weather_regions = " | ".join(f"{key}:{value}" for key, value in (quality_gate["weather"].get("regions") or {}).items()) or "இல்லை"
+    scheme_categories = " | ".join(f"{key}:{value}" for key, value in (quality_gate["schemes"].get("categories") or {}).items()) or "இல்லை"
+
+    source_names = [
+        quality_gate["weather"].get("last_source_name"),
+        quality_gate["schemes"].get("last_source_name"),
+    ]
+    source_names = [item for item in source_names if item]
+    sources_text = " | ".join(source_names) if source_names else "மூலம் எதுவும் பதிவு செய்யப்படவில்லை"
+
+    return f"""
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quality Gate</title>
+  <style>
+    :root {{
+      --bg: #f4f8f2;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --secondary: #4aa6d6;
+      --warning: #d97706;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #dfe9df;
+      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif; background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%); color: var(--text); }}
+    .container {{ max-width: 1000px; margin: 0 auto; padding: 28px 18px 48px; }}
+    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }}
+    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 700; }}
+    .logo {{ width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
+    .nav {{ display: flex; gap: 10px; flex-wrap: wrap; }}
+    .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
+    h1 {{ margin: 28px 0 10px; font-size: clamp(2rem, 4vw, 3rem); }}
+    .lede {{ color: var(--muted); line-height: 1.8; max-width: 75ch; }}
+    .hero {{ display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px; margin-top: 24px; }}
+    .panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 22px; box-shadow: var(--shadow); }}
+    .stats {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }}
+    .stat {{ background: linear-gradient(180deg, #f7faf6 0%, #edf9f2 100%); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }}
+    .stat span {{ color: var(--muted); }}
+    .stat strong {{ display: block; margin-top: 8px; font-size: 1.8rem; }}
+    ul {{ margin: 0; padding-left: 18px; color: var(--muted); line-height: 1.9; }}
+    @media (max-width: 760px) {{ .hero, .stats {{ grid-template-columns: 1fr; }} .topbar {{ flex-direction: column; align-items: flex-start; }} }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🛡️</div>
+        <span>Quality Gate / தரக் கட்டுப்பாடு</span>
+      </div>
+      <nav class="nav">
+        <a href="/">முகப்பு</a>
+        <a href="/dashboard">டாஷ்போர்டு</a>
+        <a href="/admin/overview">Admin</a>
+      </nav>
+    </header>
+
+    <h1>Quality Gate</h1>
+    <p class="lede">வானிலை தரவு, அரசு திட்ட புதுப்பிப்புகள், மற்றும் மூலநிலை ஆகியவற்றின் நம்பகத்தன்மை மற்றும் தர மதிப்பீடு ஆகியவற்றை ஒரே பார்வையில் சோதிக்கிறது.</p>
+
+    <section class="hero">
+      <div class="panel">
+        <h2>தர நிலை / Health</h2>
+        <div class="stats">
+          <div class="stat"><span>ஒட்டுமொத்த நிலை</span><strong>{escape(str(quality_gate['overall_status']))}</strong></div>
+          <div class="stat"><span>வானிலை பதிவுகள்</span><strong>{quality_gate['weather'].get('total_records', 0)}</strong></div>
+          <div class="stat"><span>அரசு திட்டங்கள்</span><strong>{quality_gate['schemes'].get('total_schemes', 0)}</strong></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>மூலம் / Source</h2>
+        <ul>
+          <li>{escape(sources_text)}</li>
+          <li>வானிலை: {escape(weather_regions)}</li>
+          <li>அரசு திட்டங்கள்: {escape(scheme_categories)}</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="panel" style="margin-top: 20px;">
+      <h2>வானிலை / Weather</h2>
+      <ul>
+        <li>மீண்டும் புதுப்பித்த நேரம்: {escape(str(quality_gate['weather'].get('last_updated_at', 'பதிவு இல்லை')))}</li>
+        <li>தினசரி பதிவுகள்: {quality_gate['weather'].get('daily_records', 0)}</li>
+        <li>மண்டலங்கள்: {escape(weather_regions)}</li>
+      </ul>
+    </section>
+
+    <section class="panel" style="margin-top: 20px;">
+      <h2>அரசு திட்டங்கள் / Schemes</h2>
+      <ul>
+        <li>சமீபத்திய வெளியீடுகள்: {quality_gate['schemes'].get('latest_count', 0)}</li>
+        <li>இறுதி புதுப்பிப்பு: {escape(str(quality_gate['schemes'].get('last_updated_at', 'பதிவு இல்லை')))}</li>
+        <li>வகைகள்: {escape(scheme_categories)}</li>
+      </ul>
+    </section>
+  </div>
+</body>
+</html>
+"""
+
+
 @app.get("/health")
 def health_check():
     try:

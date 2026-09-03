@@ -172,6 +172,15 @@ def test_market_intelligence_page_renders_price_trend_and_action():
     assert "பரிந்துரை" in response.text or "Recommendation" in response.text
 
 
+def test_admin_quality_gate_page_renders_fetch_and_source_health():
+    response = client.get("/admin/quality-gate")
+    assert response.status_code == 200
+    assert "Quality Gate" in response.text or "தரக்" in response.text
+    assert "வானிலை" in response.text or "Weather" in response.text
+    assert "அரசு திட்டங்கள்" in response.text or "Schemes" in response.text
+    assert "மூலம்" in response.text or "Source" in response.text
+
+
 def test_sustainability_and_traceability_pages_render_farmer_summary():
     sustainability_response = client.get("/sustainability?farm_size_ha=5&soil_carbon_tons=2.4&water_use_liters=4200&energy_use_kwh=320")
     assert sustainability_response.status_code == 200
