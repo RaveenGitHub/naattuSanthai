@@ -2720,6 +2720,119 @@ def register_page():
 """
 
 
+@app.get("/profile", response_class=HTMLResponse)
+def profile_page(username: str = "operator1"):
+    try:
+        profile = get_profile(username)
+    except ValueError:
+        profile = {"username": username, "role": "operator"}
+
+    role_label = {
+        "farmer": "விவசாயி",
+        "operator": "ஆபரேட்டர்",
+        "admin": "நிர்வாகி",
+    }.get(profile.get("role", "operator"), "ஆபரேட்டர்")
+
+    return f"""
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>சுயவிபரம்</title>
+  <style>
+    :root {{
+      --bg: #f4f8f2;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --secondary: #4aa6d6;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #dfe9df;
+      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+      --warning: #d97706;
+      --success: #2d7d46;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif; background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%); color: var(--text); }}
+    .container {{ max-width: 1000px; margin: 0 auto; padding: 28px 18px 48px; }}
+    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }}
+    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 700; }}
+    .logo {{ width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
+    .nav {{ display: flex; gap: 10px; flex-wrap: wrap; }}
+    .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
+    h1 {{ margin: 28px 0 10px; font-size: clamp(2rem, 4vw, 3rem); }}
+    .lede {{ color: var(--muted); line-height: 1.8; max-width: 75ch; }}
+    .hero {{ display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 18px; margin-top: 24px; }}
+    .panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 22px; box-shadow: var(--shadow); }}
+    .stats {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }}
+    .stat {{ background: linear-gradient(180deg, #f7faf6 0%, #edf9f2 100%); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }}
+    .stat span {{ color: var(--muted); }}
+    .stat strong {{ display: block; margin-top: 8px; font-size: 1.8rem; }}
+    .meta {{ display: grid; gap: 12px; margin-top: 14px; }}
+    .meta-item {{ border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: #fbfdfb; }}
+    .muted {{ color: var(--muted); }}
+    ul {{ margin: 0; padding-left: 18px; color: var(--muted); line-height: 1.9; }}
+    @media (max-width: 760px) {{ .hero, .stats {{ grid-template-columns: 1fr; }} .topbar {{ flex-direction: column; align-items: flex-start; }} }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">👤</div>
+        <span>சுயவிபரம் / Profile</span>
+      </div>
+      <nav class="nav">
+        <a href="/">முகப்பு</a>
+        <a href="/dashboard">டாஷ்போர்டு</a>
+        <a href="/services">சேவைகள்</a>
+      </nav>
+    </header>
+
+    <h1>பயனர் சுயவிபரம்</h1>
+    <p class="lede">விவசாயி மற்றும் நில மேலாண்மை தகவல்களை ஒரே இடத்தில் ஆய்வு செய்து, அடுத்த நடவடிக்கையை திட்டமிட உதவுகிறது.</p>
+
+    <section class="hero">
+      <div class="panel">
+        <h2>சுருக்கம் / Summary</h2>
+        <div class="stats">
+          <div class="stat"><span>பயனர்</span><strong>{escape(str(profile.get('username', username)))}</strong></div>
+          <div class="stat"><span>பங்கு</span><strong>{escape(role_label)}</strong></div>
+          <div class="stat"><span>நிலம்</span><strong>3.5 ha</strong></div>
+        </div>
+        <div class="meta">
+          <div class="meta-item"><strong>கிராமம்:</strong> <span class="muted">கல்லக்குறிச்சி</span></div>
+          <div class="meta-item"><strong>முக்கிய பயிர்:</strong> <span class="muted">நெல்</span></div>
+          <div class="meta-item"><strong>மண் நிலை:</strong> <span class="muted">சக்திவாய்ந்த, pH 6.8</span></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>நிலை / Status</h2>
+        <ul>
+          <li>சமீபத்திய மண் ஆய்வு: வெள்ளிக்கிழமை, 24 மணி நேரத்திற்கு முன்பு.</li>
+          <li>பாசன அட்டவணை: 3 முறை பரிந்துரைக்கப்பட்டது.</li>
+          <li>வானிலை எச்சரிக்கை: மிதமான மழை முன்னறிவிப்பு.</li>
+          <li>அரசு திட்டங்கள்: 2 புதிய உதவிகள் பொருந்துகின்றன.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="panel" style="margin-top: 20px;">
+      <h2>அடுத்த படிகள் / Next Steps</h2>
+      <ul>
+        <li>மண் தரவை மறுபரிசீலனை செய்து, உர திட்டத்தை புதுப்பிக்கவும்.</li>
+        <li>வானிலை மற்றும் சந்தை முன்னறிவிப்புகளை தொடர்ந்து கண்காணிக்கவும்.</li>
+        <li>அரசு உதவித் திட்டங்கள் மற்றும் நீர் மேலாண்மை நடவடிக்கைகளை ஒருங்கிணைக்கவும்.</li>
+      </ul>
+    </section>
+  </div>
+</body>
+</html>
+"""
+
+
 @app.get("/health")
 def health_check():
     try:

@@ -190,6 +190,15 @@ def test_registration_page_renders_farmer_onboarding_steps():
     assert "படிவம்" in response.text or "Form" in response.text
 
 
+def test_profile_page_renders_user_and_farm_summary():
+    response = client.get("/profile?username=operator1")
+    assert response.status_code == 200
+    assert "சுயவிபரம்" in response.text or "Profile" in response.text
+    assert "operator1" in response.text or "ஆபரேட்டர்" in response.text
+    assert "கிராமம்" in response.text or "Village" in response.text
+    assert "நிலம்" in response.text or "Farm" in response.text
+
+
 def test_sustainability_and_traceability_pages_render_farmer_summary():
     sustainability_response = client.get("/sustainability?farm_size_ha=5&soil_carbon_tons=2.4&water_use_liters=4200&energy_use_kwh=320")
     assert sustainability_response.status_code == 200
