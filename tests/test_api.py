@@ -181,6 +181,15 @@ def test_admin_quality_gate_page_renders_fetch_and_source_health():
     assert "மூலம்" in response.text or "Source" in response.text
 
 
+def test_registration_page_renders_farmer_onboarding_steps():
+    response = client.get("/register")
+    assert response.status_code == 200
+    assert "பதிவு" in response.text or "Register" in response.text
+    assert "கிராமம்" in response.text or "Village" in response.text
+    assert "நிலம்" in response.text or "Farm" in response.text
+    assert "படிவம்" in response.text or "Form" in response.text
+
+
 def test_sustainability_and_traceability_pages_render_farmer_summary():
     sustainability_response = client.get("/sustainability?farm_size_ha=5&soil_carbon_tons=2.4&water_use_liters=4200&energy_use_kwh=320")
     assert sustainability_response.status_code == 200

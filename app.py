@@ -2588,6 +2588,138 @@ def admin_quality_gate_page():
 """
 
 
+@app.get("/register", response_class=HTMLResponse)
+def register_page():
+    return """
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>விவசாயி பதிவு</title>
+  <style>
+    :root {
+      --bg: #f4f8f2;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --secondary: #4aa6d6;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #dfe9df;
+      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%); color: var(--text);
+    }
+    .container { max-width: 1000px; margin: 0 auto; padding: 28px 18px 48px; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; }
+    .logo { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }
+    .nav { display: flex; gap: 10px; flex-wrap: wrap; }
+    .nav a { text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }
+    h1 { margin: 28px 0 10px; font-size: clamp(2rem, 4vw, 3rem); }
+    .lede { color: var(--muted); line-height: 1.8; max-width: 75ch; }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 24px; box-shadow: var(--shadow); }
+    form { display: grid; gap: 18px; }
+    .row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    label { display: grid; gap: 8px; font-weight: 600; }
+    input, select, textarea {
+      width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; font: inherit; background: #fbfdfb; color: var(--text);
+    }
+    button {
+      border: none; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; border-radius: 12px; padding: 14px 18px; font-weight: 700; cursor: pointer;
+    }
+    ul { color: var(--muted); line-height: 1.9; padding-left: 18px; }
+    @media (max-width: 760px) { .row { grid-template-columns: 1fr; } .topbar { flex-direction: column; align-items: flex-start; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🌾</div>
+        <span>விவசாயி பதிவு / Farmer Registration</span>
+      </div>
+      <nav class="nav">
+        <a href="/">முகப்பு</a>
+        <a href="/dashboard">டாஷ்போர்டு</a>
+        <a href="/services">சேவைகள்</a>
+      </nav>
+    </header>
+
+    <h1>பதிவு படிவம் / Registration Form</h1>
+    <p class="lede">உங்கள் விவசாயப் பதிவு, கிராமம், நிலம், பயிர் மற்றும் தொடர்புத் தகவல்களை உள்ளிட்டு, அடுத்தகட்ட சேவைகளை அணுகவும்.</p>
+
+    <div class="panel">
+      <form>
+        <div class="row">
+          <label>
+            விவசாயி பெயர் / Farmer Name
+            <input type="text" value="" placeholder="உதாரணம்: குமரன்" />
+          </label>
+          <label>
+            கைபேசி எண் / Phone
+            <input type="tel" value="" placeholder="9876543210" />
+          </label>
+        </div>
+
+        <div class="row">
+          <label>
+            கிராமம் / Village
+            <input type="text" value="" placeholder="கல்லக்குறிச்சி" />
+          </label>
+          <label>
+            நிலப்பரப்பு / Farm Area (ha)
+            <input type="number" value="" placeholder="3.5" />
+          </label>
+        </div>
+
+        <div class="row">
+          <label>
+            முக்கிய பயிர் / Primary Crop
+            <select>
+              <option>நெல்</option>
+              <option>மக்காச்சோளம்</option>
+              <option>நிலக்கடலை</option>
+              <option>மிளகாய்</option>
+            </select>
+          </label>
+          <label>
+            மண் வகை / Soil Type
+            <select>
+              <option>களிமண்</option>
+              <option>இளமண்</option>
+              <option>சுண்ணாம்பு</option>
+              <option>கலப்பு</option>
+            </select>
+          </label>
+        </div>
+
+        <label>
+          கூடுதல் குறிப்பு / Notes
+          <textarea rows="4" placeholder="நிலத்தின் நிலை, நீர் ஆதாரம், அல்லது தொடர்புடைய தேவைகள்"></textarea>
+        </label>
+
+        <button type="submit">பதிவு செய்யவும் / Register</button>
+      </form>
+    </div>
+
+    <div class="panel" style="margin-top: 20px;">
+      <h2>அடுத்த படிகள் / Next steps</h2>
+      <ul>
+        <li>பயிர் விவரம் மற்றும் மண் நிலை பதிவு செய்யப்படும்.</li>
+        <li>சேவைகளின் அடிப்படையில் இலக்கு பரிந்துரைகள் வழங்கப்படும்.</li>
+        <li>வானிலை, சந்தை மற்றும் அரசு திட்ட தகவல்கள் உங்களுக்காகத் தயாராகும்.</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>
+"""
+
+
 @app.get("/health")
 def health_check():
     try:
