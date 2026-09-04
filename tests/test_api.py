@@ -154,6 +154,17 @@ def test_government_scheme_latest_and_archive_endpoints():
     assert "விண்ணப்ப படிகள்" in detailed_page_response.text
 
 
+def test_soil_manual_entry_page_renders_farm_input_form():
+    response = client.get("/soil-testing")
+    assert response.status_code == 200
+    assert "மண் சோதனை" in response.text or "Soil Testing" in response.text
+    assert "pH" in response.text or "பிஎச்" in response.text
+    assert "நைட்ரஜன்" in response.text or "Nitrogen" in response.text
+    assert "பாஸ்பரஸ்" in response.text or "Phosphorus" in response.text
+    assert "பொட்டாசியம்" in response.text or "Potassium" in response.text
+    assert "சேமி" in response.text or "Submit" in response.text
+
+
 def test_soil_health_page_renders_farmer_actionable_summary():
     response = client.get("/soil-health?crop=groundnut&ph=5.6&nitrogen=24&phosphorus=18&potassium=152")
     assert response.status_code == 200

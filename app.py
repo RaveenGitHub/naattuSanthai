@@ -1436,6 +1436,121 @@ def soil_health_page(
 """
 
 
+@app.get("/soil-testing", response_class=HTMLResponse)
+def soil_testing_page():
+    return """
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>மண் சோதனை</title>
+  <style>
+    :root {
+      --bg: #f7f5ee;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --secondary: #4aa6d6;
+      --soil: #8f5e3c;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #ddebdc;
+      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%);
+      color: var(--text);
+    }
+    .container { max-width: 900px; margin: 0 auto; padding: 28px 18px 48px; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0 20px; border-bottom: 1px solid var(--line); }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; }
+    .logo { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--soil)); color: white; }
+    .nav { display: flex; flex-wrap: wrap; gap: 10px; }
+    .nav a { text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }
+    .panel {
+      margin-top: 26px; background: var(--panel); border: 1px solid var(--line); border-radius: 20px;
+      box-shadow: var(--shadow); padding: 24px;
+    }
+    h1 { margin-top: 0; margin-bottom: 10px; font-size: clamp(2rem, 4vw, 2.7rem); }
+    .lede { color: var(--muted); line-height: 1.8; }
+    form { display: grid; gap: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    .field { display: flex; flex-direction: column; gap: 8px; }
+    label { font-weight: 700; }
+    input, select {
+      border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font-size: 1rem; color: var(--text); background: #fff;
+    }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; }
+    button {
+      border: none; border-radius: 12px; padding: 12px 18px; font-size: 1rem; font-weight: 700; cursor: pointer;
+      background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white;
+    }
+    .secondary { background: #eff5ef; color: var(--text); border: 1px solid var(--line); }
+    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } .topbar { flex-direction: column; align-items: flex-start; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🌾</div>
+        <span>மண் சோதனை</span>
+      </div>
+      <nav class="nav" aria-label="மண் சோதனை வழிசெலுத்தல்">
+        <a href="/">முகப்பு</a>
+        <a href="/dashboard">டாஷ்போர்டு</a>
+        <a href="/services">சேவைகள்</a>
+      </nav>
+    </header>
+
+    <section class="panel">
+      <h1>மண் சோதனை மற்றும் உர திட்டம்</h1>
+      <p class="lede">தற்போதைய மண் நிலையை எளிய படிவத்தில் உள்ளிடவும். pH, நைட்ரஜன், பாஸ்பரஸ் மற்றும் பொட்டாசியம் மதிப்புகள் அடிப்படையில் பயிர் சார்ந்த பரிந்துரை உருவாக்கப்படும்.</p>
+
+      <form method="get" action="/soil-health">
+        <div class="grid">
+          <div class="field">
+            <label for="crop">பயிர்</label>
+            <select id="crop" name="crop">
+              <option value="groundnut">நிலக்கடலை</option>
+              <option value="rice">நெல்</option>
+              <option value="tomato">தக்காளி</option>
+              <option value="cotton">பருத்தி</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="ph">pH</label>
+            <input id="ph" name="ph" type="number" step="0.1" value="6.5" placeholder="6.5" />
+          </div>
+          <div class="field">
+            <label for="nitrogen">நைட்ரஜன்</label>
+            <input id="nitrogen" name="nitrogen" type="number" step="1" value="25" placeholder="25" />
+          </div>
+          <div class="field">
+            <label for="phosphorus">பாஸ்பரஸ்</label>
+            <input id="phosphorus" name="phosphorus" type="number" step="1" value="20" placeholder="20" />
+          </div>
+          <div class="field">
+            <label for="potassium">பொட்டாசியம்</label>
+            <input id="potassium" name="potassium" type="number" step="1" value="180" placeholder="180" />
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="submit">சேமி</button>
+          <button type="reset" class="secondary">மீட்டமை</button>
+        </div>
+      </form>
+    </section>
+  </div>
+</body>
+</html>
+"""
+
+
 GOVERNMENT_SCHEMES_PAGE = """
 <!DOCTYPE html>
 <html lang="ta">
