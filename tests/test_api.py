@@ -72,9 +72,19 @@ def test_weather_fetch_status_contains_source_and_retention_metadata():
     assert "retention_days" in payload
     assert "quality_gate" in payload
     assert "archive_policy" in payload
+    assert "source_whitelist" in payload
+    assert "fallback_sources" in payload
     assert payload["retention_days"] >= 7
     assert payload["archive_policy"]["latest_window_days"] == 7
     assert payload["archive_policy"]["monthly_retention_months"] >= 12
+
+
+def test_weather_quality_page_renders_source_whitelist_and_retention_policy():
+    response = client.get("/weather-quality")
+    assert response.status_code == 200
+    assert "Trusted weather sources" in response.text or "நம்பகமான வானிலை மூலங்கள்" in response.text
+    assert "Retention" in response.text or "பொறுப்பு" in response.text or "தக்கவைப்பு" in response.text
+    assert "IMD" in response.text or "India Meteorological Department" in response.text
 
 
 def test_market_prices_endpoint():

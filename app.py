@@ -2040,6 +2040,88 @@ def weather_page(region: str = "Kallakurichi", period: str = "daily"):
 """
 
 
+@app.get("/weather-quality", response_class=HTMLResponse)
+def weather_quality_page():
+    status = get_weather_fetch_status()
+    source_list = " | ".join(status.get("source_whitelist", [])) or "IMD"
+    fallback_list = " | ".join(status.get("fallback_sources", [])) or "Regional field station"
+    retention = status.get("archive_policy", {})
+    return f"""
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Weather Quality</title>
+  <style>
+    :root {{
+      --bg: #f4f8f2;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --secondary: #4aa6d6;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #dfe9df;
+      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif; background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%); color: var(--text); }}
+    .container {{ max-width: 1000px; margin: 0 auto; padding: 28px 18px 48px; }}
+    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }}
+    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 700; }}
+    .logo {{ width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
+    .nav {{ display: flex; gap: 10px; flex-wrap: wrap; }}
+    .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
+    h1 {{ margin: 28px 0 10px; font-size: clamp(2rem, 4vw, 3rem); }}
+    .lede {{ color: var(--muted); line-height: 1.8; max-width: 75ch; }}
+    .panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 22px; box-shadow: var(--shadow); }}
+    .meta {{ display: grid; gap: 12px; margin-top: 18px; }}
+    .meta-item {{ border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: #fbfdfb; }}
+    ul {{ color: var(--muted); line-height: 1.9; padding-left: 18px; margin: 0; }}
+    @media (max-width: 760px) {{ .topbar {{ flex-direction: column; align-items: flex-start; }} }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🛰️</div>
+        <span>Trusted weather sources / நம்பகமான வானிலை மூலங்கள்</span>
+      </div>
+      <nav class="nav">
+        <a href="/">முகப்பு</a>
+        <a href="/dashboard">டாஷ்போர்டு</a>
+        <a href="/admin/overview">Admin</a>
+      </nav>
+    </header>
+
+    <h1>வானிலை தரக் கட்டுப்பாடு</h1>
+    <p class="lede">அதிகாரப்பூர்வ வானிலை ஆதாரங்கள், தக்கவைப்பு கொள்கை மற்றும் அட்மின் கண்காணிப்பு ஆகியவற்றை ஒரே பார்வையில் சரிபார்க்கிறது.</p>
+
+    <section class="panel">
+      <h2>Trusted weather sources / நம்பகமான மூலங்கள்</h2>
+      <div class="meta">
+        <div class="meta-item"><strong>Whitelist:</strong> {escape(source_list)}</div>
+        <div class="meta-item"><strong>Fallback / Secondary:</strong> {escape(fallback_list)}</div>
+        <div class="meta-item"><strong>Current feed:</strong> {escape(str(status.get('last_source_name') or 'IMD'))}</div>
+      </div>
+    </section>
+
+    <section class="panel" style="margin-top: 20px;">
+      <h2>Retention and archive / தக்கவைப்பு மற்றும் காப்பகம்</h2>
+      <ul>
+        <li>Latest window: {retention.get('latest_window_days', 7)} days</li>
+        <li>Archive after: {retention.get('archive_after_days', 7)} days</li>
+        <li>Monthly retention: {retention.get('monthly_retention_months', 12)} months</li>
+        <li>Status: {escape(str(retention.get('status', 'pass')))}</li>
+      </ul>
+    </section>
+  </div>
+</body>
+</html>
+"""
+
+
 @app.get("/market-intelligence", response_class=HTMLResponse)
 def market_intelligence_page(crop: str = "rice", market: str = "Kallakurichi"):
     from digital_farming.services.market_intelligence import get_market_intelligence

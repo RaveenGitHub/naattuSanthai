@@ -173,11 +173,13 @@ def get_weather_fetch_status() -> dict:
         ).fetchall()
 
     last_source_name = last_row["source_name"] if last_row else None
-    sources = {"IMD", "India Meteorological Department", "Tamil Nadu Weather Office"}
+    source_whitelist = ["IMD", "India Meteorological Department", "Tamil Nadu Weather Office"]
+    fallback_sources = ["Regional field station", "Local agro-weather sensor"]
     source_compliance = {
-        "status": "pass" if last_source_name in sources else "warning",
-        "trusted_sources": sorted(sources),
+        "status": "pass" if last_source_name in set(source_whitelist) else "warning",
+        "trusted_sources": sorted(source_whitelist),
         "current_source": last_source_name,
+        "fallback_sources": fallback_sources,
     }
     retention_days = 14
     archive_policy = {
@@ -201,6 +203,8 @@ def get_weather_fetch_status() -> dict:
         "last_source_name": last_source_name,
         "last_updated_at": last_row["created_at"] if last_row else None,
         "regions": {row["region"]: row["count"] for row in region_rows},
+        "source_whitelist": source_whitelist,
+        "fallback_sources": fallback_sources,
         "source_compliance": source_compliance,
         "retention_days": retention_days,
         "archive_policy": archive_policy,
