@@ -165,6 +165,13 @@ def test_soil_manual_entry_page_renders_farm_input_form():
     assert "சேமி" in response.text or "Submit" in response.text
 
 
+def test_soil_health_page_shows_crop_and_irrigation_guidance():
+    response = client.get("/soil-health?crop=groundnut&ph=5.6&nitrogen=24&phosphorus=18&potassium=152")
+    assert response.status_code == 200
+    assert "பயிர் பரிந்துரை" in response.text or "Recommended crops" in response.text or "Crop recommendations" in response.text
+    assert "நீர் மேலாண்மை" in response.text or "Irrigation" in response.text or "irrigation" in response.text.lower()
+
+
 def test_soil_health_page_renders_farmer_actionable_summary():
     response = client.get("/soil-health?crop=groundnut&ph=5.6&nitrogen=24&phosphorus=18&potassium=152")
     assert response.status_code == 200
@@ -182,6 +189,15 @@ def test_weather_page_renders_region_forecast_and_guidance():
     assert "Kallakurichi" in response.text or "கல்லக்குறிச்சி" in response.text
     assert "பரிந்துரை" in response.text or "Advisory" in response.text
     assert "மழை" in response.text or "Rain" in response.text
+
+
+def test_weather_page_supports_region_selector_for_district_taluk_and_village():
+    response = client.get("/weather?region=Kallakurichi&district=Villupuram&taluk=Kallakurichi&village=Periyar Nagar&period=daily")
+    assert response.status_code == 200
+    assert "district" in response.text.lower() or "மாவட்டம்" in response.text
+    assert "taluk" in response.text.lower() or "தாலுக்கா" in response.text
+    assert "village" in response.text.lower() or "கிராமம்" in response.text
+    assert "Kallakurichi" in response.text or "கல்லக்குறிச்சி" in response.text
 
 
 def test_market_intelligence_page_renders_price_trend_and_action():

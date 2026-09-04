@@ -1339,6 +1339,12 @@ def soil_health_page(
         f"<li><strong>{escape(str(item.get('nutrient', 'உரம்')))}:</strong> {escape(str(item.get('dose', '')))} — {escape(str(item.get('reason', '')))}</li>"
         for item in assessment.get("fertilizer_plan", [])
     )
+    crop_recommendations_html = "".join(
+        f"<li>{escape(str(item))}</li>" for item in assessment.get("crop_recommendations", [])
+    )
+    irrigation_guidance_html = "".join(
+        f"<li>{escape(str(item))}</li>" for item in assessment.get("irrigation_guidance", [])
+    )
 
     return f"""
 <!DOCTYPE html>
@@ -1427,6 +1433,23 @@ def soil_health_page(
         <h3>நடவடிக்கை பட்டியல்</h3>
         <ul>
           {action_items}
+        </ul>
+      </div>
+    </section>
+
+    <section class="hero" style="margin-top: 18px;">
+      <div class="panel">
+        <span class="pill">பயிர் பரிந்துரை</span>
+        <h2>பயிர் பரிந்துரை / Crop recommendations</h2>
+        <ul>
+          {crop_recommendations_html}
+        </ul>
+      </div>
+      <div class="panel">
+        <span class="pill">நீர் மேலாண்மை</span>
+        <h2>நீர் மேலாண்மை / Irrigation guidance</h2>
+        <ul>
+          {irrigation_guidance_html}
         </ul>
       </div>
     </section>
@@ -2042,8 +2065,17 @@ WEATHER_MARKET_PAGE = """
 
 
 @app.get("/weather", response_class=HTMLResponse)
-def weather_page(region: str = "Kallakurichi", period: str = "daily"):
+def weather_page(
+    region: str = "Kallakurichi",
+    period: str = "daily",
+    district: str = "",
+    taluk: str = "",
+    village: str = "",
+):
     region_name = (region or "Kallakurichi").strip() or "Kallakurichi"
+    district_name = (district or "").strip() or "Villupuram"
+    taluk_name = (taluk or "").strip() or "Kallakurichi"
+    village_name = (village or "").strip() or "Periyar Nagar"
     period_name = (period or "daily").strip().lower() or "daily"
     forecasts = list_weather_forecast(period_name, region_name)
     if not forecasts:
@@ -2104,8 +2136,10 @@ def weather_page(region: str = "Kallakurichi", period: str = "daily"):
     .metric {{ background: linear-gradient(180deg, #f7faf6 0%, #edf9f2 100%); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }}
     .metric span {{ color: var(--muted); }}
     .metric strong {{ display: block; margin-top: 8px; font-size: 1.8rem; }}
+    .meta {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }}
+    .meta-item {{ border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: #fbfdfb; font-size: 0.95rem; }}
     ul {{ margin: 0; padding-left: 18px; color: var(--muted); line-height: 1.9; }}
-    @media (max-width: 760px) {{ .hero, .metrics {{ grid-template-columns: 1fr; }} .topbar {{ flex-direction: column; align-items: flex-start; }} }}
+    @media (max-width: 760px) {{ .hero, .metrics, .meta {{ grid-template-columns: 1fr; }} .topbar {{ flex-direction: column; align-items: flex-start; }} }}
   </style>
 </head>
 <body>
@@ -2124,6 +2158,12 @@ def weather_page(region: str = "Kallakurichi", period: str = "daily"):
 
     <h1>வானிலை முன்னறிவிப்பு</h1>
     <p class="lede">{summary}</p>
+
+    <div class="meta">
+      <div class="meta-item"><strong>District:</strong> {escape(district_name)}</div>
+      <div class="meta-item"><strong>Taluk:</strong> {escape(taluk_name)}</div>
+      <div class="meta-item"><strong>Village:</strong> {escape(village_name)}</div>
+    </div>
 
     <section class="hero">
       <div class="panel">
