@@ -2100,6 +2100,86 @@ def weather_page(
     humidity = float(forecast.get("humidity_pct", 68.0))
     wind = float(forecast.get("wind_kmh", 18.0))
 
+    if period_name == "weekly":
+        weekly_cards = "".join(
+            [
+                f"<div class='metric'><span>{day}</span><strong>{temp_val}°C</strong><small>{rain_val} mm / மழை</small></div>"
+                for day, temp_val, rain_val in [
+                    ("திங்கள்", 30, 18),
+                    ("செவ்வாய்", 31, 22),
+                    ("புதன்", 29, 26),
+                    ("வியாழன்", 30, 15),
+                    ("வெள்ளி", 32, 12),
+                    ("சனி", 31, 14),
+                    ("ஞாயிறு", 29, 20),
+                ]
+            ]
+        )
+        period_section = f"""
+        <section class=\"hero\">
+          <div class=\"panel\">
+            <h2>7 நாள் முன்னறிவிப்பு / 7-day forecast</h2>
+            <div class=\"metrics\" style=\"grid-template-columns: repeat(auto-fit, minmax(116px, 1fr));\">{weekly_cards}</div>
+          </div>
+          <div class=\"panel\">
+            <h2>பயிர் பரிந்துரை / Crop Advisory</h2>
+            <ul>
+              <li>மழை மற்றும் வெப்பநிலை மாற்றத்தை கணக்கிட்டு, பாசன நேரத்தை மாற்றியமைக்கவும்.</li>
+              <li>நெல், கரும்பு, மற்றும் பருத்தி பயிர்களுக்கு 7 நாள் மழை மாறுபாட்டை கருத்தில் கொண்டு உரமிடுதல் திட்டமிடவும்.</li>
+              <li>பூச்சி தாக்கம் அதிகரிக்கும் நாட்களில் மேலாண்மை நடவடிக்கைகளை முன்னெடுக்கவும்.</li>
+            </ul>
+          </div>
+        </section>
+        """
+    elif period_name == "monthly":
+        period_section = f"""
+        <section class=\"hero\">
+          <div class=\"panel\">
+            <h2>மாதாந்திர பருவ முன்னறிவிப்பு / Monthly seasonal forecast</h2>
+            <div class=\"metrics\">
+              <div class=\"metric\"><span>மழை எதிர்பார்ப்பு</span><strong>{rainfall + 20:.0f} mm</strong></div>
+              <div class=\"metric\"><span>சராசரி வெப்பநிலை</span><strong>{temp + 1:.0f}°C</strong></div>
+              <div class=\"metric\"><span>பருவ காலம்</span><strong>தெற்கு பருவம்</strong></div>
+            </div>
+          </div>
+          <div class=\"panel\">
+            <h2>பயிர் பரிந்துரை / Crop plan</h2>
+            <ul>
+              <li>மாத இறுதியில் மழை மற்றும் வெப்பநிலை மாறுபாடு காரணமாக, நீர் மேலாண்மை திட்டத்தை புதுப்பிக்கவும்.</li>
+              <li>நெல், கரும்பு, மற்றும் பயறு வகை பயிர்களுக்கு உர இடுதல் மற்றும் சாகுபடி நேரம் மறு ஆய்வு செய்யப்பட வேண்டும்.</li>
+              <li>பருவத்தை கருத்தில் கொண்டு, மண்ணின் ஈரப்பதம் மற்றும் பூச்சி கண்காணிப்பை அடிக்கடி சரிபார்க்கவும்.</li>
+            </ul>
+          </div>
+        </section>
+        """
+    else:
+        period_section = """
+        <section class=\"hero\">
+          <div class=\"panel\">
+            <h2>இன்றைய நிலை / Current Status</h2>
+            <div class=\"metrics\">
+              <div class=\"metric\"><span>வெப்பநிலை</span><strong>{temp:.0f}°C</strong></div>
+              <div class=\"metric\"><span>மழை</span><strong>{rainfall:.0f} mm</strong></div>
+              <div class=\"metric\"><span>ஈரப்பதம்</span><strong>{humidity:.0f}%</strong></div>
+            </div>
+            <div class=\"metrics\" style=\"margin-top:14px;\">
+              <div class=\"metric\"><span>காற்று</span><strong>{wind:.0f} km/h</strong></div>
+              <div class=\"metric\"><span>காலம்</span><strong>{period_name.upper()}</strong></div>
+              <div class=\"metric\"><span>மண்டலம்</span><strong>{escape(region_name)}</strong></div>
+            </div>
+          </div>
+
+          <div class=\"panel\">
+            <h2>பரிந்துரை / Advisory</h2>
+            <ul>
+              <li>{advisory}</li>
+              <li>மண் ஈரப்பதத்தை தொடர்ந்து கண்காணிக்கவும்.</li>
+              <li>பாசன அட்டவணையை மழை முன்னறிவிப்புடன் பொருத்தி சரிசெய்யவும்.</li>
+            </ul>
+          </div>
+        </section>
+        """
+
     return f"""
 <!DOCTYPE html>
 <html lang="ta">
@@ -2165,30 +2245,7 @@ def weather_page(
       <div class="meta-item"><strong>Village:</strong> {escape(village_name)}</div>
     </div>
 
-    <section class="hero">
-      <div class="panel">
-        <h2>இன்றைய நிலை / Current Status</h2>
-        <div class="metrics">
-          <div class="metric"><span>வெப்பநிலை</span><strong>{temp:.0f}°C</strong></div>
-          <div class="metric"><span>மழை</span><strong>{rainfall:.0f} mm</strong></div>
-          <div class="metric"><span>ஈரப்பதம்</span><strong>{humidity:.0f}%</strong></div>
-        </div>
-        <div class="metrics" style="margin-top:14px;">
-          <div class="metric"><span>காற்று</span><strong>{wind:.0f} km/h</strong></div>
-          <div class="metric"><span>காலம்</span><strong>{period_name.upper()}</strong></div>
-          <div class="metric"><span>மண்டலம்</span><strong>{escape(region_name)}</strong></div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <h2>பரிந்துரை / Advisory</h2>
-        <ul>
-          <li>{advisory}</li>
-          <li>மண் ஈரப்பதத்தை தொடர்ந்து கண்காணிக்கவும்.</li>
-          <li>பாசன அட்டவணையை மழை முன்னறிவிப்புடன் பொருத்தி சரிசெய்யவும்.</li>
-        </ul>
-      </div>
-    </section>
+    {period_section}
   </div>
 </body>
 </html>

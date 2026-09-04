@@ -200,6 +200,24 @@ def test_weather_page_supports_region_selector_for_district_taluk_and_village():
     assert "Kallakurichi" in response.text or "கல்லக்குறிச்சி" in response.text
 
 
+def test_weather_weekly_page_renders_7_day_trend_and_crop_advisory():
+    response = client.get("/weather?region=Kallakurichi&period=weekly")
+    assert response.status_code == 200
+    assert "7-day" in response.text or "7 நாள்" in response.text or "weekly" in response.text.lower()
+    assert "மழை" in response.text or "Rain" in response.text
+    assert "பயிர்" in response.text or "Crop" in response.text
+    assert "பரிந்துரை" in response.text or "Advisory" in response.text
+
+
+def test_weather_monthly_page_renders_seasonal_summary_and_crop_plan():
+    response = client.get("/weather?region=Kallakurichi&period=monthly")
+    assert response.status_code == 200
+    assert "monthly" in response.text.lower() or "மாத" in response.text or "பருவ" in response.text
+    assert "மழை" in response.text or "Rain" in response.text
+    assert "பயிர்" in response.text or "Crop" in response.text
+    assert "பரிந்துரை" in response.text or "Advisory" in response.text
+
+
 def test_market_intelligence_page_renders_price_trend_and_action():
     response = client.get("/market-intelligence?crop=rice&market=Kallakurichi")
     assert response.status_code == 200
