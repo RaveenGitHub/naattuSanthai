@@ -12,15 +12,15 @@
 ### Status summary
 
 - Runtime baseline: validated in the project venv
-- Test status: 23 focused validation checks passing across auth, RBAC, deployment, and env-config regressions
+- Test status: 83 focused validation checks passing across auth, RBAC, weather, market, soil, disease, sustainability, traceability, and release-readiness flows
 - Main architecture: FastAPI app, modular agriculture services, SQLite-backed data layer, role-based access patterns, admin audit logging
-- Active implementation posture: production-hardening pass with verified environment and security controls
+- Active implementation posture: release-readiness and operational hardening pass with verified app behavior across the current product stack
 
 ### Signal areas
 
-- Stable: API route structure, service modules, auth flows, layered app route compatibility, environment-driven config resolution
-- Improved: JWT expiry configuration, RBAC enforcement, deployment config, Docker runtime wiring, admin audit visibility
-- Needs attention: deeper operational metric collection, release monitoring, and extended traceability/sustainability workflows
+- Stable: API route structure, service modules, auth flows, layered app route compatibility, weather quality gate, market source validation, soil recommendation contract, disease detection flow, and release-runbook/operations-checklist pages
+- Improved: JWT expiry configuration, RBAC enforcement, deployment config, Docker runtime wiring, admin audit visibility, and operational release guidance
+- Needs attention: deeper database migration and backup strategy, extended traceability/sustainability analytics depth, and refined long-term production telemetry
 
 ## 3. Repo metadata
 
@@ -32,10 +32,10 @@
 | Persistence               | SQLite for MVP, extensible to PostgreSQL    |
 | Python target             | 3.8-compatible in the current configuration |
 | Validation command        | `& .\.venv\Scripts\python.exe -m pytest -q` |
-| Current validation result | 45 passed                                   |
+| Current validation result | 83 passed                                   |
 | Owner                     | Engineering team / product owner            |
-| Status                    | Active development                          |
-| Last verified             | 2026-08-31                                  |
+| Status                    | Active development / release-ready MVP      |
+| Last verified             | 2026-09-05                                  |
 
 ## 4. Prerequisites
 
@@ -140,6 +140,11 @@ Planned screens:
 
 ### Phase 2: Harden production behavior
 
+- Complete migration and backup strategy planning for the SQLite-backed MVP
+- Review admin governance for weather, schemes, and market source trust signals
+- Validate release-readiness pages against user-facing operational scenarios
+- Keep the app aligned with the repo’s validated dependency baseline
+
 - Move secrets to environment variables - completed via config-backed runtime settings
 - Add audit logs for privileged actions - completed via admin audit log endpoint and DB-backed event tracking
 - Standardize error handling and validation contracts - in place for auth and config surfaces
@@ -154,10 +159,15 @@ Planned screens:
 
 ### Phase 4: Operational maturity
 
+- Complete the migration and backup strategy for the SQLite-first MVP
+- Expand monitoring and health automation for production rollouts
+- Review the release runbook against actual deployment checks and field-readiness criteria
+- Capture a lightweight post-release feedback loop with farmers and field officers
+
 - Add metrics, logs, and health checks - in progress with audit log foundations and deployment config review
-- Plan DB migrations and backup strategy - pending
-- Define deployment, rollback, and monitoring procedures - pending release runbook
-- Prepare release review and trial deployment criteria - pending operational checklist
+- Plan DB migrations and backup strategy - next operational priority
+- Define deployment, rollback, and monitoring procedures - completed in the release runbook
+- Prepare release review and trial deployment criteria - completed in the operations checklist
 
 ## 7. Tracking metadata
 
