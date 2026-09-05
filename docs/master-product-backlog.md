@@ -316,7 +316,7 @@ As a farmer, I want crop recommendations based on my soil analysis so that I can
   - recommended crops are generated from soil metrics
   - output is shown in Tamil
   - advice is easy to understand in field conditions
-- Status: Planned
+- Status: Partially implemented
 
 ### Story ST-05
 
@@ -327,7 +327,7 @@ As a farmer, I want an actionable fertilizer plan so that I can correct nutrient
   - fertilizer plan is generated from soil output
   - recommendations are written in simple Tamil
   - plan covers major nutrient deficiencies
-- Status: Planned
+- Status: Partially implemented
 
 ### Story ST-06
 
@@ -338,7 +338,7 @@ As a farmer, I want irrigation advice based on soil moisture and EC so that I ca
   - irrigation guidance is produced for the soil profile
   - recommendations are practical and seasonal
   - actions are easy to execute in the field
-- Status: Planned
+- Status: Partially implemented
 
 ### Story ST-07
 
@@ -349,7 +349,7 @@ As a farmer, I want soil improvement tips so that I can restore fertility and re
   - improvement tips are displayed in Tamil
   - advice prioritizes low-cost, local actions
   - recommendations include organic matter and nutrient correction guidance
-- Status: Planned
+- Status: Partially implemented
 
 ### Story ST-08
 

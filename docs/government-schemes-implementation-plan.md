@@ -4,6 +4,12 @@
 
 Build and ship a reliable agritech information stack that covers government schemes, soil testing, weather intelligence, and disease support. Each module must fetch trustworthy data, translate and summarize it in Tamil, expose a clear latest/archive experience for farmers, and remain monitorable by admins.
 
+## Status update — 2026-09-05
+
+- Market intelligence trust metadata is now implemented and validated: source name, source_status, and display_price are returned from the versioned API.
+- Government schemes and admin monitoring remain in a stable operational state with continued quality checks.
+- Current implementation priority: formalize the soil testing recommendation engine and complete the Tamil-first farmer guidance flow before moving deeper into weather or disease modules.
+
 ---
 
 ## 2. Delivery Approach
