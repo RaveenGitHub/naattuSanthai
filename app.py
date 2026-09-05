@@ -448,8 +448,17 @@ DASHBOARD_PAGE = """
       </div>
       <nav class="nav" aria-label="டாஷ்போர்டு வழிசெலுத்தல்">
         <a href="/">முகப்பு</a>
-        <a href="/dashboard">கண்ணோட்டம்</a>
-        <a href="/health">நிலை</a>
+        <a href="/dashboard">டாஷ்போர்டு</a>
+        <a href="/weather">வானிலை</a>
+        <a href="/soil-health">மண் சோதனை</a>
+        <a href="/disease-detection">நோய் கண்டறிதல்</a>
+        <a href="/government-schemes">அரசு திட்டங்கள்</a>
+        <a href="/market-intelligence">சந்தை</a>
+        <a href="/sustainability">நிலைத்தன்மை</a>
+        <a href="/traceability">கண்காணிப்பு</a>
+        <a href="/register">பதிவு</a>
+        <a href="/profile">சுயவிபரம்</a>
+        <a href="/admin/overview">Admin</a>
       </nav>
     </header>
 
@@ -589,7 +598,16 @@ SERVICES_PAGE = """
       <nav class="nav" aria-label="சேவைகள் வழிசெலுத்தல்">
         <a href="/">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/health">நிலை</a>
+        <a href="/weather">வானிலை</a>
+        <a href="/soil-health">மண் சோதனை</a>
+        <a href="/disease-detection">நோய் கண்டறிதல்</a>
+        <a href="/government-schemes">அரசு திட்டங்கள்</a>
+        <a href="/market-intelligence">சந்தை</a>
+        <a href="/sustainability">நிலைத்தன்மை</a>
+        <a href="/traceability">கண்காணிப்பு</a>
+        <a href="/register">பதிவு</a>
+        <a href="/profile">சுயவிபரம்</a>
+        <a href="/admin/overview">Admin</a>
       </nav>
     </header>
 
@@ -875,7 +893,16 @@ def admin_overview_page():
       <nav class="nav" aria-label="Admin navigation">
         <a href="/">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/services">சேவைகள்</a>
+        <a href="/weather">வானிலை</a>
+        <a href="/soil-health">மண் சோதனை</a>
+        <a href="/disease-detection">நோய் கண்டறிதல்</a>
+        <a href="/government-schemes">அரசு திட்டங்கள்</a>
+        <a href="/market-intelligence">சந்தை</a>
+        <a href="/sustainability">நிலைத்தன்மை</a>
+        <a href="/traceability">கண்காணிப்பு</a>
+        <a href="/admin/quality-gate">Quality Gate</a>
+        <a href="/admin/release-runbook">Release Runbook</a>
+        <a href="/admin/operations-checklist">Operations Checklist</a>
       </nav>
     </header>
 
@@ -1152,7 +1179,15 @@ def disease_detection_page(
       <nav class="nav" aria-label="நோய் கண்டறிதல் வழிசெலுத்தல்">
         <a href="/">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/services">சேவைகள்</a>
+        <a href="/weather">வானிலை</a>
+        <a href="/soil-health">மண் சோதனை</a>
+        <a href="/government-schemes">அரசு திட்டங்கள்</a>
+        <a href="/market-intelligence">சந்தை</a>
+        <a href="/sustainability">நிலைத்தன்மை</a>
+        <a href="/traceability">கண்காணிப்பு</a>
+        <a href="/register">பதிவு</a>
+        <a href="/profile">சுயவிபரம்</a>
+        <a href="/admin/overview">Admin</a>
       </nav>
     </header>
 
@@ -1402,7 +1437,15 @@ def soil_health_page(
       <nav class="nav" aria-label="மண் சோதனை வழிசெலுத்தல்">
         <a href="/">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/services">சேவைகள்</a>
+        <a href="/weather">வானிலை</a>
+        <a href="/disease-detection">நோய் கண்டறிதல்</a>
+        <a href="/government-schemes">அரசு திட்டங்கள்</a>
+        <a href="/market-intelligence">சந்தை</a>
+        <a href="/sustainability">நிலைத்தன்மை</a>
+        <a href="/traceability">கண்காணிப்பு</a>
+        <a href="/register">பதிவு</a>
+        <a href="/profile">சுயவிபரம்</a>
+        <a href="/admin/overview">Admin</a>
       </nav>
     </header>
 
@@ -1526,7 +1569,15 @@ def soil_testing_page():
       <nav class="nav" aria-label="மண் சோதனை வழிசெலுத்தல்">
         <a href="/">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/services">சேவைகள்</a>
+        <a href="/weather">வானிலை</a>
+        <a href="/disease-detection">நோய் கண்டறிதல்</a>
+        <a href="/government-schemes">அரசு திட்டங்கள்</a>
+        <a href="/market-intelligence">சந்தை</a>
+        <a href="/sustainability">நிலைத்தன்மை</a>
+        <a href="/traceability">கண்காணிப்பு</a>
+        <a href="/register">பதிவு</a>
+        <a href="/profile">சுயவிபரம்</a>
+        <a href="/admin/overview">Admin</a>
       </nav>
     </header>
 
@@ -2254,7 +2305,15 @@ def weather_page(
       <nav class="nav">
         <a href="/">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/services">சேவைகள்</a>
+        <a href="/soil-health">மண் சோதனை</a>
+        <a href="/disease-detection">நோய் கண்டறிதல்</a>
+        <a href="/government-schemes">அரசு திட்டங்கள்</a>
+        <a href="/market-intelligence">சந்தை</a>
+        <a href="/sustainability">நிலைத்தன்மை</a>
+        <a href="/traceability">கண்காணிப்பு</a>
+        <a href="/register">பதிவு</a>
+        <a href="/profile">சுயவிபரம்</a>
+        <a href="/admin/overview">Admin</a>
       </nav>
     </header>
 
@@ -2325,6 +2384,15 @@ def weather_quality_page():
       <nav class="nav">
         <a href="/">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
+        <a href="/weather">வானிலை</a>
+        <a href="/soil-health">மண் சோதனை</a>
+        <a href="/disease-detection">நோய் கண்டறிதல்</a>
+        <a href="/government-schemes">அரசு திட்டங்கள்</a>
+        <a href="/market-intelligence">சந்தை</a>
+        <a href="/sustainability">நிலைத்தன்மை</a>
+        <a href="/traceability">கண்காணிப்பு</a>
+        <a href="/register">பதிவு</a>
+        <a href="/profile">சுயவிபரம்</a>
         <a href="/admin/overview">Admin</a>
       </nav>
     </header>
@@ -2416,7 +2484,15 @@ def market_intelligence_page(crop: str = "rice", market: str = "Kallakurichi"):
       <nav class="nav">
         <a href="/">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/services">சேவைகள்</a>
+        <a href="/weather">வானிலை</a>
+        <a href="/soil-health">மண் சோதனை</a>
+        <a href="/disease-detection">நோய் கண்டறிதல்</a>
+        <a href="/government-schemes">அரசு திட்டங்கள்</a>
+        <a href="/sustainability">நிலைத்தன்மை</a>
+        <a href="/traceability">கண்காணிப்பு</a>
+        <a href="/register">பதிவு</a>
+        <a href="/profile">சுயவிபரம்</a>
+        <a href="/admin/overview">Admin</a>
       </nav>
     </header>
 
@@ -2545,7 +2621,16 @@ def weather_market_page(region: str = "Kallakurichi"):
       <nav class="nav" aria-label="வானிலை மற்றும் சந்தை வழிசெலுத்தல்">
         <a href="/">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/services">சேவைகள்</a>
+        <a href="/weather">வானிலை</a>
+        <a href="/soil-health">மண் சோதனை</a>
+        <a href="/disease-detection">நோய் கண்டறிதல்</a>
+        <a href="/government-schemes">அரசு திட்டங்கள்</a>
+        <a href="/market-intelligence">சந்தை</a>
+        <a href="/sustainability">நிலைத்தன்மை</a>
+        <a href="/traceability">கண்காணிப்பு</a>
+        <a href="/register">பதிவு</a>
+        <a href="/profile">சுயவிபரம்</a>
+        <a href="/admin/overview">Admin</a>
       </nav>
     </header>
 
@@ -2669,7 +2754,15 @@ def sustainability_page(
       <nav class="nav">
         <a href="/">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/services">சேவைகள்</a>
+        <a href="/weather">வானிலை</a>
+        <a href="/soil-health">மண் சோதனை</a>
+        <a href="/disease-detection">நோய் கண்டறிதல்</a>
+        <a href="/government-schemes">அரசு திட்டங்கள்</a>
+        <a href="/market-intelligence">சந்தை</a>
+        <a href="/traceability">கண்காணிப்பு</a>
+        <a href="/register">பதிவு</a>
+        <a href="/profile">சுயவிபரம்</a>
+        <a href="/admin/overview">Admin</a>
       </nav>
     </header>
 
@@ -2783,7 +2876,15 @@ def traceability_page(
       <nav class="nav">
         <a href="/">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/services">சேவைகள்</a>
+        <a href="/weather">வானிலை</a>
+        <a href="/soil-health">மண் சோதனை</a>
+        <a href="/disease-detection">நோய் கண்டறிதல்</a>
+        <a href="/government-schemes">அரசு திட்டங்கள்</a>
+        <a href="/market-intelligence">சந்தை</a>
+        <a href="/sustainability">நிலைத்தன்மை</a>
+        <a href="/register">பதிவு</a>
+        <a href="/profile">சுயவிபரம்</a>
+        <a href="/admin/overview">Admin</a>
       </nav>
     </header>
 
@@ -2882,7 +2983,15 @@ def admin_release_runbook_page():
       <nav class="nav">
         <a href="/">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
+        <a href="/weather">வானிலை</a>
+        <a href="/soil-health">மண் சோதனை</a>
+        <a href="/disease-detection">நோய் கண்டறிதல்</a>
+        <a href="/government-schemes">அரசு திட்டங்கள்</a>
+        <a href="/market-intelligence">சந்தை</a>
+        <a href="/sustainability">நிலைத்தன்மை</a>
+        <a href="/traceability">கண்காணிப்பு</a>
         <a href="/admin/quality-gate">Quality Gate</a>
+        <a href="/admin/operations-checklist">Operations Checklist</a>
       </nav>
     </header>
 
@@ -2971,7 +3080,16 @@ def admin_operations_checklist_page():
       <nav class="nav">
         <a href="/">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
+        <a href="/weather">வானிலை</a>
+        <a href="/soil-health">மண் சோதனை</a>
+        <a href="/disease-detection">நோய் கண்டறிதல்</a>
+        <a href="/government-schemes">அரசு திட்டங்கள்</a>
+        <a href="/market-intelligence">சந்தை</a>
+        <a href="/sustainability">நிலைத்தன்மை</a>
+        <a href="/traceability">கண்காணிப்பு</a>
         <a href="/admin/overview">Admin</a>
+        <a href="/admin/quality-gate">Quality Gate</a>
+        <a href="/admin/release-runbook">Release Runbook</a>
       </nav>
     </header>
 
@@ -3088,7 +3206,16 @@ def admin_quality_gate_page():
       <nav class="nav">
         <a href="/">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
+        <a href="/weather">வானிலை</a>
+        <a href="/soil-health">மண் சோதனை</a>
+        <a href="/disease-detection">நோய் கண்டறிதல்</a>
+        <a href="/government-schemes">அரசு திட்டங்கள்</a>
+        <a href="/market-intelligence">சந்தை</a>
+        <a href="/sustainability">நிலைத்தன்மை</a>
+        <a href="/traceability">கண்காணிப்பு</a>
         <a href="/admin/overview">Admin</a>
+        <a href="/admin/release-runbook">Release Runbook</a>
+        <a href="/admin/operations-checklist">Operations Checklist</a>
       </nav>
     </header>
 
@@ -3206,7 +3333,15 @@ def register_page():
       <nav class="nav">
         <a href="/">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/services">சேவைகள்</a>
+        <a href="/weather">வானிலை</a>
+        <a href="/soil-health">மண் சோதனை</a>
+        <a href="/disease-detection">நோய் கண்டறிதல்</a>
+        <a href="/government-schemes">அரசு திட்டங்கள்</a>
+        <a href="/market-intelligence">சந்தை</a>
+        <a href="/sustainability">நிலைத்தன்மை</a>
+        <a href="/traceability">கண்காணிப்பு</a>
+        <a href="/profile">சுயவிபரம்</a>
+        <a href="/admin/overview">Admin</a>
       </nav>
     </header>
 
@@ -3347,7 +3482,15 @@ def profile_page(username: str = "operator1"):
       <nav class="nav">
         <a href="/">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/services">சேவைகள்</a>
+        <a href="/weather">வானிலை</a>
+        <a href="/soil-health">மண் சோதனை</a>
+        <a href="/disease-detection">நோய் கண்டறிதல்</a>
+        <a href="/government-schemes">அரசு திட்டங்கள்</a>
+        <a href="/market-intelligence">சந்தை</a>
+        <a href="/sustainability">நிலைத்தன்மை</a>
+        <a href="/traceability">கண்காணிப்பு</a>
+        <a href="/register">பதிவு</a>
+        <a href="/admin/overview">Admin</a>
       </nav>
     </header>
 
