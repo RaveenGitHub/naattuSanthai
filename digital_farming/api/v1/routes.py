@@ -76,6 +76,7 @@ def soil_health(
         "recommendation_summary": result["recommendation_summary"],
         "fertilizer_plan": result["fertilizer_plan"],
         "crop_recommendations": result["crop_recommendations"],
+        "recommended_crops": result.get("recommended_crops", result["crop_recommendations"]),
         "soil_improvement_actions": result["soil_improvement_actions"],
         "irrigation_guidance": result["irrigation_guidance"],
     }

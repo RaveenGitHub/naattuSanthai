@@ -88,6 +88,7 @@ def assess_soil_health(crop: str, ph: float, nitrogen: float, phosphorus: float,
         "recommendation_summary": recommendation_summary,
         "fertilizer_plan": fertilizer_plan,
         "crop_recommendations": crop_recommendations,
+        "recommended_crops": crop_recommendations,
         "soil_improvement_actions": soil_improvement_actions,
         "irrigation_guidance": irrigation_guidance,
     }

@@ -55,6 +55,8 @@ def test_soil_health_route_returns_nutrient_plan():
     assert payload["fertilizer_plan"]
     assert isinstance(payload.get("crop_recommendations"), list)
     assert payload["crop_recommendations"]
+    assert isinstance(payload.get("recommended_crops"), list)
+    assert payload["recommended_crops"]
     assert isinstance(payload.get("soil_improvement_actions"), list)
     assert payload["soil_improvement_actions"]
     assert isinstance(payload.get("irrigation_guidance"), list)
