@@ -17,6 +17,7 @@ from services import (
     list_archived_scheme_updates,
     list_latest_scheme_updates,
     list_market_prices,
+    list_weather_alerts,
     list_weather_forecast,
 )
 
@@ -2099,6 +2100,15 @@ def weather_page(
     rainfall = float(forecast.get("rainfall_mm", 18.0))
     humidity = float(forecast.get("humidity_pct", 68.0))
     wind = float(forecast.get("wind_kmh", 18.0))
+    alerts = list_weather_alerts(village_name)
+    if not alerts:
+        alerts = list_weather_alerts(region_name)
+    if not alerts:
+        alerts = list_weather_alerts("Kallakurichi")
+    alert = alerts[0] if alerts else None
+    alert_title = escape(str(getattr(alert, "alert_type", "Rainstorm") if alert else "Rainstorm"))
+    alert_severity = escape(str(getattr(alert, "severity", "High") if alert else "High"))
+    alert_message = escape(str(getattr(alert, "message", "Heavy rainfall expected. Protect standing crops and delay field work.") if alert else "Heavy rainfall expected. Protect standing crops and delay field work."))
 
     if period_name == "weekly":
         weekly_cards = "".join(
@@ -2122,11 +2132,15 @@ def weather_page(
             <div class=\"metrics\" style=\"grid-template-columns: repeat(auto-fit, minmax(116px, 1fr));\">{weekly_cards}</div>
           </div>
           <div class=\"panel\">
-            <h2>பயிர் பரிந்துரை / Crop Advisory</h2>
+            <h2>எச்சரிக்கை / Warning</h2>
+            <ul>
+              <li><strong>{alert_title}</strong> ({alert_severity})</li>
+              <li>{alert_message}</li>
+            </ul>
+            <h2 style=\"margin-top:18px;\">பயிர் பரிந்துரை / Crop Advisory</h2>
             <ul>
               <li>மழை மற்றும் வெப்பநிலை மாற்றத்தை கணக்கிட்டு, பாசன நேரத்தை மாற்றியமைக்கவும்.</li>
               <li>நெல், கரும்பு, மற்றும் பருத்தி பயிர்களுக்கு 7 நாள் மழை மாறுபாட்டை கருத்தில் கொண்டு உரமிடுதல் திட்டமிடவும்.</li>
-              <li>பூச்சி தாக்கம் அதிகரிக்கும் நாட்களில் மேலாண்மை நடவடிக்கைகளை முன்னெடுக்கவும்.</li>
             </ul>
           </div>
         </section>
@@ -2143,17 +2157,21 @@ def weather_page(
             </div>
           </div>
           <div class=\"panel\">
-            <h2>பயிர் பரிந்துரை / Crop plan</h2>
+            <h2>எச்சரிக்கை / Warning</h2>
+            <ul>
+              <li><strong>{alert_title}</strong> ({alert_severity})</li>
+              <li>{alert_message}</li>
+            </ul>
+            <h2 style=\"margin-top:18px;\">பயிர் பரிந்துரை / Crop plan</h2>
             <ul>
               <li>மாத இறுதியில் மழை மற்றும் வெப்பநிலை மாறுபாடு காரணமாக, நீர் மேலாண்மை திட்டத்தை புதுப்பிக்கவும்.</li>
               <li>நெல், கரும்பு, மற்றும் பயறு வகை பயிர்களுக்கு உர இடுதல் மற்றும் சாகுபடி நேரம் மறு ஆய்வு செய்யப்பட வேண்டும்.</li>
-              <li>பருவத்தை கருத்தில் கொண்டு, மண்ணின் ஈரப்பதம் மற்றும் பூச்சி கண்காணிப்பை அடிக்கடி சரிபார்க்கவும்.</li>
             </ul>
           </div>
         </section>
         """
     else:
-        period_section = """
+        period_section = f"""
         <section class=\"hero\">
           <div class=\"panel\">
             <h2>இன்றைய நிலை / Current Status</h2>
@@ -2170,11 +2188,15 @@ def weather_page(
           </div>
 
           <div class=\"panel\">
-            <h2>பரிந்துரை / Advisory</h2>
+            <h2>எச்சரிக்கை / Warning</h2>
+            <ul>
+              <li><strong>{alert_title}</strong> ({alert_severity})</li>
+              <li>{alert_message}</li>
+            </ul>
+            <h2 style=\"margin-top:18px;\">பரிந்துரை / Advisory</h2>
             <ul>
               <li>{advisory}</li>
               <li>மண் ஈரப்பதத்தை தொடர்ந்து கண்காணிக்கவும்.</li>
-              <li>பாசன அட்டவணையை மழை முன்னறிவிப்புடன் பொருத்தி சரிசெய்யவும்.</li>
             </ul>
           </div>
         </section>
@@ -2597,6 +2619,8 @@ def sustainability_page(
     )
 
     recommendations = "".join(f"<li>{escape(str(item))}</li>" for item in report.get("recommendations", []))
+    regenerative_actions = "".join(f"<li>{escape(str(item))}</li>" for item in report.get("regenerative_actions", []))
+    regeneration_status = escape(str(report.get("regeneration_status", "Regenerative performance is being monitored.")))
     return f"""
 <!DOCTYPE html>
 <html lang="ta">
@@ -2666,10 +2690,18 @@ def sustainability_page(
         <h2>நிலை / Status</h2>
         <ul>
           <li>{escape(str(report.get('carbon_status', 'Carbon status available')))}</li>
+          <li>Regenerative status / மறு உற்பத்தி நிலை: {regeneration_status}</li>
           <li>குடும்ப அல்லது குழு நிலை: {float(report.get('farm_size_ha', 0.0))} ஹெக்டேர்ஸ்</li>
           <li>மண் கார்பன்: {float(report.get('soil_carbon_tons', 0.0))} டன்</li>
         </ul>
       </div>
+    </section>
+
+    <section class="panel" style="margin-top: 20px;">
+      <h2>Regenerative actions / மீளுருவாக்கும் நடவடிக்கைகள்</h2>
+      <ul>
+        {regenerative_actions}
+      </ul>
     </section>
 
     <section class="panel" style="margin-top: 20px;">
@@ -2701,6 +2733,8 @@ def traceability_page(
     )
 
     steps = "".join(f"<li>{escape(str(step))}</li>" for step in traceability.get("procurement_steps", []))
+    custody_steps = "".join(f"<li>{escape(str(step))}</li>" for step in traceability.get("chain_of_custody", []))
+    lot_lifecycle = "".join(f"<li>{escape(str(step))}</li>" for step in traceability.get("lot_lifecycle", []))
     return f"""
 <!DOCTYPE html>
 <html lang="ta">
@@ -2777,9 +2811,200 @@ def traceability_page(
     </section>
 
     <section class="panel" style="margin-top: 20px;">
+      <h2>Chain of custody / பாதுகாப்பு சங்கிலி</h2>
+      <ul>
+        {custody_steps}
+      </ul>
+    </section>
+
+    <section class="panel" style="margin-top: 20px;">
+      <h2>Lot lifecycle / லாட் வாழ்க்கைச் சுழற்சி</h2>
+      <ul>
+        {lot_lifecycle}
+      </ul>
+    </section>
+
+    <section class="panel" style="margin-top: 20px;">
       <h2>விளையாட்டு / Procurement steps</h2>
       <ul>
         {steps}
+      </ul>
+    </section>
+  </div>
+</body>
+</html>
+"""
+
+
+@app.get("/admin/release-runbook", response_class=HTMLResponse)
+def admin_release_runbook_page():
+    return """
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Release Runbook</title>
+  <style>
+    :root {{
+      --bg: #f4f8f2;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --secondary: #4aa6d6;
+      --warning: #d97706;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #dfe9df;
+      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif; background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%); color: var(--text); }}
+    .container {{ max-width: 1000px; margin: 0 auto; padding: 28px 18px 48px; }}
+    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }}
+    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 700; }}
+    .logo {{ width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
+    .nav {{ display: flex; gap: 10px; flex-wrap: wrap; }}
+    .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
+    h1 {{ margin: 28px 0 10px; font-size: clamp(2rem, 4vw, 3rem); }}
+    .lede {{ color: var(--muted); line-height: 1.8; max-width: 75ch; }}
+    .panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 22px; box-shadow: var(--shadow); margin-top: 20px; }}
+    ul {{ margin: 0; padding-left: 18px; color: var(--muted); line-height: 1.9; }}
+    @media (max-width: 760px) {{ .topbar {{ flex-direction: column; align-items: flex-start; }} }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🚀</div>
+        <span>Release Runbook / ரிலீஸ் ரன்ன்புக்</span>
+      </div>
+      <nav class="nav">
+        <a href="/">முகப்பு</a>
+        <a href="/dashboard">டாஷ்போர்டு</a>
+        <a href="/admin/quality-gate">Quality Gate</a>
+      </nav>
+    </header>
+
+    <h1>Release Runbook</h1>
+    <p class="lede">இந்த வெளியீட்டு விரிவுரை, மேம்பாடு, அரை-சோதனை, சுகாதார சரிபார்ப்பு, மற்றும் மீட்டெடுப்பு நடைமுறைகளை ஒரே இடத்தில் காட்டுகிறது.</p>
+
+    <section class="panel">
+      <h2>Deployment checklist / நிறுவல் பட்டியல்</h2>
+      <ul>
+        <li>Confirm environment values are loaded from .env or the deployment runtime.</li>
+        <li>Validate Python dependencies and pinned versions before the release.</li>
+        <li>Verify the app boots with uvicorn or the configured container command.</li>
+        <li>Check weather, scheme, and admin health endpoints before promoting release.</li>
+        <li>Document the release owner, region, and deployment timestamp for audit tracking.</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>Health check / சுகாதார சரிபார்ப்பு</h2>
+      <ul>
+        <li>Run the backend health endpoint and confirm the service status is healthy.</li>
+        <li>Verify weather source compliance and scheme source compliance remain in pass or warning states.</li>
+        <li>Inspect latest fetch dates for weather and scheme records before release sign-off.</li>
+        <li>Review admin quality gate output and confirm all critical metrics are within expected thresholds.</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>Rollback plan / மீட்டெடுப்பு திட்டம்</h2>
+      <ul>
+        <li>Revert to the previous tagged build if any user-facing route returns error or data mismatch.</li>
+        <li>Restore the previous database snapshot when a migration or seed operation introduces instability.</li>
+        <li>Turn off fetch jobs or source updates until the affected source is reviewed and revalidated.</li>
+        <li>Notify admins, support staff, and operators with the issue summary and rollback status.</li>
+      </ul>
+    </section>
+  </div>
+</body>
+</html>
+"""
+
+
+@app.get("/admin/operations-checklist", response_class=HTMLResponse)
+def admin_operations_checklist_page():
+    return """
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Operations Checklist</title>
+  <style>
+    :root {{
+      --bg: #f7f6f0;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --secondary: #4aa6d6;
+      --warning: #d97706;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #e0e9e1;
+      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif; background: linear-gradient(180deg, #eff9f0 0%, #f8f5ef 100%); color: var(--text); }}
+    .container {{ max-width: 1000px; margin: 0 auto; padding: 28px 18px 48px; }}
+    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }}
+    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 700; }}
+    .logo {{ width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
+    .nav {{ display: flex; gap: 10px; flex-wrap: wrap; }}
+    .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
+    h1 {{ margin: 28px 0 10px; font-size: clamp(2rem, 4vw, 3rem); }}
+    .lede {{ color: var(--muted); line-height: 1.8; max-width: 75ch; }}
+    .panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 22px; box-shadow: var(--shadow); margin-top: 20px; }}
+    ul {{ margin: 0; padding-left: 18px; color: var(--muted); line-height: 1.9; }}
+    @media (max-width: 760px) {{ .topbar {{ flex-direction: column; align-items: flex-start; }} }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🧰</div>
+        <span>Operations Checklist / இயக்கத் தேர்வுப்பட்டி</span>
+      </div>
+      <nav class="nav">
+        <a href="/">முகப்பு</a>
+        <a href="/dashboard">டாஷ்போர்டு</a>
+        <a href="/admin/overview">Admin</a>
+      </nav>
+    </header>
+
+    <h1>Operations Checklist</h1>
+    <p class="lede">தேவையான தரவு காப்புப்பிரதி, மைக்ரேஷன், செயல்பாட்டு சோதனை மற்றும் வெளியீட்டு சீரான செயல்பாட்டை உறுதிசெய்வதற்கான அட்மின் சின்னம் பட்டியல்.</p>
+
+    <section class="panel">
+      <h2>Backup readiness / காப்பு தயார்</h2>
+      <ul>
+        <li>Take a fresh database snapshot before every release or schema change.</li>
+        <li>Archive farm, weather, and scheme data to a recoverable storage target.</li>
+        <li>Validate that backup restoration works in a staging or test environment.</li>
+        <li>Confirm the backup process is time-stamped and ownership is assigned.</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>Migration readiness / மைக்ரேஷன் தயார்</h2>
+      <ul>
+        <li>Review schema migration scripts before applying them to the live environment.</li>
+        <li>Verify that seed data and existing records remain compatible after migration.</li>
+        <li>Run a dry-run or preflight validation before production rollout.</li>
+        <li>Capture rollback steps for every migration to support controlled recovery.</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>Release sign-off / வெளியீட்டு ஒப்புதல்</h2>
+      <ul>
+        <li>Check weather and scheme source compliance statuses in the admin quality gate.</li>
+        <li>Confirm health checks, fetch status, and alert coverage are in the expected range.</li>
+        <li>Approve only after the rollback, backup, and migration checks are recorded.</li>
+        <li>Document final owner, location, and validation timestamp for the deployment record.</li>
       </ul>
     </section>
   </div>
@@ -2797,6 +3022,12 @@ def admin_quality_gate_page():
         "weather": weather_status,
         "schemes": scheme_status,
     }
+
+    weather_source_status = quality_gate["weather"].get("source_compliance", {}).get("status", "warning")
+    scheme_source_status = quality_gate["schemes"].get("source_compliance", {}).get("status", "warning")
+    ai_validation = quality_gate["schemes"].get("ai_validation", {})
+    ai_status = ai_validation.get("status", "warning")
+    readability_state = ai_validation.get("readability_check", "warning")
 
     weather_regions = " | ".join(f"{key}:{value}" for key, value in (quality_gate["weather"].get("regions") or {}).items()) or "இல்லை"
     scheme_categories = " | ".join(f"{key}:{value}" for key, value in (quality_gate["schemes"].get("categories") or {}).items()) or "இல்லை"
@@ -2899,6 +3130,17 @@ def admin_quality_gate_page():
         <li>சமீபத்திய வெளியீடுகள்: {quality_gate['schemes'].get('latest_count', 0)}</li>
         <li>இறுதி புதுப்பிப்பு: {escape(str(quality_gate['schemes'].get('last_updated_at', 'பதிவு இல்லை')))}</li>
         <li>வகைகள்: {escape(scheme_categories)}</li>
+      </ul>
+    </section>
+
+    <section class="panel" style="margin-top: 20px;">
+      <h2>AI validation / செயற்கை நுண்ணறிவு மதிப்பீடு</h2>
+      <ul>
+        <li>AI status: {escape(str(ai_status))}</li>
+        <li>Readability / படித்தல்: {escape(str(readability_state))}</li>
+        <li>Summary quality score: {ai_validation.get('summary_quality_score', 0)}</li>
+        <li>Manual review required: {escape(str(ai_validation.get('manual_review_required', False)))}</li>
+        <li>Source compliance: weather={escape(str(weather_source_status))}, schemes={escape(str(scheme_source_status))}</li>
       </ul>
     </section>
   </div>

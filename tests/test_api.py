@@ -182,6 +182,20 @@ def test_soil_health_page_renders_farmer_actionable_summary():
     assert "உர திட்டம்" in response.text or "Fertilizer plan" in response.text or "fertilizer" in response.text.lower()
 
 
+def test_sustainability_and_traceability_pages_render_regeneration_and_lifecycle_details():
+    sustainability_response = client.get("/sustainability?farm_size_ha=5&soil_carbon_tons=2.4&water_use_liters=4200&energy_use_kwh=320")
+    assert sustainability_response.status_code == 200
+    assert "நிலையான" in sustainability_response.text or "Sustainability" in sustainability_response.text
+    assert "regenerative" in sustainability_response.text.lower() or "மேம்பாடு" in sustainability_response.text or "புதுப்பித்தல்" in sustainability_response.text
+    assert "carbon" in sustainability_response.text.lower() or "கார்பன்" in sustainability_response.text
+
+    traceability_response = client.get("/traceability?farmer=Kumaran&batch=RICE-24A&location=Kallakurichi&quality_grade=A")
+    assert traceability_response.status_code == 200
+    assert "trace" in traceability_response.text.lower() or "கண்காணிப்பு" in traceability_response.text
+    assert "lot" in traceability_response.text.lower() or "லாட்" in traceability_response.text
+    assert "custody" in traceability_response.text.lower() or "பாதுகாப்பு" in traceability_response.text or "சங்கிலி" in traceability_response.text
+
+
 def test_weather_page_renders_region_forecast_and_guidance():
     response = client.get("/weather?region=Kallakurichi&period=daily")
     assert response.status_code == 200
@@ -218,6 +232,14 @@ def test_weather_monthly_page_renders_seasonal_summary_and_crop_plan():
     assert "பரிந்துரை" in response.text or "Advisory" in response.text
 
 
+def test_weather_page_renders_warning_alert_panel_for_risk_events():
+    response = client.get("/weather?region=Kallakurichi&period=daily")
+    assert response.status_code == 200
+    assert "எச்சரிக்கை" in response.text or "Warning" in response.text or "Alert" in response.text
+    assert "Rainstorm" in response.text or "மழை புயல்" in response.text or "மழை" in response.text
+    assert "High" in response.text or "அதிகம்" in response.text or "உயர்" in response.text
+
+
 def test_market_intelligence_page_renders_price_trend_and_action():
     response = client.get("/market-intelligence?crop=rice&market=Kallakurichi")
     assert response.status_code == 200
@@ -234,6 +256,24 @@ def test_admin_quality_gate_page_renders_fetch_and_source_health():
     assert "வானிலை" in response.text or "Weather" in response.text
     assert "அரசு திட்டங்கள்" in response.text or "Schemes" in response.text
     assert "மூலம்" in response.text or "Source" in response.text
+    assert "AI validation" in response.text or "AI" in response.text or "செயற்கை நுண்ணறிவு" in response.text
+    assert "Readability" in response.text or "படித்தல்" in response.text or "readability" in response.text.lower()
+
+
+def test_admin_release_runbook_page_renders_release_steps_and_rollback_plan():
+    response = client.get("/admin/release-runbook")
+    assert response.status_code == 200
+    assert "Release Runbook" in response.text or "ரிலீஸ்" in response.text or "deployment" in response.text.lower()
+    assert "Rollback" in response.text or "மீட்டெடுப்பு" in response.text
+    assert "Health check" in response.text or "சுகாதார சரிபார்ப்பு" in response.text or "health" in response.text.lower()
+
+
+def test_admin_operations_checklist_page_renders_backup_and_migration_readiness():
+    response = client.get("/admin/operations-checklist")
+    assert response.status_code == 200
+    assert "Operations Checklist" in response.text or "இயக்கச்" in response.text or "operational" in response.text.lower()
+    assert "Backup" in response.text or "காப்பு" in response.text
+    assert "Migration" in response.text or "மாற்றம்" in response.text or "migration" in response.text.lower()
 
 
 def test_registration_page_renders_farmer_onboarding_steps():
