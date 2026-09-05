@@ -93,6 +93,9 @@ def test_market_intelligence_route_returns_price_and_procurement_guidance():
     assert payload["recommended_action"]
     assert isinstance(payload["buyer_insights"], list)
     assert payload["buyer_insights"]
+    assert payload["source_status"] in {"verified", "review_required"}
+    assert payload["source_name"]
+    assert payload["display_price"]
 
 
 def test_sustainability_report_route_returns_carbon_and_regeneration_summary():
@@ -133,3 +136,27 @@ def test_traceability_route_returns_origin_and_procurement_summary():
     assert payload["traceability_status"]
     assert isinstance(payload["procurement_steps"], list)
     assert payload["procurement_steps"]
+
+
+def test_sustainability_and_traceability_richness_layers_include_regeneration_and_lot_lifecycle():
+    sustainability = client.get(
+        "/api/v1/sustainability/carbon?farm_size_ha=5&soil_carbon_tons=2.4&water_use_liters=4200&energy_use_kwh=320"
+    )
+    assert sustainability.status_code == 200
+    sustainability_payload = sustainability.json()
+    assert "regeneration_status" in sustainability_payload
+    assert "regenerative_actions" in sustainability_payload
+    assert isinstance(sustainability_payload["regenerative_actions"], list)
+    assert sustainability_payload["regenerative_actions"]
+
+    traceability = client.get(
+        "/api/v1/procurement/traceability?farmer=Kumaran&batch=RICE-24A&location=Kallakurichi&quality_grade=A"
+    )
+    assert traceability.status_code == 200
+    traceability_payload = traceability.json()
+    assert "chain_of_custody" in traceability_payload
+    assert "lot_lifecycle" in traceability_payload
+    assert isinstance(traceability_payload["chain_of_custody"], list)
+    assert isinstance(traceability_payload["lot_lifecycle"], list)
+    assert traceability_payload["chain_of_custody"]
+    assert traceability_payload["lot_lifecycle"]

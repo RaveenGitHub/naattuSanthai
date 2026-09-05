@@ -124,6 +124,9 @@ def market_intelligence(
         "market_trend": intelligence["market_trend"],
         "recommended_action": intelligence["recommended_action"],
         "buyer_insights": intelligence["buyer_insights"],
+        "source_name": intelligence["source_name"],
+        "source_status": intelligence["source_status"],
+        "display_price": intelligence["display_price"],
     }
 
 
@@ -147,6 +150,8 @@ def sustainability_carbon_report(
         "energy_use_kwh": report["energy_use_kwh"],
         "carbon_score": report["carbon_score"],
         "carbon_status": report["carbon_status"],
+        "regeneration_status": report.get("regeneration_status"),
+        "regenerative_actions": report.get("regenerative_actions", []),
         "water_efficiency_m3_per_ha": report["water_efficiency_m3_per_ha"],
         "energy_use_kwh_per_ha": report["energy_use_kwh_per_ha"],
         "recommendations": report["recommendations"],
@@ -197,4 +202,6 @@ def procurement_traceability(
         "quality_grade": traceability["quality_grade"],
         "traceability_status": traceability["traceability_status"],
         "procurement_steps": traceability["procurement_steps"],
+        "chain_of_custody": traceability.get("chain_of_custody", []),
+        "lot_lifecycle": traceability.get("lot_lifecycle", []),
     }
