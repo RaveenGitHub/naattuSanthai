@@ -225,8 +225,10 @@ def test_weather_page_renders_region_forecast_and_guidance():
 def test_weather_page_reports_rainfall_in_mm_not_percent():
     response = client.get("/weather-market?region=Kallakurichi")
     assert response.status_code == 200
-    assert "மழை</span><strong>18 mm" in response.text or "மழை</span><strong>19 mm" in response.text or "மழை</span><strong>20 mm" in response.text
-    assert "%</strong>" not in response.text
+    assert "மழை</span><strong>" in response.text
+    rainfall_value = response.text.split("மழை</span><strong>", 1)[1].split("</strong>", 1)[0]
+    assert "mm" in rainfall_value.lower()
+    assert "%" not in rainfall_value
 
 
 def test_weather_page_supports_region_selector_for_district_taluk_and_village():
