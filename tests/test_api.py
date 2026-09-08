@@ -1,6 +1,9 @@
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from app import app
+from database import create_db_backup, get_migration_status, record_migration_status
 
 client = TestClient(app)
 
@@ -152,6 +155,20 @@ def test_government_scheme_latest_and_archive_endpoints():
     assert "தகுதி" in detailed_page_response.text
     assert "நன்மைகள்" in detailed_page_response.text
     assert "விண்ணப்ப படிகள்" in detailed_page_response.text
+
+
+def test_database_backup_and_migration_tracking_are_available():
+    backup_path = create_db_backup("test-backup")
+    assert isinstance(backup_path, Path)
+    assert backup_path.exists()
+
+    record = record_migration_status("test_migration", "applied", "validation migration")
+    assert record["name"] == "test_migration"
+    assert record["status"] == "applied"
+
+    status = get_migration_status()
+    assert status["backup_directory"].exists()
+    assert any(item["name"] == "test_migration" for item in status["migrations"])
 
 
 def test_soil_manual_entry_page_renders_farm_input_form():

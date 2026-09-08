@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 
 def _resolve_db_path() -> Path:
@@ -162,3 +165,107 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS migration_status (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                status TEXT NOT NULL,
+                details TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+
+
+BACKUP_DIRECTORY = Path(__file__).resolve().parent / "backups"
+BACKUP_DIRECTORY.mkdir(parents=True, exist_ok=True)
+
+
+def create_db_backup(label: str | None = None) -> Path:
+    source_path = _resolve_db_path()
+    BACKUP_DIRECTORY.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    clean_label = (label or "db-backup").strip().lower().replace(" ", "-")
+    backup_path = BACKUP_DIRECTORY / f"{clean_label}-{timestamp}.db"
+
+    if source_path.exists():
+        shutil.copy2(source_path, backup_path)
+    else:
+        source_path.parent.mkdir(parents=True, exist_ok=True)
+        source_path.touch()
+        shutil.copy2(source_path, backup_path)
+
+    return backup_path
+
+
+def record_migration_status(name: str, status: str, details: str = "") -> dict:
+    with get_connection() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS migration_status (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                status TEXT NOT NULL,
+                details TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+
+        timestamp = datetime.now(timezone.utc).isoformat()
+        existing = conn.execute(
+            "SELECT id, created_at FROM migration_status WHERE name = ?",
+            (name,),
+        ).fetchone()
+
+        if existing:
+            record_id = existing["id"]
+            created_at = existing["created_at"]
+            conn.execute(
+                "UPDATE migration_status SET status = ?, details = ?, updated_at = ? WHERE id = ?",
+                (status, details, timestamp, record_id),
+            )
+        else:
+            record_id = uuid4().hex
+            created_at = timestamp
+            conn.execute(
+                "INSERT INTO migration_status (id, name, status, details, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (record_id, name, status, details, timestamp, timestamp),
+            )
+
+        row = conn.execute(
+            "SELECT id, name, status, details, created_at, updated_at FROM migration_status WHERE id = ?",
+            (record_id,),
+        ).fetchone()
+        return dict(row)
+
+
+def get_migration_status() -> dict:
+    backup_dir = BACKUP_DIRECTORY
+    backup_dir.mkdir(parents=True, exist_ok=True)
+
+    with get_connection() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS migration_status (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                status TEXT NOT NULL,
+                details TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        rows = conn.execute(
+            "SELECT id, name, status, details, created_at, updated_at FROM migration_status ORDER BY created_at DESC"
+        ).fetchall()
+
+    return {
+        "backup_directory": backup_dir,
+        "migrations": [dict(row) for row in rows],
+    }
