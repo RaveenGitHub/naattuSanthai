@@ -1125,6 +1125,8 @@ def disease_detection_page(
     crop_label = escape(str(crop_type or "Rice"))
     notes_text = escape(str(notes or "No additional notes provided."))
     image_text = escape(str(image_url or "https://example.com/crop-scan.jpg"))
+    treatment_steps = "".join(f"<li>{escape(str(step))}</li>" for step in result.get("treatment_steps", [recommendation]))
+    prevention_steps = "".join(f"<li>{escape(str(step))}</li>" for step in result.get("prevention_steps", ["Monitor the field closely and keep notes for the next review cycle."]))
     return f"""
 <!DOCTYPE html>
 <html lang="ta">
@@ -1245,18 +1247,14 @@ def disease_detection_page(
       <article class="card">
         <h3>சிகிச்சை</h3>
         <ul>
-          <li>முன்னெச்சரிக்கைக்கு பரிந்துரைக்கப்பட்ட நுண்ணுயிர் தயாரிப்பை பயன்படுத்தவும்.</li>
-          <li>தண்ணீர் தேங்குவதைத் தவிர்க்கவும்.</li>
-          <li>பரவலுக்கு அருகிலுள்ள இலைகளை அகற்றவும்.</li>
+          {treatment_steps}
         </ul>
       </article>
 
       <article class="card">
         <h3>தடுப்பு</h3>
         <ul>
-          <li>பயிர் இடைவெளியை சரியாக பராமரிக்கவும்.</li>
-          <li>காற்றோட்டத்தை மேம்படுத்தவும்.</li>
-          <li>மண் மற்றும் நீர் மேலாண்மையை தொடர்ந்து கண்காணிக்கவும்.</li>
+          {prevention_steps}
         </ul>
       </article>
     </section>

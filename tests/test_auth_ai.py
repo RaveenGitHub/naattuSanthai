@@ -36,6 +36,10 @@ def test_ai_diagnosis_returns_recommendation():
     assert body["success"] is True
     assert "diagnosis" in body["data"]
     assert "recommendation" in body["data"]
+    assert "treatment_steps" in body["data"]
+    assert "prevention_steps" in body["data"]
+    assert isinstance(body["data"]["treatment_steps"], list)
+    assert isinstance(body["data"]["prevention_steps"], list)
 
 
 def test_ai_diagnosis_history_is_available_to_authorized_user():
