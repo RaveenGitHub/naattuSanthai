@@ -222,6 +222,13 @@ def test_weather_page_renders_region_forecast_and_guidance():
     assert "மழை" in response.text or "Rain" in response.text
 
 
+def test_weather_page_reports_rainfall_in_mm_not_percent():
+    response = client.get("/weather-market?region=Kallakurichi")
+    assert response.status_code == 200
+    assert "மழை</span><strong>18 mm" in response.text or "மழை</span><strong>19 mm" in response.text or "மழை</span><strong>20 mm" in response.text
+    assert "%</strong>" not in response.text
+
+
 def test_weather_page_supports_region_selector_for_district_taluk_and_village():
     response = client.get("/weather?region=Kallakurichi&district=Villupuram&taluk=Kallakurichi&village=Periyar Nagar&period=daily")
     assert response.status_code == 200

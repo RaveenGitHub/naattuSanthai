@@ -1021,7 +1021,16 @@ ADVISORY_PAGE = """
       <nav class="nav" aria-label="பயிர் ஆலோசனை வழிசெலுத்தல்">
         <a href="/">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/services">சேவைகள்</a>
+        <a href="/weather">வானிலை</a>
+        <a href="/soil-health">மண் சோதனை</a>
+        <a href="/disease-detection">நோய் கண்டறிதல்</a>
+        <a href="/government-schemes">அரசு திட்டங்கள்</a>
+        <a href="/market-intelligence">சந்தை</a>
+        <a href="/sustainability">நிலைத்தன்மை</a>
+        <a href="/traceability">கண்காணிப்பு</a>
+        <a href="/register">பதிவு</a>
+        <a href="/profile">சுயவிபரம்</a>
+        <a href="/admin/overview">Admin</a>
       </nav>
     </header>
 
@@ -2057,7 +2066,16 @@ WEATHER_MARKET_PAGE = """
       <nav class="nav" aria-label="வானிலை மற்றும் சந்தை வழிசெலுத்தல்">
         <a href="/">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/services">சேவைகள்</a>
+        <a href="/weather">வானிலை</a>
+        <a href="/soil-health">மண் சோதனை</a>
+        <a href="/disease-detection">நோய் கண்டறிதல்</a>
+        <a href="/government-schemes">அரசு திட்டங்கள்</a>
+        <a href="/market-intelligence">சந்தை</a>
+        <a href="/sustainability">நிலைத்தன்மை</a>
+        <a href="/traceability">கண்காணிப்பு</a>
+        <a href="/register">பதிவு</a>
+        <a href="/profile">சுயவிபரம்</a>
+        <a href="/admin/overview">Admin</a>
       </nav>
     </header>
 
@@ -2644,7 +2662,7 @@ def weather_market_page(region: str = "Kallakurichi"):
         <h2>இன்றைய வானிலை</h2>
         <div class="metrics">
           <div class="metric"><span>வெப்பநிலை</span><strong>{float(forecast.get('temperature_c', 29.0)):.0f}°C</strong></div>
-          <div class="metric"><span>மழை</span><strong>{float(forecast.get('rainfall_mm', 18.0)):.0f}%</strong></div>
+          <div class="metric"><span>மழை</span><strong>{float(forecast.get('rainfall_mm', 18.0)):.0f} mm</strong></div>
           <div class="metric"><span>காற்று</span><strong>{float(forecast.get('wind_kmh', 18.0)):.0f} km/h</strong></div>
         </div>
       </div>
