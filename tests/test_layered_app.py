@@ -63,6 +63,19 @@ def test_soil_health_route_returns_nutrient_plan():
     assert payload["irrigation_guidance"]
 
 
+def test_soil_health_route_uses_rice_specific_recommendations():
+    response = client.get(
+        "/api/v1/soil/health?crop=rice&ph=6.2&nitrogen=18&phosphorus=16&potassium=140"
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["crop"] == "rice"
+    assert "rice" in payload["recommendation_summary"].lower()
+    assert any("rice" in str(item).lower() or "paddy" in str(item).lower() for item in payload["crop_recommendations"])
+    assert any("irrigation" in str(item).lower() or "water" in str(item).lower() for item in payload["irrigation_guidance"])
+    assert any("nitrogen" in str(item.get("nutrient", "")).lower() for item in payload["fertilizer_plan"])
+
+
 def test_pest_monitoring_route_returns_risk_and_actions():
     response = client.get(
         "/api/v1/field/pest-monitor?crop=rice&field_condition=high_humidity&severity=moderate"

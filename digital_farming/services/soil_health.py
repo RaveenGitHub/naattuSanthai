@@ -33,6 +33,23 @@ def assess_soil_health(crop: str, ph: float, nitrogen: float, phosphorus: float,
             "Groundnut or sesame are suitable when the soil is moderately balanced and moisture remains stable.",
             "Short-duration pulse crops may perform better while nutrient levels are corrected.",
         ]
+    elif "rice" in crop_name or "paddy" in crop_name:
+        nitrogen_status = "Low" if nitrogen < 25 else "Moderate"
+        phosphorus_status = "Low" if phosphorus < 16 else "Adequate"
+        potassium_status = "Low" if potassium < 140 else "Adequate"
+        base_status = "Rice field needs water and nutrient control"
+        recommendation_summary = (
+            "Rice soil needs a split nitrogen plan, paddy-safe phosphorus support, and careful water scheduling to reduce lodging and nutrient loss while sustaining tillering."
+        )
+        fertilizer_plan = [
+            {"nutrient": "Nitrogen", "dose": "Apply 25-35 kg N/acre in 3 split doses during transplanting, tillering, and panicle initiation", "reason": "Improves tiller count and grain filling in rice paddies."},
+            {"nutrient": "Phosphorus", "dose": "Increase phosphorus to 16-20 ppm when the field is below target", "reason": "Supports root development and early establishment in flooded soils."},
+            {"nutrient": "Potassium", "dose": "Maintain 140-180 ppm with potassium application during active growth", "reason": "Improves grain filling and stress tolerance under water variability."},
+        ]
+        crop_recommendations = [
+            "Rice or paddy is the best fit when soils remain saturated with controlled drainage and nutrient timing is maintained.",
+            "Short-duration rice varieties may help if the field is prone to late-season water stress or pest pressure.",
+        ]
     else:
         nitrogen_status = "Adequate" if nitrogen >= 28 else "Moderate"
         phosphorus_status = "Adequate" if phosphorus >= 20 else "Low"
