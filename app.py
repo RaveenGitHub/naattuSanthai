@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from database import get_connection
+from database import get_connection, get_migration_status
 from digital_farming_mvp import generate_backend_mvp_plan
 from diagnostics import diagnose_crop_issue, list_diagnosis_history
 from routes import router
@@ -814,6 +814,61 @@ def dashboard():
 @app.get("/services", response_class=HTMLResponse)
 def services_page():
     return SERVICES_PAGE
+
+
+@app.get("/api/admin/overview")
+def admin_monitoring_overview(authorization: Optional[str] = Header(default=None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    token = authorization.split(" ", 1)[1]
+    try:
+        payload = verify_token(token)
+    except Exception as exc:  # pragma: no cover - security exception path
+        raise HTTPException(status_code=401, detail="Invalid token") from exc
+    if payload.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        with get_connection() as conn:
+            conn.execute("SELECT 1")
+        db_status = "healthy"
+    except Exception:
+        db_status = "unhealthy"
+
+    weather_status = get_weather_fetch_status()
+    scheme_status = get_scheme_fetch_status()
+    backup_status = get_migration_status()
+
+    service_status = {
+        "status": "healthy" if db_status == "healthy" else "unhealthy",
+        "app": "digital-farming-support-center",
+        "database": db_status,
+    }
+
+    alerts = []
+    if service_status["status"] != "healthy":
+        alerts.append("Database connection check failed.")
+    if weather_status.get("quality_gate", {}).get("status") != "pass":
+        alerts.append("Weather feed quality gate requires review.")
+    if scheme_status.get("quality_gate", {}).get("status") != "pass":
+        alerts.append("Scheme feed quality gate requires review.")
+    if backup_status.get("backup_policy", {}).get("retention_days", 0) < 7:
+        alerts.append("Backup retention policy is below the minimum recommended window.")
+    if not alerts:
+        alerts.append("All monitored services are operating within the expected health thresholds.")
+
+    return {
+        "success": True,
+        "data": {
+            "service_status": service_status,
+            "database_status": db_status,
+            "weather_status": weather_status,
+            "scheme_status": scheme_status,
+            "backup_status": backup_status,
+            "alerts": alerts,
+        },
+        "error": None,
+    }
 
 
 @app.get("/admin/overview", response_class=HTMLResponse)
