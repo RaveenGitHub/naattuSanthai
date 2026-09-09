@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -181,6 +181,45 @@ def init_db() -> None:
 
 BACKUP_DIRECTORY = Path(__file__).resolve().parent / "backups"
 BACKUP_DIRECTORY.mkdir(parents=True, exist_ok=True)
+BACKUP_POLICY = {
+    "retention_days": 30,
+    "max_backups": 10,
+    "auto_prune_enabled": True,
+}
+
+
+def _list_backup_history() -> list[dict]:
+    entries: list[dict] = []
+    for backup_path in sorted(BACKUP_DIRECTORY.glob("*.db"), key=lambda item: item.stat().st_mtime, reverse=True):
+        try:
+            created_at = datetime.fromtimestamp(backup_path.stat().st_mtime, tz=timezone.utc)
+        except (OSError, ValueError):
+            created_at = datetime.now(timezone.utc)
+        entries.append(
+            {
+                "name": backup_path.name,
+                "path": str(backup_path),
+                "created_at": created_at.isoformat(),
+                "size_bytes": backup_path.stat().st_size,
+            }
+        )
+    return entries
+
+
+def _prune_old_backups() -> None:
+    if not BACKUP_POLICY["auto_prune_enabled"]:
+        return
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=BACKUP_POLICY["retention_days"])
+    for backup_path in sorted(BACKUP_DIRECTORY.glob("*.db"), key=lambda item: item.stat().st_mtime):
+        file_time = datetime.fromtimestamp(backup_path.stat().st_mtime, tz=timezone.utc)
+        if file_time < cutoff:
+            backup_path.unlink(missing_ok=True)
+
+    remaining = sorted(BACKUP_DIRECTORY.glob("*.db"), key=lambda item: item.stat().st_mtime)
+    while len(remaining) > BACKUP_POLICY["max_backups"]:
+        oldest = remaining.pop(0)
+        oldest.unlink(missing_ok=True)
 
 
 def create_db_backup(label: str | None = None) -> Path:
@@ -198,6 +237,7 @@ def create_db_backup(label: str | None = None) -> Path:
         source_path.touch()
         shutil.copy2(source_path, backup_path)
 
+    _prune_old_backups()
     return backup_path
 
 
@@ -247,6 +287,8 @@ def record_migration_status(name: str, status: str, details: str = "") -> dict:
 def get_migration_status() -> dict:
     backup_dir = BACKUP_DIRECTORY
     backup_dir.mkdir(parents=True, exist_ok=True)
+    backup_history = _list_backup_history()
+    latest_backup = backup_history[0] if backup_history else None
 
     with get_connection() as conn:
         conn.execute(
@@ -267,5 +309,12 @@ def get_migration_status() -> dict:
 
     return {
         "backup_directory": backup_dir,
+        "backup_policy": {
+            "retention_days": BACKUP_POLICY["retention_days"],
+            "max_backups": BACKUP_POLICY["max_backups"],
+            "auto_prune_enabled": BACKUP_POLICY["auto_prune_enabled"],
+        },
+        "backup_history": backup_history,
+        "latest_backup": latest_backup,
         "migrations": [dict(row) for row in rows],
     }

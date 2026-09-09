@@ -169,6 +169,10 @@ def test_database_backup_and_migration_tracking_are_available():
     status = get_migration_status()
     assert status["backup_directory"].exists()
     assert any(item["name"] == "test_migration" for item in status["migrations"])
+    assert "backup_policy" in status
+    assert "backup_history" in status
+    assert status["backup_policy"]["retention_days"] >= 7
+    assert status["backup_policy"]["max_backups"] >= 1
 
 
 def test_soil_manual_entry_page_renders_farm_input_form():
