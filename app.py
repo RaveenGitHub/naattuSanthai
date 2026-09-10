@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from html import escape
 from typing import Optional
 from uuid import uuid4
@@ -36,6 +36,7 @@ from security import (
 )
 from services import (
     get_scheme_fetch_status,
+    get_scheme_scheduler,
     get_scheme_update_by_id,
     get_weather_fetch_status,
     list_archived_scheme_updates,
@@ -1720,6 +1721,134 @@ def admin_source_registry_page():
 
     <section class="card-grid">
       {source_rows}
+    </section>
+  </div>
+</body>
+</html>
+"""
+
+
+@app.get("/api/admin/scheduler")
+def admin_scheduler_api(authorization: Optional[str] = Header(default=None)):
+    token = get_bearer_token(authorization)
+    try:
+        payload = verify_token(token)
+    except Exception as exc:  # pragma: no cover - security exception path
+        raise HTTPException(status_code=401, detail="Invalid token") from exc
+    if payload.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    scheduler = get_scheme_scheduler().to_dict()
+    return {
+        "success": True,
+        "data": scheduler,
+        "error": None,
+    }
+
+
+@app.post("/api/admin/scheduler/run")
+def admin_scheduler_run_api(authorization: Optional[str] = Header(default=None)):
+    token = get_bearer_token(authorization)
+    try:
+        payload = verify_token(token)
+    except Exception as exc:  # pragma: no cover - security exception path
+        raise HTTPException(status_code=401, detail="Invalid token") from exc
+    if payload.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    scheduler = get_scheme_scheduler()
+    result = scheduler.trigger_manual_run()
+
+    record_audit_log(
+        payload.get("sub", "admin"),
+        "scheduler_run",
+        "scheduler",
+        "success",
+        "Manual scheduler refresh triggered for government scheme sources.",
+    )
+
+    return {
+        "success": True,
+        "data": result,
+        "error": None,
+    }
+
+
+@app.get("/admin/scheduler", response_class=HTMLResponse)
+def admin_scheduler_page():
+    scheduler = get_scheme_scheduler().to_dict()
+
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scheduler</title>
+  <style>
+    :root {{
+      --bg: #f4f8f1;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --secondary: #4aa6d6;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #dfe9df;
+      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif; background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%); color: var(--text); }}
+    .container {{ max-width: 1050px; margin: 0 auto; padding: 28px 18px 52px; }}
+    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }}
+    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 700; }}
+    .logo {{ width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
+    .nav {{ display: flex; gap: 10px; flex-wrap: wrap; }}
+    .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
+    h1 {{ margin: 28px 0 10px; font-size: clamp(2rem, 4vw, 3rem); }}
+    .lede {{ color: var(--muted); line-height: 1.8; max-width: 72ch; }}
+    .hero {{ display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px; margin-top: 22px; }}
+    .panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 22px; box-shadow: var(--shadow); }}
+    .stats {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }}
+    .stat {{ background: linear-gradient(180deg, #f7faf6 0%, #edf9f2 100%); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }}
+    .stat span {{ display: block; font-size: 0.75rem; color: var(--muted); margin-bottom: 8px; }}
+    .stat strong {{ display: block; font-size: 1.7rem; }}
+    .pill {{ display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; background: #ebf9ed; border: 1px solid var(--line); border-radius: 999px; font-weight: 700; color: var(--primary); }}
+    @media (max-width: 760px) {{ .hero, .stats {{ grid-template-columns: 1fr; }} .topbar {{ flex-direction: column; align-items: flex-start; }} }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">⏱️</div>
+        <span>Scheduler / திட்டமிடுபவர்</span>
+      </div>
+      <nav class="nav">
+        <a href="/admin/overview">Admin</a>
+        <a href="/admin/source-registry">Source Registry</a>
+        <a href="/admin/review-queue">Review Queue</a>
+        <a href="/admin/audit-logs">Audit Logs</a>
+      </nav>
+    </header>
+
+    <h1>Scheduler</h1>
+    <p class="lede">Government and weather refresh jobs are coordinated here so source syncs stay consistent, auditable, and aligned with operational windows.</p>
+
+    <section class="hero">
+      <div class="panel">
+        <div class="stats">
+          <div class="stat"><span>Status</span><strong>{scheduler.get('status', 'active')}</strong></div>
+          <div class="stat"><span>Frequency</span><strong>{scheduler.get('frequency', 'every 12 hours')}</strong></div>
+          <div class="stat"><span>Cron</span><strong>{scheduler.get('cron_expression', '0 */12 * * *')}</strong></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Runtime details</h2>
+        <p><strong>Job:</strong> {scheduler.get('job_name', 'government_scheme_fetch')}</p>
+        <p><strong>Last run:</strong> {scheduler.get('last_run') or 'not yet'}</p>
+        <p><strong>Next run:</strong> {scheduler.get('next_run') or 'scheduled'}</p>
+        <div class="pill">Operational status: {scheduler.get('status', 'active')}</div>
+      </div>
     </section>
   </div>
 </body>

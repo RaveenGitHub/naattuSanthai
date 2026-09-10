@@ -593,6 +593,71 @@ def test_admin_audit_logs_are_exposed_on_api_and_page():
     assert "login" in page_response.text.lower()
 
 
+def test_admin_scheduler_controls_are_exposed_on_api_and_page():
+    admin_login = client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    assert admin_login.status_code == 200
+    token = admin_login.json()["token"]
+
+    api_response = client.get("/api/admin/scheduler", headers={"Authorization": f"Bearer {token}"})
+    assert api_response.status_code == 200
+    payload = api_response.json()
+    assert payload["success"] is True
+    assert "status" in payload["data"]
+    assert "cron_expression" in payload["data"]
+
+    trigger_response = client.post("/api/admin/scheduler/run", headers={"Authorization": f"Bearer {token}"})
+    assert trigger_response.status_code == 200
+    assert trigger_response.json()["success"] is True
+
+    page_response = client.get("/admin/scheduler", headers={"Authorization": f"Bearer {token}"})
+    assert page_response.status_code == 200
+    assert "Scheduler" in page_response.text or "திட்டமிடுபவர்" in page_response.text
+
+
+def test_scheme_fetch_scheduler_is_active_service_with_operational_state():
+    from services import get_scheme_scheduler
+
+    scheduler = get_scheme_scheduler()
+    assert scheduler.job_name == "government_scheme_fetch"
+    assert scheduler.cron_expression == "0 */12 * * *"
+    assert scheduler.frequency == "every 12 hours"
+
+    scheduler.trigger_manual_run()
+    assert scheduler.status in {"running", "active"}
+    assert scheduler.last_run is not None
+    assert scheduler.next_run is not None
+
+
+def test_source_registry_and_fetch_job_use_authoritative_sources_and_record_operation():
+    from services import get_source_registry, run_scheme_fetch_job
+
+    registry = get_source_registry()
+    assert any(source["name"] == "PM-Kisan" for source in registry)
+    assert any(source["name"] == "Tamil Nadu Agriculture Department" for source in registry)
+    assert all(source["trust_level"] in {"high", "medium"} for source in registry)
+
+    result = run_scheme_fetch_job(force=True)
+    assert result["status"] in {"success", "warning"}
+    assert result["source_count"] >= 2
+    assert result["updated_sources"]
+
+
+def test_scheme_fetch_job_tracks_retries_and_source_failures():
+    from services import get_scheme_fetch_history, run_scheme_fetch_job
+
+    result = run_scheme_fetch_job(force=True)
+    assert result["status"] in {"success", "warning"}
+    assert "attempts" in result
+    assert "failed_sources" in result
+    assert "retry_count" in result
+    assert len(result["attempts"]) >= 2
+
+    history = get_scheme_fetch_history()
+    assert isinstance(history, list)
+    assert len(history) >= 1
+    assert any(item.get("source_name") for item in history)
+
+
 def test_registration_creates_pending_user_and_requires_otp_verification_before_login():
     username = f"otp_user_{__import__('uuid').uuid4().hex[:8]}"
     isolated_client = TestClient(app)

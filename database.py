@@ -221,6 +221,19 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS fetch_history (
+                id TEXT PRIMARY KEY,
+                source_name TEXT NOT NULL,
+                status TEXT NOT NULL,
+                attempts INTEGER NOT NULL DEFAULT 1,
+                retry_count INTEGER NOT NULL DEFAULT 0,
+                error_message TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
 
     _ensure_user_verification_columns()
 
