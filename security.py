@@ -55,11 +55,29 @@ def verify_password(plain_password: str, stored_password: str) -> bool:
         return False
 
 
-def create_user(username: str, password: str, role: str) -> Dict[str, str]:
+def create_user(
+    username: str,
+    password: str,
+    role: str,
+    *,
+    email: Optional[str] = None,
+    phone: Optional[str] = None,
+    full_name: str = "",
+    status: str = "active",
+) -> Dict[str, str]:
     if not username or not password:
         raise ValueError("Username and password are required")
     if role not in {"farmer", "operator", "admin"}:
         raise ValueError("Invalid role")
+
+    if status not in {"active", "pending_verification", "locked"}:
+        raise ValueError("Invalid status")
+
+    otp_code = None
+    otp_expires_at = None
+    if status == "pending_verification":
+        otp_code = f"{secrets.randbelow(900000) + 100000:06d}"
+        otp_expires_at = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
 
     with get_connection() as conn:
         existing = conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone()
@@ -67,12 +85,29 @@ def create_user(username: str, password: str, role: str) -> Dict[str, str]:
             raise ValueError("User already exists")
 
         conn.execute(
-            "INSERT INTO users (id, username, password, role, created_at) VALUES (?, ?, ?, ?, ?)",
-            (f"USR-{uuid4().hex}", username, hash_password(password), role, datetime.now(timezone.utc).isoformat()),
+            """
+            INSERT INTO users (id, username, password, role, email, phone, full_name, status, otp_code, otp_expires_at,
+            failed_login_attempts, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+            """,
+            (
+                f"USR-{uuid4().hex}",
+                username,
+                hash_password(password),
+                role,
+                email,
+                phone,
+                full_name,
+                status,
+                otp_code,
+                otp_expires_at,
+                datetime.now(timezone.utc).isoformat(),
+                datetime.now(timezone.utc).isoformat(),
+            ),
         )
 
-    record_audit_log(username, "user_created", "users", "success", f"Created user with role {role}")
-    return {"username": username, "role": role}
+    record_audit_log(username, "user_created", "users", "success", f"Created user with role {role} and status {status}")
+    return {"username": username, "role": role, "status": status, "otp_code": otp_code}
 
 
 def list_users() -> List[dict]:
@@ -90,7 +125,7 @@ def get_profile(username: str) -> Dict[str, str]:
     user = _get_user(username)
     if user is None:
         raise ValueError("User not found")
-    return {"username": user["username"], "role": user["role"]}
+    return {"username": user["username"], "role": user["role"], "status": user.get("status", "active")}
 
 
 def reset_password(username: str, current_password: str, new_password: str) -> Dict[str, str]:
@@ -114,7 +149,10 @@ def reset_password(username: str, current_password: str, new_password: str) -> D
 def _get_user(username: str) -> Optional[Dict[str, str]]:
     with get_connection() as conn:
         row = conn.execute(
-            "SELECT username, password, role FROM users WHERE username = ?",
+            """
+            SELECT username, password, role, status, otp_code, otp_expires_at, failed_login_attempts, email, phone
+            FROM users WHERE username = ?
+            """,
             (username,),
         ).fetchone()
     if row is None:
@@ -127,7 +165,17 @@ def _get_user(username: str) -> Optional[Dict[str, str]]:
             conn.execute("UPDATE users SET password = ? WHERE username = ?", (migrated, username))
         stored_password = migrated
 
-    return {"username": row["username"], "password": stored_password, "role": row["role"]}
+    return {
+        "username": row["username"],
+        "password": stored_password,
+        "role": row["role"],
+        "status": row["status"] or "active",
+        "otp_code": row["otp_code"],
+        "otp_expires_at": row["otp_expires_at"],
+        "failed_login_attempts": row["failed_login_attempts"] or 0,
+        "email": row["email"],
+        "phone": row["phone"],
+    }
 
 
 def seed_default_users() -> None:
@@ -198,27 +246,111 @@ def list_audit_logs(limit: int = 100) -> List[Dict[str, str]]:
     ]
 
 
-def create_token(username: str) -> str:
+def create_token(username: str, token_type: str = "access") -> str:
     user = _get_user(username)
     if user is None:
         raise ValueError("User not found")
+    expiry_hours = settings.jwt_expiry_hours if token_type == "access" else 168
+    now = datetime.now(timezone.utc)
     payload = {
         "sub": username,
         "role": user["role"],
-        "exp": datetime.now(timezone.utc) + timedelta(hours=settings.jwt_expiry_hours),
+        "type": token_type,
+        "jti": uuid4().hex,
+        "iat": int(now.timestamp()),
+        "exp": now + timedelta(hours=expiry_hours),
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def verify_token(token: str) -> Dict[str, str]:
-    return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+def verify_token(token: str, expected_type: Optional[str] = None) -> Dict[str, str]:
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    if expected_type and payload.get("type") not in {None, expected_type}:
+        raise ValueError("Unexpected token type")
+    return payload
+
+
+def refresh_access_token(current_token: str) -> Dict[str, str]:
+    payload = verify_token(current_token)
+    username = payload.get("sub")
+    if not username:
+        raise ValueError("Invalid token")
+    user = _get_user(username)
+    if user is None:
+        raise ValueError("Invalid token")
+    new_token = create_token(username, token_type="access")
+    record_audit_log(username, "token_refreshed", "auth", "success", "Access token refreshed")
+    return {"token": new_token, "role": user["role"], "type": "access"}
+
+
+def verify_otp(username: str, otp_code: str) -> Dict[str, str]:
+    if not username or not otp_code:
+        raise ValueError("Username and OTP are required")
+
+    user = _get_user(username)
+    if user is None:
+        raise ValueError("Invalid username or OTP")
+    if user.get("status") == "active":
+        return {"username": username, "status": "active", "verified": True}
+
+    stored_otp = (user.get("otp_code") or "").strip()
+    expires_at = user.get("otp_expires_at")
+    if not stored_otp or not expires_at:
+        raise ValueError("No active OTP found for this user")
+
+    try:
+        expires = datetime.fromisoformat(expires_at)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("OTP has expired") from exc
+
+    if datetime.now(timezone.utc) > expires:
+        raise ValueError("OTP has expired")
+
+    if not hmac.compare_digest(stored_otp, str(otp_code).strip()):
+        raise ValueError("Invalid username or OTP")
+
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE users SET status = ?, otp_code = NULL, otp_expires_at = NULL, updated_at = ? WHERE username = ?",
+            ("active", datetime.now(timezone.utc).isoformat(), username),
+        )
+
+    record_audit_log(username, "otp_verified", "auth", "success", "OTP verification complete")
+    return {"username": username, "status": "active", "verified": True}
 
 
 def authenticate(username: str, password: str) -> Dict[str, str]:
     user = _get_user(username)
-    if user is None or not verify_password(password, user["password"]):
+    if user is None:
         record_audit_log(username or "unknown", "login", "auth", "failure", "Invalid username or password")
         raise ValueError("Invalid username or password")
+
+    if user.get("status") == "pending_verification":
+        record_audit_log(username, "login", "auth", "failure", "Account pending verification")
+        raise ValueError("Account is pending verification")
+    if user.get("status") == "locked":
+        record_audit_log(username, "login", "auth", "failure", "Account locked")
+        raise ValueError("Invalid username or password")
+
+    if not verify_password(password, user["password"]):
+        attempts = (user.get("failed_login_attempts") or 0) + 1
+        new_status = "locked" if attempts >= 5 else user.get("status", "active")
+        with get_connection() as conn:
+            conn.execute(
+                "UPDATE users SET failed_login_attempts = ?, status = ?, updated_at = ? WHERE username = ?",
+                (attempts, new_status, datetime.now(timezone.utc).isoformat(), username),
+            )
+        record_audit_log(username, "login", "auth", "failure", "Invalid username or password")
+        if new_status == "locked":
+            record_audit_log(username, "login", "auth", "failure", "Account locked after repeated failed attempts")
+        raise ValueError("Invalid username or password")
+
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE users SET failed_login_attempts = 0, last_login_at = ?, updated_at = ? WHERE username = ?",
+            (datetime.now(timezone.utc).isoformat(), datetime.now(timezone.utc).isoformat(), username),
+        )
+
     token = create_token(username)
     record_audit_log(username, "login", "auth", "success", "JWT token issued")
     return {"token": token, "role": user["role"]}

@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from app import app
 from database import create_db_backup, get_migration_status, record_migration_status
+from security import create_user
 
 client = TestClient(app)
 
@@ -306,6 +307,105 @@ def test_admin_operations_checklist_page_renders_backup_and_migration_readiness(
     assert "Migration" in response.text or "மாற்றம்" in response.text or "migration" in response.text.lower()
 
 
+def test_admin_content_configuration_page_renders_special_news_and_ad_controls():
+    response = client.get("/admin/content-config")
+    assert response.status_code == 200
+    assert "Special News" in response.text or "சிறப்பு செய்திகள்" in response.text
+    assert "Advertising" in response.text or "விளம்பரம்" in response.text
+
+    api_response = client.get("/api/admin/content-config")
+    assert api_response.status_code == 200
+    assert api_response.json()["success"] is True
+    assert "special_news" in api_response.json()["data"]
+    assert "advertising" in api_response.json()["data"]
+
+
+def test_registration_creates_pending_user_and_requires_otp_verification_before_login():
+    username = f"otp_user_{__import__('uuid').uuid4().hex[:8]}"
+    isolated_client = TestClient(app)
+
+    response = isolated_client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": username,
+            "password": "SecurePass123",
+            "role": "farmer",
+            "phone": "9876543210",
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["data"]["status"] == "pending_verification"
+    assert payload["data"].get("otp_code")
+
+    with __import__("sqlite3").connect("digital_farming.db") as conn:
+        row = conn.execute("SELECT status, otp_code FROM users WHERE username = ?", (username,)).fetchone()
+    assert row is not None
+    assert row[0] == "pending_verification"
+    otp = row[1]
+
+    blocked_login = isolated_client.post("/auth/login", json={"username": username, "password": "SecurePass123"})
+    assert blocked_login.status_code == 401
+
+    verify_response = isolated_client.post(
+        "/api/v1/auth/verify-otp",
+        json={"username": username, "otp_code": otp},
+    )
+    assert verify_response.status_code == 200
+    assert verify_response.json()["success"] is True
+
+    final_login = isolated_client.post("/auth/login", json={"username": username, "password": "SecurePass123"})
+    assert final_login.status_code == 200
+    assert final_login.json()["role"] == "farmer"
+
+
+def test_refresh_token_returns_new_token_and_logout_clears_session_cookie():
+    isolated_client = TestClient(app)
+    login = isolated_client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    assert login.status_code == 200
+    original_token = login.json()["token"]
+
+    refresh = isolated_client.post(
+        "/api/v1/auth/refresh",
+        headers={"Authorization": f"Bearer {original_token}"},
+    )
+    assert refresh.status_code == 200
+    refreshed = refresh.json()
+    assert refreshed["success"] is True
+    assert refreshed["data"]["token"]
+    assert refreshed["data"]["token"] != original_token
+
+    admin_check = isolated_client.get(
+        "/api/admin/overview",
+        headers={"Authorization": f"Bearer {refreshed['data']['token']}"},
+    )
+    assert admin_check.status_code == 200
+
+    logout = isolated_client.post("/auth/logout")
+    assert logout.status_code == 200
+    assert logout.cookies.get("digital_farming_session") in {"", None}
+
+
+def test_failed_login_attempts_lock_account_after_threshold():
+    username = f"lockout_{__import__('uuid').uuid4().hex[:8]}"
+    isolated_client = TestClient(app)
+    create_user(username, "StrongPass123", "farmer")
+
+    for _ in range(5):
+        response = isolated_client.post("/auth/login", json={"username": username, "password": "wrongpass"})
+        assert response.status_code == 401
+
+    locked = isolated_client.post("/auth/login", json={"username": username, "password": "StrongPass123"})
+    assert locked.status_code == 401
+
+    with __import__("sqlite3").connect("digital_farming.db") as conn:
+        row = conn.execute("SELECT status, failed_login_attempts FROM users WHERE username = ?", (username,)).fetchone()
+    assert row is not None
+    assert row[0] == "locked"
+    assert row[1] >= 5
+
+
 def test_login_page_exposes_registration_and_recovery_ctas():
     response = client.get("/login")
     assert response.status_code == 200
@@ -334,7 +434,8 @@ def test_password_recovery_pages_render_public_auth_flow_paths():
 
 
 def test_protected_pages_redirect_to_login_without_session_cookie():
-    response = client.get("/dashboard", follow_redirects=False)
+    isolated_client = TestClient(app)
+    response = isolated_client.get("/dashboard", follow_redirects=False)
     assert response.status_code in {302, 307}
     assert response.headers.get("location", "").startswith("/login")
 

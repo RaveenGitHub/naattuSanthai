@@ -25,7 +25,9 @@ from security import (
     list_audit_logs,
     list_users,
     record_audit_log,
+    refresh_access_token,
     reset_password,
+    verify_otp,
     verify_token,
 )
 from services import (
@@ -912,7 +914,15 @@ def api_v1_register(payload: RegisterRequest):
         raise HTTPException(status_code=400, detail="Phone number must contain digits only")
 
     try:
-        result = create_user(payload.username, payload.password, payload.role)
+        result = create_user(
+            payload.username,
+            payload.password,
+            payload.role,
+            email=(payload.email or "").strip() or None,
+            phone=(payload.phone or "").strip() or None,
+            full_name=(payload.full_name or "").strip(),
+            status="pending_verification",
+        )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {
@@ -920,9 +930,10 @@ def api_v1_register(payload: RegisterRequest):
         "data": {
             "username": result["username"],
             "role": result["role"],
-            "status": "pending_verification",
+            "status": result["status"],
             "email": payload.email,
             "phone": payload.phone,
+            "otp_code": result.get("otp_code"),
         },
         "message": "Registration submitted successfully. Please complete activation.",
     }
@@ -962,13 +973,37 @@ def api_v1_reset_password(payload: AuthResetPasswordRequest):
 
 
 @app.post("/api/v1/auth/verify-otp")
-def api_v1_verify_otp():
-    return {"success": True, "message": "OTP verification is supported for pending accounts."}
+def api_v1_verify_otp(payload: dict):
+    username = str((payload or {}).get("username", "")).strip()
+    otp_code = str((payload or {}).get("otp_code", "")).strip()
+    try:
+        result = verify_otp(username, otp_code)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "success": True,
+        "data": result,
+        "message": "OTP verification completed successfully.",
+    }
 
 
 @app.post("/api/v1/auth/refresh")
-def api_v1_refresh():
-    return {"success": True, "message": "Token refresh is available for active sessions."}
+def api_v1_refresh(authorization: Optional[str] = Header(default=None)):
+    token = get_bearer_token(authorization)
+    try:
+        result = refresh_access_token(token)
+    except Exception as exc:  # pragma: no cover - security exception path
+        raise HTTPException(status_code=401, detail="Invalid token") from exc
+    return {
+        "success": True,
+        "data": {"token": result["token"], "role": result["role"], "type": result["type"]},
+        "message": "Token refreshed successfully.",
+    }
+
+
+@app.post("/auth/refresh")
+def auth_refresh(authorization: Optional[str] = Header(default=None)):
+    return api_v1_refresh(authorization)
 
 
 @app.post("/api/v1/auth/logout")
@@ -1186,6 +1221,44 @@ def admin_monitoring_overview(authorization: Optional[str] = Header(default=None
     }
 
 
+@app.get("/api/admin/content-config")
+def admin_content_config_api():
+    return {
+        "success": True,
+        "data": {
+            "special_news": [
+                {
+                    "title": "Kharif advisory window open",
+                    "channel": "Operator bulletin",
+                    "status": "active",
+                    "published_at": "2026-09-10T08:00:00Z",
+                },
+                {
+                    "title": "Rainfall risk alert for Villupuram cluster",
+                    "channel": "Village WhatsApp",
+                    "status": "scheduled",
+                    "published_at": "2026-09-11T06:30:00Z",
+                },
+            ],
+            "advertising": [
+                {
+                    "title": "Seed supplier campaign",
+                    "target_group": "Farmers in Kallakurichi",
+                    "status": "active",
+                    "placement": "home-banner",
+                },
+                {
+                    "title": "Irrigation subsidy promotion",
+                    "target_group": "Pump-set owners",
+                    "status": "draft",
+                    "placement": "dashboard-card",
+                },
+            ],
+        },
+        "error": None,
+    }
+
+
 @app.get("/admin/overview", response_class=HTMLResponse)
 def admin_overview_page():
     weather_status = get_weather_fetch_status()
@@ -1273,6 +1346,7 @@ def admin_overview_page():
         <a href="/admin/quality-gate">Quality Gate</a>
         <a href="/admin/release-runbook">Release Runbook</a>
         <a href="/admin/operations-checklist">Operations Checklist</a>
+        <a href="/admin/content-config">Content Config</a>
       </nav>
     </header>
 
@@ -3585,6 +3659,91 @@ def traceability_page(
       <ul>
         {steps}
       </ul>
+    </section>
+  </div>
+</body>
+</html>
+"""
+
+
+@app.get("/admin/content-config", response_class=HTMLResponse)
+def admin_content_config_page():
+    return """
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Content Configuration</title>
+  <style>
+    :root {{
+      --bg: #f4f8f2;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --secondary: #4aa6d6;
+      --warning: #d97706;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #dfe9df;
+      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif; background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%); color: var(--text); }}
+    .container {{ max-width: 1100px; margin: 0 auto; padding: 28px 18px 48px; }}
+    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }}
+    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 700; }}
+    .logo {{ width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
+    .nav {{ display: flex; gap: 10px; flex-wrap: wrap; }}
+    .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
+    h1 {{ margin: 28px 0 10px; font-size: clamp(2rem, 4vw, 3rem); }}
+    .lede {{ color: var(--muted); line-height: 1.8; max-width: 75ch; }}
+    .grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 24px; }}
+    .panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 22px; box-shadow: var(--shadow); }}
+    .chip {{ display: inline-block; padding: 5px 10px; border-radius: 999px; background: #ebf9ef; color: var(--primary); font-weight: 700; margin-bottom: 10px; }}
+    ul {{ margin: 10px 0 0; padding-left: 18px; color: var(--muted); line-height: 1.9; }}
+    @media (max-width: 760px) {{ .grid {{ grid-template-columns: 1fr; }} .topbar {{ flex-direction: column; align-items: flex-start; }} }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">📣</div>
+        <span>Content Configuration / உள்ளடக்க கட்டுப்பாடு</span>
+      </div>
+      <nav class="nav">
+        <a href="/">முகப்பு</a>
+        <a href="/dashboard">டாஷ்போர்டு</a>
+        <a href="/admin/overview">Admin</a>
+        <a href="/admin/quality-gate">Quality Gate</a>
+        <a href="/admin/release-runbook">Release Runbook</a>
+        <a href="/admin/operations-checklist">Operations Checklist</a>
+      </nav>
+    </header>
+
+    <h1>Special News & Advertising</h1>
+    <p class="lede">This content management screen allows admins to review special news announcements and advertising placements intended for the farmer experience.</p>
+
+    <section class="grid">
+      <article class="panel">
+        <span class="chip">Special News</span>
+        <h2>சிறப்பு செய்திகள்</h2>
+        <ul>
+          <li>Kharif advisory window open for registered farmer groups.</li>
+          <li>Operator bulletin for seasonal rainfall risk is scheduled for release.</li>
+          <li>Priority broadcast channel remains the village operator network.</li>
+        </ul>
+      </article>
+
+      <article class="panel">
+        <span class="chip">Advertising</span>
+        <h2>விளம்பரம்</h2>
+        <ul>
+          <li>Seed supplier campaign is active on the home banner.</li>
+          <li>Irrigation subsidy promotion is in draft mode for dashboard placement.</li>
+          <li>All advertising blocks remain within approved regional targeting.</li>
+        </ul>
+      </article>
     </section>
   </div>
 </body>

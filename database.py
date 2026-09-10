@@ -27,6 +27,29 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 
+def _ensure_user_verification_columns() -> None:
+    with get_connection() as conn:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+        if "email" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN email TEXT")
+        if "phone" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN phone TEXT")
+        if "full_name" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN full_name TEXT DEFAULT ''")
+        if "status" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'")
+        if "otp_code" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN otp_code TEXT")
+        if "otp_expires_at" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN otp_expires_at TEXT")
+        if "failed_login_attempts" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER NOT NULL DEFAULT 0")
+        if "last_login_at" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN last_login_at TEXT")
+        if "updated_at" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN updated_at TEXT")
+
+
 def init_db() -> None:
     with get_connection() as conn:
         conn.execute(
@@ -130,7 +153,16 @@ def init_db() -> None:
                 username TEXT NOT NULL UNIQUE,
                 password TEXT NOT NULL,
                 role TEXT NOT NULL,
-                created_at TEXT NOT NULL
+                email TEXT,
+                phone TEXT,
+                full_name TEXT DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'active',
+                otp_code TEXT,
+                otp_expires_at TEXT,
+                failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+                last_login_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT
             )
             """
         )
@@ -177,6 +209,8 @@ def init_db() -> None:
             )
             """
         )
+
+    _ensure_user_verification_columns()
 
 
 BACKUP_DIRECTORY = Path(__file__).resolve().parent / "backups"
