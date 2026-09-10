@@ -437,6 +437,20 @@ def test_admin_can_unlock_a_locked_user():
     assert row[1] == 0
 
 
+def test_repeated_login_failures_are_rate_limited():
+    username = f"ratelimit_{__import__('uuid').uuid4().hex[:8]}"
+    isolated_client = TestClient(app)
+    create_user(username, "StrongPass123", "farmer")
+
+    for _ in range(5):
+        response = isolated_client.post("/auth/login", json={"username": username, "password": "wrongpass"})
+        assert response.status_code == 401
+
+    throttled = isolated_client.post("/auth/login", json={"username": username, "password": "wrongpass"})
+    assert throttled.status_code == 429
+    assert "Too many" in throttled.json()["detail"]
+
+
 def test_login_page_exposes_registration_and_recovery_ctas():
     response = client.get("/login")
     assert response.status_code == 200

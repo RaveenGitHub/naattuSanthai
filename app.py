@@ -29,6 +29,7 @@ from security import (
     reset_password,
     unlock_user,
     verify_otp,
+    verify_password,
     verify_token,
 )
 from services import (
@@ -881,6 +882,18 @@ async def require_authenticated_session(request: Request, call_next):
 
 @app.post("/auth/login")
 def login(payload: LoginRequest):
+    user_row = None
+    with get_connection() as conn:
+        user_row = conn.execute(
+            "SELECT password, status FROM users WHERE username = ?",
+            (payload.username,),
+        ).fetchone()
+
+    if user_row and user_row["status"] == "locked":
+        if verify_password(payload.password, user_row["password"]):
+            raise HTTPException(status_code=401, detail="Invalid username or password")
+        raise HTTPException(status_code=429, detail="Too many login attempts. Please try again later.")
+
     try:
         result = authenticate(payload.username, payload.password)
     except ValueError as exc:
