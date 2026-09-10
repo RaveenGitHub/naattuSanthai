@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
+from uuid import uuid4
 
 from database import get_connection, init_db
 from schemas import Farmer, Farm, MarketPrice, SoilTestRecord, WeatherAlert
@@ -124,7 +125,7 @@ def run_scheme_fetch_job(force: bool = False) -> dict:
             conn.execute(
                 "INSERT INTO fetch_history (id, source_name, status, attempts, retry_count, error_message, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
-                    f"FETCH-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{len(attempts)}",
+                    f"FETCH-{uuid4().hex}",
                     source_name,
                     source_status,
                     attempt_count,

@@ -658,6 +658,39 @@ def test_scheme_fetch_job_tracks_retries_and_source_failures():
     assert any(item.get("source_name") for item in history)
 
 
+def test_admin_fetch_history_is_exposed_on_api_and_page():
+    admin_login = client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    assert admin_login.status_code == 200
+    token = admin_login.json()["token"]
+
+    api_response = client.get("/api/admin/fetch-history", headers={"Authorization": f"Bearer {token}"})
+    assert api_response.status_code == 200
+    payload = api_response.json()
+    assert payload["success"] is True
+    assert isinstance(payload["data"], list)
+
+    page_response = client.get("/admin/fetch-history", headers={"Authorization": f"Bearer {token}"})
+    assert page_response.status_code == 200
+    assert "Fetch History" in page_response.text or "டேட்டா பரிமாற்ற வரலாறு" in page_response.text
+
+
+def test_admin_pilot_readiness_and_feedback_loop_are_exposed_on_api_and_page():
+    admin_login = client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    assert admin_login.status_code == 200
+    token = admin_login.json()["token"]
+
+    api_response = client.get("/api/admin/pilot-readiness", headers={"Authorization": f"Bearer {token}"})
+    assert api_response.status_code == 200
+    payload = api_response.json()
+    assert payload["success"] is True
+    assert "checklist" in payload["data"]
+    assert "feedback_template" in payload["data"]
+
+    page_response = client.get("/admin/pilot-readiness", headers={"Authorization": f"Bearer {token}"})
+    assert page_response.status_code == 200
+    assert "Pilot Readiness" in page_response.text or "பைலட் தயார் நிலை" in page_response.text
+
+
 def test_registration_creates_pending_user_and_requires_otp_verification_before_login():
     username = f"otp_user_{__import__('uuid').uuid4().hex[:8]}"
     isolated_client = TestClient(app)

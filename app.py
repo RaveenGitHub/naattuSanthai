@@ -35,6 +35,7 @@ from security import (
     verify_token,
 )
 from services import (
+    get_scheme_fetch_history,
     get_scheme_fetch_status,
     get_scheme_scheduler,
     get_scheme_update_by_id,
@@ -1323,6 +1324,19 @@ def admin_audit_logs_api(authorization: Optional[str] = Header(default=None)):
     return {"success": True, "data": list_audit_logs(), "error": None}
 
 
+@app.get("/api/admin/fetch-history")
+def admin_fetch_history_api(authorization: Optional[str] = Header(default=None)):
+    token = get_bearer_token(authorization)
+    try:
+        payload = verify_token(token)
+    except Exception as exc:  # pragma: no cover - security exception path
+        raise HTTPException(status_code=401, detail="Invalid token") from exc
+    if payload.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    return {"success": True, "data": get_scheme_fetch_history(), "error": None}
+
+
 @app.get("/api/admin/review-queue")
 def admin_review_queue_api():
     status = get_scheme_fetch_status()
@@ -1374,6 +1388,116 @@ def admin_review_queue_resolve(scheme_id: str, payload: dict, authorization: Opt
 
     record_audit_log(reviewer, "scheme_review_resolved", "scheme_review_actions", "success", f"Scheme {scheme_id} marked as {decision}.")
     return {"success": True, "data": {"scheme_id": scheme_id, "decision": decision, "reviewer": reviewer, "reason": reason}, "error": None}
+
+
+@app.get("/admin/fetch-history", response_class=HTMLResponse)
+def admin_fetch_history_page(authorization: Optional[str] = Header(default=None)):
+    token = get_bearer_token(authorization)
+    try:
+        payload = verify_token(token)
+    except Exception as exc:  # pragma: no cover - security exception path
+        raise HTTPException(status_code=401, detail="Invalid token") from exc
+    if payload.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    rows = get_scheme_fetch_history()
+    row_html = "".join(
+        """
+        <tr>
+          <td>{source}</td>
+          <td>{status}</td>
+          <td>{attempts}</td>
+          <td>{retry_count}</td>
+          <td>{error}</td>
+          <td>{created_at}</td>
+        </tr>
+        """.format(
+            source=escape(str(item.get("source_name", "unknown"))),
+            status=escape(str(item.get("status", "unknown"))),
+            attempts=escape(str(item.get("attempts", 0))),
+            retry_count=escape(str(item.get("retry_count", 0))),
+            error=escape(str(item.get("error_message") or "-")),
+            created_at=escape(str(item.get("created_at") or "-")),
+        )
+        for item in rows
+    ) if rows else """
+        <tr>
+          <td colspan='6'>No fetch attempts recorded yet.</td>
+        </tr>
+        """
+
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fetch History</title>
+  <style>
+    :root {{
+      --bg: #f4f8f1;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --secondary: #4aa6d6;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #dfe9df;
+      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif; background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%); color: var(--text); }}
+    .container {{ max-width: 1200px; margin: 0 auto; padding: 28px 18px 52px; }}
+    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }}
+    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 700; }}
+    .logo {{ width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
+    .nav {{ display: flex; gap: 10px; flex-wrap: wrap; }}
+    .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
+    h1 {{ margin: 28px 0 10px; font-size: clamp(2rem, 4vw, 3rem); }}
+    .lede {{ color: var(--muted); line-height: 1.8; max-width: 72ch; }}
+    table {{ width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); border: 1px solid var(--line); margin-top: 20px; }}
+    th, td {{ border-bottom: 1px solid var(--line); padding: 12px 14px; text-align: left; vertical-align: top; color: var(--text); }}
+    th {{ background: #f7faf6; font-weight: 700; }}
+    td {{ color: var(--muted); }}
+    @media (max-width: 760px) {{ .topbar {{ flex-direction: column; align-items: flex-start; }} table {{ display: block; overflow-x: auto; }} }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🧾</div>
+        <span>Fetch History / டேட்டா பரிமாற்ற வரலாறு</span>
+      </div>
+      <nav class="nav">
+        <a href="/admin/overview">Admin</a>
+        <a href="/admin/source-registry">Source Registry</a>
+        <a href="/admin/scheduler">Scheduler</a>
+        <a href="/admin/audit-logs">Audit Logs</a>
+      </nav>
+    </header>
+
+    <h1>Fetch History</h1>
+    <p class="lede">Each source fetch attempt is logged here so admins can see retry behavior, warnings, and source-level operational states.</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Source</th>
+          <th>Status</th>
+          <th>Attempts</th>
+          <th>Retries</th>
+          <th>Error</th>
+          <th>Created At</th>
+        </tr>
+      </thead>
+      <tbody>
+        {row_html}
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>
+"""
 
 
 @app.get("/admin/review-queue", response_class=HTMLResponse)
