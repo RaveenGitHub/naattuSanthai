@@ -152,6 +152,8 @@ def test_government_scheme_latest_and_archive_endpoints():
     filtered_page_response = client.get("/government-schemes?category=subsidy&search=PM-Kisan")
     assert filtered_page_response.status_code == 200
     assert "PM-Kisan" in filtered_page_response.text or "subsidy" in filtered_page_response.text.lower()
+    assert 'data-page="/government-schemes"' in filtered_page_response.text
+    assert 'class="nav-link active"' in filtered_page_response.text
 
     detailed_page_response = client.get("/scheme-page/SCHEME-NEW-001")
     assert detailed_page_response.status_code == 200
@@ -341,6 +343,91 @@ def test_archived_scheme_updates_include_year_grouping_metadata():
     archived = list_archived_scheme_updates()
     assert any(item.get("year_group") == "2024" for item in archived)
     assert any(item.get("year_group") == "2026" for item in archived)
+
+
+def test_government_schemes_archive_page_groups_entries_by_year():
+    with __import__("sqlite3").connect("digital_farming.db") as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO government_scheme_updates (
+                id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
+                category, scheme_type, source_name, source_url, is_archived, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "SCHEME-ARCHIVE-YEAR-UI",
+                "2024 UI archive",
+                "2024 archive UI validation",
+                "2024 eligibility",
+                "2024 benefits",
+                "2024 steps",
+                "subsidy",
+                "state",
+                "Archive UI Source",
+                "https://example.com/archive-ui",
+                1,
+                "2024-09-01T09:00:00+00:00",
+            ),
+        )
+
+    response = client.get("/government-schemes")
+    assert response.status_code == 200
+    assert "2024" in response.text
+    assert "Archive 2024" in response.text or "2024" in response.text
+
+
+def test_scheme_source_compliance_flags_untrusted_or_duplicate_sources():
+    with __import__("sqlite3").connect("digital_farming.db") as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO government_scheme_updates (
+                id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
+                category, scheme_type, source_name, source_url, is_archived, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "SCHEME-SOURCE-QUALITY-001",
+                "Untrusted source scheme",
+                "This scheme is from an untrusted source and should be flagged.",
+                "Eligibility details",
+                "Benefits details",
+                "Application steps",
+                "subsidy",
+                "central",
+                "Unverified Local Notice Board",
+                "https://example.com/local-notice-board",
+                0,
+                __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+            ),
+        )
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO government_scheme_updates (
+                id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
+                category, scheme_type, source_name, source_url, is_archived, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "SCHEME-SOURCE-QUALITY-002",
+                "Duplicate trusted scheme",
+                "Duplicate source record should also be flagged for deduplication review.",
+                "Eligibility details",
+                "Benefits details",
+                "Application steps",
+                "subsidy",
+                "central",
+                "PM-Kisan",
+                "https://pmkisan.gov.in/",
+                0,
+                __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+            ),
+        )
+
+    status = get_scheme_fetch_status()
+    compliance = status["source_compliance"]
+    assert compliance["status"] == "warning"
+    assert compliance["issues"]
+    assert any("untrusted" in issue.lower() or "duplicate" in issue.lower() for issue in compliance["issues"])
 
 
 def test_admin_quality_gate_page_renders_fetch_and_source_health():

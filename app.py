@@ -2266,12 +2266,14 @@ def government_schemes_page(category: Optional[str] = None, search: Optional[str
             category_name = escape(str(item.get("category", "")).title())
             eligibility = escape(str(item.get("eligibility_ta") or item.get("eligibility_en") or "தகுதி விவரங்கள் விரைவில் இடம் பெறும்."))
             steps = escape(str(item.get("apply_steps_ta") or item.get("apply_steps_en") or "விண்ணப்ப படிகள் விரைவில் இடம் பெறும்."))
+            year_group = str(item.get("year_group") or "").strip()
+            status_badge = f"{year_group}" if year_group else "புதியது"
             cards.append(
                 """
                 <article class='scheme-card'>
                   <div class='meta-row'>
                     <span class='pill'>{category_name}</span>
-                    <span class='badge'>புதியது</span>
+                    <span class='badge'>{status_badge}</span>
                   </div>
                   <h3>{title}</h3>
                   <p>{summary}</p>
@@ -2283,6 +2285,7 @@ def government_schemes_page(category: Optional[str] = None, search: Optional[str
                 </article>
                 """.format(
                     category_name=category_name,
+                    status_badge=status_badge,
                     title=title,
                     summary=summary,
                     eligibility=eligibility,
@@ -2344,6 +2347,16 @@ def government_schemes_page(category: Optional[str] = None, search: Optional[str
       border-radius: 999px;
       padding: 9px 14px;
       font-weight: 700;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }}
+    .nav a.active, .nav a:hover {{
+      background: linear-gradient(135deg, var(--primary-soft), #edf8ff);
+      color: var(--primary);
+      border-color: rgba(45, 125, 70, 0.25);
+      box-shadow: 0 8px 18px rgba(45, 125, 70, 0.12);
     }}
     .hero {{
       display: grid;
@@ -2513,9 +2526,10 @@ def government_schemes_page(category: Optional[str] = None, search: Optional[str
         <span>அரசுத் திட்டங்கள்</span>
       </div>
       <nav class="nav" aria-label="அரசு திட்டங்கள் வழிசெலுத்தல்">
-        <a href="/">முகப்பு</a>
-        <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/services">சேவைகள்</a>
+        <a href="/" class="nav-link" data-page="/">முகப்பு</a>
+        <a href="/dashboard" class="nav-link" data-page="/dashboard">டாஷ்போர்டு</a>
+        <a href="/services" class="nav-link" data-page="/services">சேவைகள்</a>
+        <a href="/government-schemes" class="nav-link active" data-page="/government-schemes">அரசுத் திட்டங்கள்</a>
       </nav>
     </header>
 
@@ -2585,6 +2599,14 @@ def government_schemes_page(category: Optional[str] = None, search: Optional[str
       __ARCHIVE_HTML__
     </section>
   </div>
+  <script>
+    const activePath = window.location.pathname || '/';
+    const navLinks = document.querySelectorAll('.nav-link');
+    navLinks.forEach((link) => {
+      const page = link.dataset.page || '/';
+      link.classList.toggle('active', page === activePath || (page === '/' && activePath === '/'));
+    });
+  </script>
 </body>
 </html>
 """
