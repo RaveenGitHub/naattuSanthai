@@ -1,5 +1,7 @@
+from datetime import datetime, timezone
 from html import escape
 from typing import Optional
+from uuid import uuid4
 
 from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -1288,6 +1290,441 @@ def admin_content_config_api():
         },
         "error": None,
     }
+
+
+@app.get("/api/admin/source-registry")
+def admin_source_registry_api():
+    status = get_scheme_fetch_status()
+    payload = {
+        "sources": status.get("source_registry", {}).get("sources", []),
+        "scheduler": status.get("scheduler", {
+            "status": "active",
+            "frequency": "every 12 hours",
+            "cron_expression": "0 */12 * * *",
+            "last_run": None,
+            "next_run": None,
+            "job_name": "government_scheme_fetch",
+        }),
+    }
+    return {"success": True, "data": payload, "error": None}
+
+
+@app.get("/api/admin/audit-logs")
+def admin_audit_logs_api(authorization: Optional[str] = Header(default=None)):
+    token = get_bearer_token(authorization)
+    try:
+        payload = verify_token(token)
+    except Exception as exc:  # pragma: no cover - security exception path
+        raise HTTPException(status_code=401, detail="Invalid token") from exc
+    if payload.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    return {"success": True, "data": list_audit_logs(), "error": None}
+
+
+@app.get("/api/admin/review-queue")
+def admin_review_queue_api():
+    status = get_scheme_fetch_status()
+    payload = status.get("review_queue", {"status": "pass", "flagged_count": 0, "pending_count": 0, "items": []})
+    return {"success": True, "data": payload, "error": None}
+
+
+@app.post("/api/admin/review-queue/{scheme_id}/resolve")
+def admin_review_queue_resolve(scheme_id: str, payload: dict, authorization: Optional[str] = Header(default=None)):
+    token = get_bearer_token(authorization)
+    try:
+        jwt_payload = verify_token(token)
+    except Exception as exc:  # pragma: no cover - security exception path
+        raise HTTPException(status_code=401, detail="Invalid token") from exc
+    if jwt_payload.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    entry = get_scheme_update_by_id(scheme_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Scheme not found")
+
+    decision = str((payload or {}).get("decision", "pending")).strip().lower()
+    reviewer = str((payload or {}).get("reviewer", jwt_payload.get("sub", "admin")).strip() or jwt_payload.get("sub", "admin"))
+    reason = str((payload or {}).get("reason", "Reviewed by admin")).strip() or "Reviewed by admin"
+
+    record = {
+        "id": f"REVIEW-{uuid4().hex}",
+        "scheme_id": scheme_id,
+        "decision": decision,
+        "reviewer": reviewer,
+        "reason": reason,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO scheme_review_actions (id, scheme_id, decision, reviewer, reason, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                record["id"],
+                record["scheme_id"],
+                record["decision"],
+                record["reviewer"],
+                record["reason"],
+                record["created_at"],
+            ),
+        )
+
+    record_audit_log(reviewer, "scheme_review_resolved", "scheme_review_actions", "success", f"Scheme {scheme_id} marked as {decision}.")
+    return {"success": True, "data": {"scheme_id": scheme_id, "decision": decision, "reviewer": reviewer, "reason": reason}, "error": None}
+
+
+@app.get("/admin/review-queue", response_class=HTMLResponse)
+def admin_review_queue_page():
+    review_queue = get_scheme_fetch_status().get("review_queue", {"status": "pass", "flagged_count": 0, "pending_count": 0, "items": []})
+    items = review_queue.get("items", [])
+    if not items:
+        row_html = """
+        <article class='empty-state'>
+          <h3>No flagged records</h3>
+          <p>There are currently no scheme records waiting for manual admin review.</p>
+        </article>
+        """
+    else:
+        row_html = "\n".join(
+            """
+            <article class='review-item'>
+              <div class='item-meta'>
+                <span class='chip'>{category}</span>
+                <span class='severity severity-{severity}'>{severity}</span>
+              </div>
+              <h3>{title}</h3>
+              <p><strong>Source:</strong> {source}</p>
+              <ul>
+                {issues}
+              </ul>
+            </article>
+            """.format(
+                category=escape(str(item.get("category", "general"))),
+                severity=escape(str(item.get("severity", "medium"))),
+                title=escape(str(item.get("title", "Untitled scheme"))),
+                source=escape(str(item.get("source_name", "Unknown source"))),
+                issues="".join(f"<li>{escape(str(issue))}</li>" for issue in item.get("issues", [])),
+            )
+            for item in items
+        )
+
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Review Queue</title>
+  <style>
+    :root {{
+      --bg: #f4f8f1;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --primary-soft: #ebf9ed;
+      --secondary: #4aa6d6;
+      --warning: #d97706;
+      --danger: #b42318;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #dfe9df;
+      --shadow: 0 12px 28px rgba(23, 48, 29, 0.08);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif; background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%); color: var(--text); }}
+    .container {{ max-width: 1100px; margin: 0 auto; padding: 28px 18px 52px; }}
+    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 14px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }}
+    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 700; }}
+    .logo {{ width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
+    .nav {{ display: flex; gap: 10px; flex-wrap: wrap; }}
+    .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
+    .hero {{ display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 20px; margin-top: 24px; }}
+    .panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 24px; box-shadow: var(--shadow); }}
+    .stats {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 12px; }}
+    .stat {{ background: linear-gradient(180deg, #f7faf6 0%, #edf9f2 100%); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }}
+    .stat span {{ display: block; color: var(--muted); font-size: 0.8rem; margin-bottom: 8px; }}
+    .stat strong {{ display: block; font-size: 1.8rem; }}
+    h1 {{ margin: 22px 0 8px; font-size: clamp(2rem, 4vw, 3rem); }}
+    .lede {{ color: var(--muted); line-height: 1.8; max-width: 72ch; }}
+    .review-list {{ display: grid; gap: 18px; margin-top: 20px; }}
+    .review-item {{ background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 20px; box-shadow: var(--shadow); }}
+    .item-meta {{ display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }}
+    .chip {{ display: inline-block; padding: 7px 10px; background: var(--primary-soft); color: var(--primary); border-radius: 999px; font-weight: 800; font-size: 12px; }}
+    .severity {{ display: inline-block; padding: 7px 10px; border-radius: 999px; font-weight: 800; font-size: 12px; }}
+    .severity-high {{ background: #fef3c7; color: #92400e; }}
+    .severity-medium {{ background: #e0f2fe; color: #075985; }}
+    .review-item h3 {{ margin: 0 0 12px; font-size: 1.25rem; }}
+    .review-item p, .review-item li {{ color: var(--muted); line-height: 1.8; }}
+    .review-item ul {{ margin: 10px 0 0; padding-left: 18px; }}
+    .empty-state {{ background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 24px; box-shadow: var(--shadow); }}
+    @media (max-width: 760px) {{ .hero, .stats {{ grid-template-columns: 1fr; }} .topbar {{ flex-direction: column; align-items: flex-start; }} }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🧭</div>
+        <span>Review Queue / மதிப்பாய்வு வரிசை</span>
+      </div>
+      <nav class="nav">
+        <a href="/admin/overview">Admin</a>
+        <a href="/admin/quality-gate">Quality Gate</a>
+        <a href="/admin/release-runbook">Release Runbook</a>
+        <a href="/admin/operations-checklist">Operations Checklist</a>
+      </nav>
+    </header>
+
+    <h1>Review Queue</h1>
+    <p class="lede">Flagged scheme records are routed here for manual validation before publication or wider farmer-facing rollout.</p>
+
+    <section class="hero">
+      <div class="panel">
+        <h2>Queue status</h2>
+        <div class="stats">
+          <div class="stat"><span>Flagged records</span><strong>{review_queue.get('flagged_count', 0)}</strong></div>
+          <div class="stat"><span>Pending review</span><strong>{review_queue.get('pending_count', 0)}</strong></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Operational note</h2>
+        <p class="lede">{escape(str(review_queue.get('status', 'pass'))).upper()} — schemes with incomplete summary, missing eligibility, or generic content are held for manual check.</p>
+      </div>
+    </section>
+
+    <section class="review-list">
+      {row_html}
+    </section>
+  </div>
+</body>
+</html>
+"""
+
+
+@app.get("/admin/audit-logs", response_class=HTMLResponse)
+def admin_audit_logs_page():
+    logs = list_audit_logs()
+    rows = "".join(
+        """
+        <tr>
+          <td>{username}</td>
+          <td>{action}</td>
+          <td>{resource}</td>
+          <td>{outcome}</td>
+          <td>{details}</td>
+          <td>{created_at}</td>
+        </tr>
+        """.format(
+            username=escape(str(item.get("username", "unknown"))),
+            action=escape(str(item.get("action", "unknown"))),
+            resource=escape(str(item.get("resource", "unknown"))),
+            outcome=escape(str(item.get("outcome", "unknown"))),
+            details=escape(str(item.get("details", ""))),
+            created_at=escape(str(item.get("created_at", ""))),
+        )
+        for item in logs
+    ) if logs else """
+        <tr>
+          <td colspan='6'>No audit events recorded yet.</td>
+        </tr>
+        """
+
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Audit Logs</title>
+  <style>
+    :root {{
+      --bg: #f4f8f1;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --secondary: #4aa6d6;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #dfe9df;
+      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif; background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%); color: var(--text); }}
+    .container {{ max-width: 1200px; margin: 0 auto; padding: 28px 18px 52px; }}
+    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }}
+    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 700; }}
+    .logo {{ width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
+    .nav {{ display: flex; gap: 10px; flex-wrap: wrap; }}
+    .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
+    h1 {{ margin: 28px 0 10px; font-size: clamp(2rem, 4vw, 3rem); }}
+    .lede {{ color: var(--muted); line-height: 1.8; max-width: 72ch; }}
+    table {{ width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); border: 1px solid var(--line); margin-top: 20px; }}
+    th, td {{ border-bottom: 1px solid var(--line); padding: 12px 14px; text-align: left; vertical-align: top; color: var(--text); }}
+    th {{ background: #f7faf6; font-weight: 700; }}
+    td {{ color: var(--muted); }}
+    @media (max-width: 760px) {{ .topbar {{ flex-direction: column; align-items: flex-start; }} table {{ display: block; overflow-x: auto; }} }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🧾</div>
+        <span>Audit Logs / ஆடிட் பதிவுகள்</span>
+      </div>
+      <nav class="nav">
+        <a href="/admin/overview">Admin</a>
+        <a href="/admin/quality-gate">Quality Gate</a>
+        <a href="/admin/review-queue">Review Queue</a>
+        <a href="/admin/source-registry">Source Registry</a>
+      </nav>
+    </header>
+
+    <h1>Audit Logs</h1>
+    <p class="lede">Every privileged action is recorded here so admins can review authentication, scheme review, and operational changes with an auditable trail.</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Action</th>
+          <th>Resource</th>
+          <th>Outcome</th>
+          <th>Details</th>
+          <th>Created At</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows}
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>
+"""
+
+
+@app.get("/admin/source-registry", response_class=HTMLResponse)
+def admin_source_registry_page():
+    status = get_scheme_fetch_status()
+    sources = status.get("source_registry", {}).get("sources", [])
+    scheduler = status.get("scheduler", {
+        "status": "active",
+        "frequency": "every 12 hours",
+        "cron_expression": "0 */12 * * *",
+        "last_run": None,
+        "next_run": None,
+        "job_name": "government_scheme_fetch",
+    })
+    source_rows = "".join(
+        """
+        <article class='card'>
+          <div class='meta-row'>
+            <span class='badge'>{name}</span>
+            <span class='pill'>{type}</span>
+          </div>
+          <h3>{title}</h3>
+          <p><strong>Source URL:</strong> <a href='{url}'>{url}</a></p>
+          <p><strong>Trust level:</strong> {trust}</p>
+          <p><strong>Last sync:</strong> {last_sync}</p>
+        </article>
+        """.format(
+            name=escape(str(source.get("name", "Unknown source"))),
+            type=escape(str(source.get("type", "general"))),
+            title=escape(str(source.get("name", "Unknown source"))),
+            url=escape(str(source.get("source_url", "#"))),
+            trust=escape(str(source.get("trust_level", "medium"))),
+            last_sync=escape(str(source.get("last_sync") or "Not synced yet")),
+        )
+        for source in sources
+    ) or "<article class='card empty'><h3>No registered sources</h3><p>There are no trusted scheme sources configured yet.</p></article>"
+
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Source Registry</title>
+  <style>
+    :root {{
+      --bg: #f4f8f1;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --secondary: #4aa6d6;
+      --accent: #eafaf0;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #dfe9df;
+      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif; background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%); color: var(--text); }}
+    .container {{ max-width: 1100px; margin: 0 auto; padding: 28px 18px 52px; }}
+    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }}
+    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 700; }}
+    .logo {{ width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
+    .nav {{ display: flex; gap: 10px; flex-wrap: wrap; }}
+    .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
+    h1 {{ margin: 28px 0 10px; font-size: clamp(2rem, 4vw, 3rem); }}
+    .lede {{ color: var(--muted); line-height: 1.8; max-width: 72ch; }}
+    .hero {{ display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 18px; margin-top: 24px; }}
+    .panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 22px; box-shadow: var(--shadow); }}
+    .stats {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }}
+    .stat {{ background: linear-gradient(180deg, #f7faf6 0%, #edf9f2 100%); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }}
+    .stat span {{ display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 8px; }}
+    .stat strong {{ display: block; font-size: 1.8rem; }}
+    .card-grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 20px; }}
+    .card {{ background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px; box-shadow: var(--shadow); }}
+    .card p {{ color: var(--muted); line-height: 1.7; }}
+    .meta-row {{ display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }}
+    .badge {{ display: inline-block; border-radius: 999px; background: var(--accent); color: var(--primary); padding: 6px 10px; font-weight: 700; }}
+    .pill {{ display: inline-block; border-radius: 999px; background: #edf5ff; color: #0f5f8c; padding: 6px 10px; font-weight: 700; }}
+    a {{ color: var(--primary); }}
+    @media (max-width: 760px) {{ .hero, .card-grid, .stats {{ grid-template-columns: 1fr; }} .topbar {{ flex-direction: column; align-items: flex-start; }} }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🧾</div>
+        <span>Source Registry / மூலப் பதிவு</span>
+      </div>
+      <nav class="nav">
+        <a href="/admin/overview">Admin</a>
+        <a href="/admin/quality-gate">Quality Gate</a>
+        <a href="/admin/review-queue">Review Queue</a>
+        <a href="/admin/content-config">Content Config</a>
+      </nav>
+    </header>
+
+    <h1>Source Registry</h1>
+    <p class="lede">The trusted source registry tracks active government and public scheme feeds, their compliance posture, and the scheduler that refreshes them.</p>
+
+    <section class="hero">
+      <div class="panel">
+        <h2>Scheduler</h2>
+        <div class="stats">
+          <div class="stat"><span>Status</span><strong>{scheduler.get('status', 'active')}</strong></div>
+          <div class="stat"><span>Frequency</span><strong>{scheduler.get('frequency', 'every 12 hours')}</strong></div>
+          <div class="stat"><span>Cron</span><strong>{scheduler.get('cron_expression', '0 */12 * * *')}</strong></div>
+        </div>
+        <p class="lede">Job: {scheduler.get('job_name', 'government_scheme_fetch')} | Last run: {scheduler.get('last_run') or 'not yet'} | Next run: {scheduler.get('next_run') or 'scheduled'}</p>
+      </div>
+      <div class="panel">
+        <h2>Operational note</h2>
+        <p class="lede">Trusted feeds are checked for duplication, source drift, and publication quality before a record is surfaced to farmers.</p>
+      </div>
+    </section>
+
+    <section class="card-grid">
+      {source_rows}
+    </section>
+  </div>
+</body>
+</html>
+"""
 
 
 @app.get("/admin/overview", response_class=HTMLResponse)

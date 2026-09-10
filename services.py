@@ -416,17 +416,50 @@ def get_scheme_fetch_status() -> dict:
         ).fetchall()
         scheme_rows = conn.execute(
             """
-            SELECT id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta
+            SELECT id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
+                   category, source_name
             FROM government_scheme_updates
             """
         ).fetchall()
 
     last_source_name = latest_row["source_name"] if latest_row else None
     trusted_sources = {"PM-Kisan", "Tamil Nadu Agriculture Department", "National Portal"}
+    trusted_source_names = {name.casefold() for name in trusted_sources}
+
+    untrusted_sources = []
+    duplicate_sources = []
+    source_occurrences: dict[str, list[str]] = {}
+    for row in scheme_rows:
+        source_name = (row["source_name"] or "").strip()
+        if not source_name:
+            continue
+        key = source_name.casefold()
+        source_occurrences.setdefault(key, []).append(source_name)
+        if source_name.casefold() not in trusted_source_names:
+            untrusted_sources.append(source_name)
+
+    for key, names in source_occurrences.items():
+        unique_names = sorted(set(names))
+        if len(unique_names) > 1 or len(names) > 1:
+            duplicate_sources.append(unique_names[0])
+
+    source_issues = []
+    for source_name in sorted(set(untrusted_sources)):
+        source_issues.append(f"Untrusted source detected: {source_name}")
+    for source_name in sorted(set(duplicate_sources)):
+        source_issues.append(f"Duplicate source detected: {source_name}")
+
+    source_status = "pass"
+    if source_issues or not last_source_name or (last_source_name.casefold() not in trusted_source_names):
+        source_status = "warning"
+
     source_compliance = {
-        "status": "pass" if last_source_name in trusted_sources or (last_source_name and last_source_name.lower() in {name.lower() for name in trusted_sources}) else "warning",
+        "status": source_status,
         "trusted_sources": sorted(trusted_sources),
         "current_source": last_source_name,
+        "issues": source_issues,
+        "untrusted_sources": sorted(set(untrusted_sources)),
+        "duplicate_sources": sorted(set(duplicate_sources)),
     }
     retention_days = 14
     quality_gate = {
@@ -463,6 +496,24 @@ def get_scheme_fetch_status() -> dict:
 
     average_score = round(sum(valid_scores) / (len(valid_scores) or 1), 2) if valid_scores else 0
     has_warning = bool(invalid_records) or total_count == 0
+    review_queue_items = []
+    for item in invalid_records:
+        row = next((entry for entry in scheme_rows if entry["id"] == item["id"]), None)
+        if row is None:
+            continue
+        category_name = (row["category"] if "category" in row.keys() else "general") or "general"
+        review_queue_items.append(
+            {
+                "id": row["id"],
+                "title": (row["title_ta"] or "").strip() or "Untitled scheme",
+                "category": str(category_name).strip(),
+                "source_name": (row["source_name"] or "Unknown source").strip(),
+                "status": "pending_review",
+                "severity": "high" if len(item["issues"]) >= 3 else "medium",
+                "issues": item["issues"],
+            }
+        )
+
     ai_validation = {
         "status": "warning" if has_warning else "pass",
         "summary_quality_score": average_score,
@@ -470,6 +521,45 @@ def get_scheme_fetch_status() -> dict:
         "manual_review_required": has_warning,
         "confidence_threshold": 0.8,
         "notes": "Manual review is required for incomplete or generic scheme summaries." if has_warning else "Tamil summaries and eligibility text meet the minimum quality threshold.",
+    }
+
+    review_queue = {
+        "status": "warning" if review_queue_items else "pass",
+        "flagged_count": len(review_queue_items),
+        "pending_count": len(review_queue_items),
+        "items": review_queue_items,
+        "last_reviewed_at": None,
+    }
+
+    source_registry = {
+        "status": "active" if source_compliance.get("status") in {"pass", "warning"} else "paused",
+        "sources": [
+            {
+                "name": "PM-Kisan",
+                "type": "central",
+                "status": "active",
+                "last_sync": latest_row["created_at"] if latest_row else None,
+                "source_url": "https://pmkisan.gov.in/",
+                "trust_level": "high",
+            },
+            {
+                "name": "Tamil Nadu Agriculture Department",
+                "type": "state",
+                "status": "active",
+                "last_sync": latest_row["created_at"] if latest_row else None,
+                "source_url": "https://agri.tn.gov.in/",
+                "trust_level": "high",
+            },
+        ],
+        "notes": "Scheme sources are verified against the trusted registry and reviewed for duplicate or untrusted entries.",
+    }
+    scheduler = {
+        "status": "active",
+        "frequency": "every 12 hours",
+        "cron_expression": "0 */12 * * *",
+        "last_run": latest_row["created_at"] if latest_row else None,
+        "next_run": (datetime.now(timezone.utc) + timedelta(hours=12)).isoformat(),
+        "job_name": "government_scheme_fetch",
     }
 
     return {
@@ -483,6 +573,9 @@ def get_scheme_fetch_status() -> dict:
         "retention_days": retention_days,
         "quality_gate": quality_gate,
         "ai_validation": ai_validation,
+        "review_queue": review_queue,
+        "source_registry": source_registry,
+        "scheduler": scheduler,
     }
 
 

@@ -209,6 +209,18 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS scheme_review_actions (
+                id TEXT PRIMARY KEY,
+                scheme_id TEXT NOT NULL,
+                decision TEXT NOT NULL,
+                reviewer TEXT NOT NULL,
+                reason TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
 
     _ensure_user_verification_columns()
 

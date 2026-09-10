@@ -441,6 +441,98 @@ def test_admin_quality_gate_page_renders_fetch_and_source_health():
     assert "Readability" in response.text or "படித்தல்" in response.text or "readability" in response.text.lower()
 
 
+def test_scheme_review_queue_tracks_flagged_records_and_admin_actions():
+    with __import__("sqlite3").connect("digital_farming.db") as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO government_scheme_updates (
+                id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
+                category, scheme_type, source_name, source_url, is_archived, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "SCHEME-REVIEW-QUEUE-001",
+                "Review queue sample",
+                "N/A",
+                "",
+                "",
+                "",
+                "subsidy",
+                "central",
+                "Manual Review Source",
+                "https://example.com/review-queue",
+                0,
+                __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+            ),
+        )
+
+    status = get_scheme_fetch_status()
+    assert status["review_queue"]["flagged_count"] >= 1
+    assert "review_queue" in status
+
+    response = client.get("/admin/review-queue")
+    assert response.status_code == 200
+    assert "Review Queue" in response.text or "மதிப்பாய்வு வரிசை" in response.text
+    assert "Manual Review Source" in response.text or "Manual Review" in response.text
+
+
+def test_scheme_review_resolution_records_admin_decision_and_audit_entry():
+    isolated_client = TestClient(app)
+    login = isolated_client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    assert login.status_code == 200
+    token = login.json()["token"]
+
+    with __import__("sqlite3").connect("digital_farming.db") as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO government_scheme_updates (
+                id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
+                category, scheme_type, source_name, source_url, is_archived, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "SCHEME-REVIEW-RESOLVE-001",
+                "Resolve queue sample",
+                "N/A",
+                "",
+                "",
+                "",
+                "insurance",
+                "state",
+                "Manual Resolve Review Source",
+                "https://example.com/review-resolve",
+                0,
+                __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+            ),
+        )
+
+    response = isolated_client.post(
+        "/api/admin/review-queue/SCHEME-REVIEW-RESOLVE-001/resolve",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"decision": "approved", "reviewer": "admin1", "reason": "Validated against official notice"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["data"]["decision"] == "approved"
+
+    with __import__("sqlite3").connect("digital_farming.db") as conn:
+        review_row = conn.execute(
+            "SELECT decision, reviewer, reason FROM scheme_review_actions WHERE scheme_id = ? ORDER BY created_at DESC LIMIT 1",
+            ("SCHEME-REVIEW-RESOLVE-001",),
+        ).fetchone()
+        audit_row = conn.execute(
+            "SELECT action, resource, outcome FROM audit_logs WHERE resource = ? ORDER BY created_at DESC LIMIT 1",
+            ("scheme_review_actions",),
+        ).fetchone()
+
+    assert review_row is not None
+    assert review_row[0] == "approved"
+    assert review_row[1] == "admin1"
+    assert audit_row is not None
+    assert audit_row[0] == "scheme_review_resolved"
+
+
 def test_admin_release_runbook_page_renders_release_steps_and_rollback_plan():
     response = client.get("/admin/release-runbook")
     assert response.status_code == 200
@@ -468,6 +560,37 @@ def test_admin_content_configuration_page_renders_special_news_and_ad_controls()
     assert api_response.json()["success"] is True
     assert "special_news" in api_response.json()["data"]
     assert "advertising" in api_response.json()["data"]
+
+
+def test_source_registry_and_scheduler_metadata_are_exposed_to_admins():
+    registry_response = client.get("/api/admin/source-registry")
+    assert registry_response.status_code == 200
+    payload = registry_response.json()
+    assert payload["success"] is True
+    assert "sources" in payload["data"]
+    assert "scheduler" in payload["data"]
+
+    page_response = client.get("/admin/source-registry")
+    assert page_response.status_code == 200
+    assert "Source Registry" in page_response.text or "மூலப் பதிவு" in page_response.text
+    assert "Scheduler" in page_response.text or "திட்டமிடுபவர்" in page_response.text
+
+
+def test_admin_audit_logs_are_exposed_on_api_and_page():
+    admin_login = client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    assert admin_login.status_code == 200
+    token = admin_login.json()["token"]
+
+    api_response = client.get("/api/admin/audit-logs", headers={"Authorization": f"Bearer {token}"})
+    assert api_response.status_code == 200
+    payload = api_response.json()
+    assert payload["success"] is True
+    assert isinstance(payload["data"], list)
+
+    page_response = client.get("/admin/audit-logs", headers={"Authorization": f"Bearer {token}"})
+    assert page_response.status_code == 200
+    assert "Audit Logs" in page_response.text or "ஆடிட் பதிவு" in page_response.text
+    assert "login" in page_response.text.lower()
 
 
 def test_registration_creates_pending_user_and_requires_otp_verification_before_login():
