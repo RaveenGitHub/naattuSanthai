@@ -4,11 +4,25 @@
 
 Build and ship a reliable agritech information stack that covers government schemes, soil testing, weather intelligence, and disease support. Each module must fetch trustworthy data, translate and summarize it in Tamil, expose a clear latest/archive experience for farmers, and remain monitorable by admins.
 
-## Status update — 2026-09-05
+## Status update — 2026-09-10
 
-- Market intelligence trust metadata is now implemented and validated: source name, source_status, and display_price are returned from the versioned API.
-- Government schemes and admin monitoring remain in a stable operational state with continued quality checks.
-- Current implementation priority: formalize the soil testing recommendation engine and complete the Tamil-first farmer guidance flow before moving deeper into weather or disease modules.
+### What has improved in the current implementation
+
+- Government scheme pages now render a consistent, polished Tamil-first experience with clearer section hierarchy, summary cards, and stronger visual distinction between latest and archived entries.
+- The active top navigation state is now aligned with the app shell, so the Schemes link remains stable and visually highlighted instead of jumping across page layouts.
+- Scheme archive logic now includes richer metadata exposure such as year_group, making archive grouping more usable and easier to filter in the UI and API flow.
+- Latest/archive endpoint behavior is user-facing and operationally more predictable, with category and keyword filters applied consistently to both page and API responses.
+- Admin scheme monitoring has stronger quality gate behavior: AI validation status, source compliance, retention rules, and quality checks are surfaced in the monitoring output rather than treated as static placeholders.
+- Empty or incomplete scheme records are better handled via validation logic and flagging, reducing the risk of publishing generic or weak content to farmers.
+- The detail-page experience is now more polished and stable, while preserving scheme-specific access for both current and archived items.
+
+### Remaining gaps to close before broader rollout
+
+- The implementation still depends on internal seeded content and mock/structured sample data rather than a fully trusted, continuously refreshed government-source pipeline.
+- There is no fully documented production fetch scheduler or cron/task orchestration for the schemes pipeline in the repo, so automation still needs to be explicitly operationalized.
+- The quality gate is stronger but still needs a clearer review workflow for flagged records, including manual admin action and audit trails.
+- The detail experience needs stronger cross-page consistency and a reusable page shell pattern across the rest of the module pages.
+- The plan should continue to distinguish between status goals already achieved and items still requiring explicit production-hardening for internal or external release.
 
 ---
 
@@ -59,6 +73,20 @@ Set up the schema, source registry, and data contracts needed for the module.
 - Raw and processed records are separated cleanly
 - Metadata includes source name, URL, and timestamp
 
+### Implementation review
+
+Implemented improvements:
+
+- The app now maintains a working stored-data model for scheme content and metadata, including support for source metadata and quality-aware status tracking.
+- Monitoring and fetch-status endpoints are exposing operational metadata that helps confirm the module is healthy from an admin point of view.
+- The implementation already supports structured scheme fields and archived/latest state transitions in a way the UI expects.
+
+Remaining gaps:
+
+- The data model still needs stronger separation between trusted source records, normalized processed records, and manually reviewed outputs.
+- Source registry configuration should be made more explicit and auditable for every active scheme source.
+- The plan needs a stricter contract for what constitutes production-ready metadata and a clear definitions list for provenance, freshness, and compliance.
+
 ---
 
 ## Phase 2 — Fetch Pipeline
@@ -86,6 +114,20 @@ Pull scheme information from official sources and store the raw content for down
 - Each fetch saves raw content and source metadata
 - Failed fetches are logged and visible to admin operations
 - Source data is normalized before AI processing
+
+### Implementation review
+
+Implemented improvements:
+
+- Fetch / status monitoring and admin-triggered refresh actions are available in the API layer, so admins can trigger and verify data collection manually.
+- The implementation includes data quality and retention metadata, which improves operational visibility beyond a simple success flag.
+- Failure and health-state handling is already more structured than a generic fetch stub, making it easier to diagnose data issues in real operations.
+
+Remaining gaps:
+
+- The repo still lacks a clearly documented robust real-world connector layer for official government portals beyond seed and sample data handling.
+- Retry, timeout, and fallback logic should be formalized into a stronger operational SLA and alerting model.
+- There is still no explicit production scheduler or evidence of integration with a managed cron/task platform for recurring fetches.
 
 ---
 
@@ -121,6 +163,20 @@ Convert raw English text into short, readable Tamil scheme content.
 - Empty or broken outputs are rejected before publication
 - AI confidence is measured and tracked
 
+### Implementation review
+
+Implemented improvements:
+
+- The scheme content pipeline now includes validation logic that rejects weak or generic entries before they become farm-facing content.
+- AI validation metadata is surfaced in admin monitoring, making it easier to spot incomplete or low-quality scheme records.
+- The implementation has moved from simple static copy to a quality-aware processing flow that filters unusable record states.
+
+Remaining gaps:
+
+- The document still needs a formally defined confidence score and review rule set for accepted vs rejected records.
+- Manual review routing and operator override actions are not yet fully explained in the implementation path.
+- The scheme output quality must be benchmarked against real farmer utility and Tamil readability, not just completeness.
+
 ---
 
 ## Phase 4 — Archive and Search Logic
@@ -148,6 +204,20 @@ Only fresh updates remain in front-of-house and old content is operationally arc
 - Latest panel contains only recent records
 - Archive panel contains older records only
 - Search and filters work consistently
+
+### Implementation review
+
+Implemented improvements:
+
+- Latest and archive list separation is working in practice and backed by category/search filtering across the page and API surface.
+- Archive metadata is stronger thanks to year grouping support, which makes older records easier to organize and navigate.
+- The UI and backend now behave more consistently around the latest/archive boundary, reducing confusion for end users.
+
+Remaining gaps:
+
+- The archive strategy should be documented with a clearer definition of freshness windows, retention windows, and admin override rules.
+- Historical data should maintain explicit provenance for why an item moved to archive and when it was reviewed.
+- More robust filtering and sorting UX is still needed for large content volumes or multi-year archive browsing.
 
 ---
 
@@ -179,6 +249,21 @@ Build the farmer-facing experience in Tamil with a mobile-friendly layout.
 - Each scheme card includes summary and CTA
 - Detail page loads correct content without broken formatting
 
+### Implementation review
+
+Implemented improvements:
+
+- The government schemes landing page is now cleaner and more farmer-friendly, with a stronger top section, summary cards, and distinguishable list areas.
+- Tags, CTA actions, and consistent page hierarchy are now more readable and usable.
+- Navigation consistency has been improved so the page feels integrated into the wider app rather than as a detached screen.
+- The detail page remains accessible and readable with structured sections and better visual treatment.
+
+Remaining gaps:
+
+- The page layout should become more fully responsive and standardized across the broader app shell using a reusable layout pattern.
+- Some text labels still need tighter localization consistency and more farmer-friendly simplification in Tamil.
+- A final content QA pass is still needed to verify readability, information density, and field usability at scale.
+
 ---
 
 ## Phase 6 — Monitoring, QA, and Pilot Rollout
@@ -207,6 +292,20 @@ Ensure the module remains reliable after release and can be operated by admins.
 - Admin can see latest fetch health
 - Broken or missing content is visible in operational logs
 - Pilot feedback is captured before broader release
+
+### Implementation review
+
+Implemented improvements:
+
+- Admin monitoring and fetch-status endpoints provide stronger operational feedback than a basic health check alone.
+- Quality gate metadata, retention policy exposure, and source compliance indicators are already present in the current implementation and are useful for pilot operations.
+- The project is now in a much healthier state for a targeted pilot because the operational surfaces are more visible to admins and developers.
+
+Remaining gaps:
+
+- A formal review queue, flag resolution workflow, and admin action log should be documented and implemented.
+- Pilot feedback collection still needs a defined template for farmer response, readability testing, and field truth validation.
+- Release criteria should explicitly separate technical readiness from field adoption readiness before broader rollout.
 
 ---
 
