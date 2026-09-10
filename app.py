@@ -653,6 +653,187 @@ SERVICES_PAGE = """
 </html>
 """
 
+APP_SHELL_PAGE = """
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Digital Farming Support Center</title>
+  <style>
+    :root {
+      --bg: #f4f9f1;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --primary-soft: #ebf9ed;
+      --secondary: #4aa6d6;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #dfe9df;
+      --shadow: 0 14px 32px rgba(23, 48, 29, 0.08);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    body {
+      overflow-x: hidden;
+    }
+    .shell {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 20px;
+      background: rgba(255,255,255,0.96);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--line);
+      box-shadow: 0 8px 18px rgba(23, 48, 29, 0.04);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+    .logo {
+      width: 40px;
+      height: 40px;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      color: #fff;
+      font-size: 18px;
+    }
+    .nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: flex-end;
+    }
+    .nav a {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 9px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--text);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 700;
+      transition: all 0.2s ease;
+    }
+    .nav a:hover, .nav a.active {
+      background: var(--primary-soft);
+      border-color: rgba(45, 125, 70, 0.2);
+      color: var(--primary);
+    }
+    .frame-wrap {
+      flex: 1;
+      padding: 18px;
+      background: var(--bg);
+    }
+    iframe {
+      width: 100%;
+      height: calc(100vh - 110px);
+      min-height: 720px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+    @media (max-width: 820px) {
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+      .nav {
+        justify-content: flex-start;
+      }
+      iframe {
+        height: 78vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🌾</div>
+        <span>Digital Farming Support Center</span>
+      </div>
+      <nav class="nav" aria-label="Main navigation">
+        <a href="/" class="nav-link active" data-page="/">Home</a>
+        <a href="/dashboard" class="nav-link" data-page="/dashboard">Dashboard</a>
+        <a href="/services" class="nav-link" data-page="/services">Services</a>
+        <a href="/weather-market" class="nav-link" data-page="/weather-market">Weather</a>
+        <a href="/government-schemes" class="nav-link" data-page="/government-schemes">Schemes</a>
+        <a href="/admin/overview" class="nav-link" data-page="/admin/overview">Admin</a>
+      </nav>
+    </header>
+
+    <div class="frame-wrap">
+      <iframe id="page-frame" title="Farm support content" src="/dashboard"></iframe>
+    </div>
+  </div>
+
+  <script>
+    const frame = document.getElementById('page-frame');
+    const links = document.querySelectorAll('.nav-link');
+    const setActiveLink = (page) => {
+      links.forEach((link) => {
+        const active = link.dataset.page === page;
+        link.classList.toggle('active', active);
+      });
+    };
+    links.forEach((link) => {
+      link.addEventListener('click', (event) => {
+        event.preventDefault();
+        const page = link.dataset.page || '/';
+        setActiveLink(page);
+        frame.src = page;
+        if (history.pushState) {
+          history.pushState({ page }, '', page === '/' ? '/' : page);
+        }
+      });
+    });
+    window.addEventListener('popstate', (event) => {
+      const page = event.state && event.state.page ? event.state.page : '/dashboard';
+      frame.src = page;
+      setActiveLink(page);
+    });
+    window.addEventListener('load', () => {
+      const initialPage = new URL(window.location.href).pathname || '/';
+      if (initialPage && initialPage !== '/') {
+        frame.src = initialPage;
+        setActiveLink(initialPage);
+      }
+    });
+  </script>
+</body>
+</html>
+"""
+
 app = FastAPI(title="Digital Farming Support Center")
 app.include_router(router)
 
@@ -666,11 +847,18 @@ def login(payload: LoginRequest):
     return {"success": True, "token": result["token"], "role": result["role"]}
 
 
+def get_bearer_token(authorization: Optional[str]) -> str:
+    if not authorization or not authorization.strip():
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    scheme, sep, token = authorization.strip().partition(" ")
+    if not sep or scheme.lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    return token.strip()
+
+
 @app.post("/api/diagnose")
 def diagnose(request: DiagnoseRequest, authorization: Optional[str] = Header(default=None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
-    token = authorization.split(" ", 1)[1]
+    token = get_bearer_token(authorization)
     try:
         payload = verify_token(token)
     except Exception as exc:  # pragma: no cover - security exception path
@@ -688,9 +876,7 @@ def diagnose_upload(
     file: UploadFile = File(...),
     authorization: Optional[str] = Header(default=None),
 ):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
-    token = authorization.split(" ", 1)[1]
+    token = get_bearer_token(authorization)
     try:
         payload = verify_token(token)
     except Exception as exc:  # pragma: no cover - security exception path
@@ -708,9 +894,7 @@ def diagnose_upload(
 
 @app.get("/api/diagnose/history")
 def diagnose_history(authorization: Optional[str] = Header(default=None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
-    token = authorization.split(" ", 1)[1]
+    token = get_bearer_token(authorization)
     try:
         payload = verify_token(token)
     except Exception as exc:  # pragma: no cover - security exception path
@@ -722,9 +906,7 @@ def diagnose_history(authorization: Optional[str] = Header(default=None)):
 
 @app.get("/api/users")
 def get_users(authorization: Optional[str] = Header(default=None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
-    token = authorization.split(" ", 1)[1]
+    token = get_bearer_token(authorization)
     try:
         payload = verify_token(token)
     except Exception as exc:  # pragma: no cover - security exception path
@@ -736,9 +918,7 @@ def get_users(authorization: Optional[str] = Header(default=None)):
 
 @app.get("/api/audit/logs")
 def get_audit_logs_endpoint(authorization: Optional[str] = Header(default=None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
-    token = authorization.split(" ", 1)[1]
+    token = get_bearer_token(authorization)
     try:
         payload = verify_token(token)
     except Exception as exc:  # pragma: no cover - security exception path
@@ -750,9 +930,7 @@ def get_audit_logs_endpoint(authorization: Optional[str] = Header(default=None))
 
 @app.post("/api/users")
 def create_user_endpoint(payload: UserCreateRequest, authorization: Optional[str] = Header(default=None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
-    token = authorization.split(" ", 1)[1]
+    token = get_bearer_token(authorization)
     try:
         payload_token = verify_token(token)
     except Exception as exc:  # pragma: no cover - security exception path
@@ -768,9 +946,7 @@ def create_user_endpoint(payload: UserCreateRequest, authorization: Optional[str
 
 @app.get("/api/profile")
 def get_user_profile(authorization: Optional[str] = Header(default=None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
-    token = authorization.split(" ", 1)[1]
+    token = get_bearer_token(authorization)
     try:
         payload = verify_token(token)
     except Exception as exc:  # pragma: no cover - security exception path
@@ -784,9 +960,7 @@ def get_user_profile(authorization: Optional[str] = Header(default=None)):
 
 @app.post("/api/profile/reset-password")
 def reset_user_password(payload: PasswordResetRequest, authorization: Optional[str] = Header(default=None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
-    token = authorization.split(" ", 1)[1]
+    token = get_bearer_token(authorization)
     try:
         payload_token = verify_token(token)
     except Exception as exc:  # pragma: no cover - security exception path
@@ -802,8 +976,13 @@ def reset_user_password(payload: PasswordResetRequest, authorization: Optional[s
 def read_root(request: Request):
     accept_header = request.headers.get("accept", "")
     if "text/html" in accept_header.lower():
-        return HTMLResponse(content=ROOT_PAGE)
+        return HTMLResponse(content=APP_SHELL_PAGE)
     return JSONResponse({"message": "Digital Farming Support Center API", "status": "ok"})
+
+
+@app.get("/shell", response_class=HTMLResponse)
+def app_shell():
+    return APP_SHELL_PAGE
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
@@ -818,9 +997,7 @@ def services_page():
 
 @app.get("/api/admin/overview")
 def admin_monitoring_overview(authorization: Optional[str] = Header(default=None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
-    token = authorization.split(" ", 1)[1]
+    token = get_bearer_token(authorization)
     try:
         payload = verify_token(token)
     except Exception as exc:  # pragma: no cover - security exception path
@@ -1831,24 +2008,33 @@ def government_schemes_page(category: Optional[str] = None, search: Optional[str
 
     def render_cards(items):
         if not items:
-            return "<div class='card'><h3>உள்ளடக்கம் இல்லை</h3><p>தற்போது தேர்ந்தெடுத்த வடிகட்டி அல்லது தேடல் அளவுருக்களுக்கு பொருந்தும் திட்டங்கள் எதுவும் இல்லை.</p></div>"
+            return """
+            <article class='empty-state'>
+                <h3>உள்ளடக்கம் இல்லை</h3>
+                <p>தற்போது தேர்ந்தெடுத்த வடிகட்டி அல்லது தேடல் அளவுருக்களுக்கு பொருந்தும் திட்டங்கள் எதுவும் இல்லை.</p>
+            </article>
+            """
+
         cards = []
         for item in items:
-            title = escape(str(item.get("title_ta", "")))
-            summary = escape(str(item.get("summary_ta", "")))
+            title = escape(str(item.get("title_ta") or item.get("title_en") or "அரசு திட்டம்"))
+            summary = escape(str(item.get("summary_ta") or item.get("summary_en") or "அரசியல் மற்றும் நிதி உதவி விவரங்கள் விரைவில் கிடைக்கும்."))
             scheme_id = escape(str(item.get("id", "")))
-            category_name = escape(str(item.get("category", "")))
-            eligibility = escape(str(item.get("eligibility_ta", "")))
-            steps = escape(str(item.get("apply_steps_ta", "")))
+            category_name = escape(str(item.get("category", "")).title())
+            eligibility = escape(str(item.get("eligibility_ta") or item.get("eligibility_en") or "தகுதி விவரங்கள் விரைவில் இடம் பெறும்."))
+            steps = escape(str(item.get("apply_steps_ta") or item.get("apply_steps_en") or "விண்ணப்ப படிகள் விரைவில் இடம் பெறும்."))
             cards.append(
                 """
-                <article class='card'>
-                  <span class='pill'>{category_name}</span>
+                <article class='scheme-card'>
+                  <div class='meta-row'>
+                    <span class='pill'>{category_name}</span>
+                    <span class='badge'>புதியது</span>
+                  </div>
                   <h3>{title}</h3>
                   <p>{summary}</p>
                   <ul>
-                    <li>தகுதி: {eligibility}</li>
-                    <li>விண்ணப்பம்: {steps}</li>
+                    <li><strong>தகுதி:</strong> {eligibility}</li>
+                    <li><strong>விண்ணப்பம்:</strong> {steps}</li>
                   </ul>
                   <a class='cta' href='/scheme-page/{scheme_id}'>மேலும் படிக்க</a>
                 </article>
@@ -1865,6 +2051,8 @@ def government_schemes_page(category: Optional[str] = None, search: Optional[str
 
     latest_html = render_cards(latest_entries)
     archive_html = render_cards(archived_entries)
+    latest_count = len(latest_entries)
+    archive_count = len(archived_entries)
     template = """
 <!DOCTYPE html>
 <html lang="ta">
@@ -1874,44 +2062,204 @@ def government_schemes_page(category: Optional[str] = None, search: Optional[str
   <title>அரசு திட்டங்கள்</title>
   <style>
     :root {{
-      --bg: #f5f9f2;
+      --bg: #f4f9f1;
       --panel: #ffffff;
       --primary: #2d7d46;
+      --primary-soft: #ebf9ed;
       --secondary: #4aa6d6;
-      --warning: #d97706;
+      --accent: #d97706;
       --text: #17301d;
       --muted: #567163;
       --line: #dfe9df;
-      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+      --shadow: 0 14px 32px rgba(23, 48, 29, 0.08);
     }}
     * {{ box-sizing: border-box; }}
+    html {{ scroll-behavior: smooth; }}
     body {{
       margin: 0;
       font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif;
       background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%);
       color: var(--text);
     }}
-    .container {{ max-width: 1100px; margin: 0 auto; padding: 28px 18px 48px; }}
-    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0 22px; border-bottom: 1px solid var(--line); }}
-    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 700; }}
-    .logo {{ width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
+    .container {{ max-width: 1180px; margin: 0 auto; padding: 28px 18px 56px; }}
+    .topbar {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 0 22px;
+      border-bottom: 1px solid var(--line);
+    }}
+    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 800; letter-spacing: 0.02em; }}
+    .logo {{ width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; box-shadow: var(--shadow); }}
     .nav {{ display: flex; flex-wrap: wrap; gap: 10px; }}
-    .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
-    h1 {{ margin: 28px 0 10px; font-size: clamp(2rem, 4vw, 3rem); }}
-    .intro {{ color: var(--muted); line-height: 1.8; max-width: 75ch; }}
-    .toolbar {{ display: flex; flex-wrap: wrap; gap: 12px; margin: 20px 0 16px; align-items: center; }}
-    .search, .filter {{ flex: 1; min-width: 180px; max-width: 260px; border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 12px 14px; font-size: 0.95rem; color: var(--text); }}
-    .tabs {{ display: flex; gap: 12px; margin: 12px 0 18px; flex-wrap: wrap; }}
-    .tab {{ border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 10px 16px; font-weight: 700; color: var(--text); }}
-    .tab.active {{ background: linear-gradient(135deg, var(--primary), var(--secondary)); color: #fff; border-color: transparent; }}
-    .grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }}
-    .card {{ background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px; box-shadow: var(--shadow); }}
-    .card h3 {{ margin-top: 0; margin-bottom: 12px; }}
-    .card p, .card li {{ color: var(--muted); line-height: 1.8; }}
-    .pill {{ display: inline-block; background: #ebf9ed; color: var(--primary); border-radius: 999px; padding: 7px 10px; font-size: 12px; font-weight: 700; margin-bottom: 12px; }}
-    .cta {{ display: inline-block; margin-top: 12px; padding: 10px 14px; border-radius: 10px; background: var(--primary); color: #fff; text-decoration: none; font-weight: 700; }}
-    ul {{ margin: 0; padding-left: 18px; }}
-    @media (max-width: 760px) {{ .grid {{ grid-template-columns: 1fr; }} .topbar {{ flex-direction: column; align-items: flex-start; }} .toolbar {{ flex-direction: column; align-items: stretch; }} .search, .filter {{ max-width: none; }} }}
+    .nav a {{
+      text-decoration: none;
+      color: var(--text);
+      background: #f4f8f4;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 9px 14px;
+      font-weight: 700;
+    }}
+    .hero {{
+      display: grid;
+      grid-template-columns: 1.5fr 0.9fr;
+      gap: 20px;
+      align-items: stretch;
+      margin-top: 24px;
+    }}
+    .hero-copy, .hero-panel {{
+      background: rgba(255,255,255,0.78);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+      padding: 24px;
+    }}
+    .eyebrow {{
+      display: inline-block;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }}
+    h1 {{ margin: 0 0 14px; font-size: clamp(2.1rem, 4vw, 3.2rem); line-height: 1.15; }}
+    .intro {{ color: var(--muted); line-height: 1.85; max-width: 70ch; margin: 0; }}
+    .hero-panel {{ display: grid; gap: 14px; align-content: center; }}
+    .stat-box {{
+      background: linear-gradient(180deg, #f7faf6 0%, #edf9f2 100%);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+    }}
+    .stat-box span {{ display: block; color: var(--muted); font-size: 0.82rem; margin-bottom: 8px; }}
+    .stat-box strong {{ display: block; font-size: clamp(1.8rem, 3vw, 2.3rem); line-height: 1.1; }}
+    .toolbar {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      margin: 24px 0 18px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255,255,255,0.7);
+      box-shadow: 0 10px 22px rgba(23, 48, 29, 0.04);
+    }}
+    .search, .filter {{
+      flex: 1;
+      min-width: 180px;
+      max-width: 260px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 0.96rem;
+      background: var(--panel);
+      color: var(--text);
+    }}
+    .filter {{ max-width: 220px; }}
+    .primary-btn, .secondary-btn {{
+      border: none;
+      border-radius: 12px;
+      padding: 12px 18px;
+      font-weight: 800;
+      text-decoration: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }}
+    .primary-btn {{ background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
+    .secondary-btn {{ background: var(--panel); border: 1px solid var(--line); color: var(--text); }}
+    .summary-grid {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin: 10px 0 24px;
+    }}
+    .summary-card {{
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 8px 20px rgba(23, 48, 29, 0.04);
+    }}
+    .summary-card .label {{ display: block; color: var(--muted); font-size: 0.78rem; letter-spacing: 0.03em; text-transform: uppercase; margin-bottom: 8px; }}
+    .summary-card strong {{ font-size: 1.8rem; }}
+    .section-head {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-top: 10px;
+      margin-bottom: 14px;
+    }}
+    .section-head h2 {{ margin: 0; font-size: 1.45rem; }}
+    .section-head span {{ color: var(--muted); font-weight: 700; }}
+    .scheme-grid {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }}
+    .scheme-card, .empty-state {{
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }}
+    .meta-row {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }}
+    .pill {{
+      display: inline-block;
+      background: var(--primary-soft);
+      color: var(--primary);
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-size: 12px;
+      font-weight: 800;
+    }}
+    .badge {{
+      display: inline-block;
+      background: #fff3da;
+      color: var(--accent);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 11px;
+      font-weight: 800;
+    }}
+    .scheme-card h3 {{ margin: 0 0 10px; font-size: 1.25rem; line-height: 1.45; }}
+    .scheme-card p, .scheme-card li, .empty-state p {{ color: var(--muted); line-height: 1.8; }}
+    .scheme-card ul {{ margin: 16px 0 0; padding-left: 18px; }}
+    .scheme-card li {{ margin-bottom: 6px; }}
+    .cta {{
+      display: inline-flex;
+      margin-top: 16px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      color: #fff;
+      text-decoration: none;
+      font-weight: 800;
+    }}
+    .empty-state h3 {{ margin-top: 0; margin-bottom: 10px; }}
+    @media (max-width: 760px) {{
+      .hero, .summary-grid, .scheme-grid {{ grid-template-columns: 1fr; }}
+      .topbar {{ flex-direction: column; align-items: flex-start; }}
+      .toolbar {{ flex-direction: column; align-items: stretch; }}
+      .search, .filter {{ max-width: none; }}
+      .section-head {{ flex-direction: column; align-items: flex-start; }}
+    }}
   </style>
 </head>
 <body>
@@ -1928,10 +2276,29 @@ def government_schemes_page(category: Optional[str] = None, search: Optional[str
       </nav>
     </header>
 
-    <h1>அரசு திட்டங்கள் மற்றும் நிதி உதவிகள்</h1>
-    <p class="intro">
-      விவசாயிகளுக்கு கிடைக்கும் புதிய மானியங்கள், பயிர் காப்பீடு, நிதி உதவிகள், பயிற்சி திட்டங்கள் மற்றும் அரசு ஒப்புதல்கள் ஆகியவற்றை தமிழில் எளிதாகப் புரியும் வகையில் வழங்கப்படுகிறது.
-    </p>
+    <section class="hero">
+      <div class="hero-copy">
+        <div class="eyebrow">Farmer support</div>
+        <h1>அரசு திட்டங்கள் மற்றும் நிதி உதவிகள்</h1>
+        <p class="intro">
+          விவசாயிகளுக்கு கிடைக்கும் புதிய மானியங்கள், பயிர் காப்பீடு, நிதி உதவிகள், பயிற்சி திட்டங்கள் மற்றும் அரசு ஒப்புதல்கள் ஆகியவற்றை தமிழில் எளிதாகப் புரியும் வகையில் ஒரே இடத்தில் வழங்கப்படுகிறது.
+        </p>
+      </div>
+      <aside class="hero-panel" aria-label="திட்ட விரைவு குறிப்பு">
+        <div class="stat-box">
+          <span>மொத்த அறிவிப்புகள்</span>
+          <strong>{latest_count}</strong>
+        </div>
+        <div class="stat-box">
+          <span>காப்பக பதிவுகள்</span>
+          <strong>{archive_count}</strong>
+        </div>
+        <div class="stat-box">
+          <span>நேரடி உதவி</span>
+          <strong>24/7</strong>
+        </div>
+      </aside>
+    </section>
 
     <form class="toolbar" method="get" action="/government-schemes">
       <input class="search" type="text" name="search" value="__SEARCH__" aria-label="தேடுக" placeholder="தேடுக" />
@@ -1940,22 +2307,38 @@ def government_schemes_page(category: Optional[str] = None, search: Optional[str
         <option value="subsidy" __SUBSIDY_SELECTED__>subsidy</option>
         <option value="insurance" __INSURANCE_SELECTED__>insurance</option>
       </select>
-      <button type="submit" class="cta" style="border:none;cursor:pointer;">வடிகட்டு</button>
+      <button type="submit" class="primary-btn">வடிகட்டு</button>
+      <a class="secondary-btn" href="/government-schemes">அனைத்தும்</a>
     </form>
 
-    <div class="tabs" aria-label="அரசு திட்டங்கள் பட்டிகள்">
-      <div class="tab active">புதிய அறிவிப்புகள் (Last 7 Days)</div>
-      <div class="tab">காப்பக அறிவிப்புகள் (Archive)</div>
-    </div>
+    <section class="summary-grid" aria-label="திட்ட சுருக்கம்">
+      <div class="summary-card">
+        <span class="label">புதிய அறிவிப்புகள்</span>
+        <strong>{latest_count}</strong>
+      </div>
+      <div class="summary-card">
+        <span class="label">காப்பகப் பதிவுகள்</span>
+        <strong>{archive_count}</strong>
+      </div>
+      <div class="summary-card">
+        <span class="label">நிறைவு நிலை</span>
+        <strong>சேவை</strong>
+      </div>
+    </section>
 
-    <section class="grid">
+    <div class="section-head">
+      <h2>புதிய அறிவிப்புகள்</h2>
+      <span>Last 7 Days</span>
+    </div>
+    <section class="scheme-grid">
       __LATEST_HTML__
     </section>
 
-    <div class="tabs" aria-label="காப்பக அறிவிப்புகள் பட்டிகள்" style="margin-top: 28px;">
-      <div class="tab active">காப்பக அறிவிப்புகள்</div>
+    <div class="section-head" style="margin-top: 32px;">
+      <h2>காப்பக அறிவிப்புகள்</h2>
+      <span>Archive</span>
     </div>
-    <section class="grid">
+    <section class="scheme-grid">
       __ARCHIVE_HTML__
     </section>
   </div>
@@ -1986,14 +2369,15 @@ def scheme_detail_page(scheme_id: str):
   <title>{entry['title_ta']}</title>
   <style>
     :root {{
-      --bg: #f5f9f2;
+      --bg: #f4f9f1;
       --panel: #ffffff;
       --primary: #2d7d46;
+      --primary-soft: #ebf9ed;
       --secondary: #4aa6d6;
       --text: #17301d;
       --muted: #567163;
       --line: #dfe9df;
-      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+      --shadow: 0 14px 32px rgba(23, 48, 29, 0.08);
     }}
     * {{ box-sizing: border-box; }}
     body {{
@@ -2002,20 +2386,74 @@ def scheme_detail_page(scheme_id: str):
       background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%);
       color: var(--text);
     }}
-    .container {{ max-width: 950px; margin: 0 auto; padding: 28px 18px 48px; }}
+    .container {{ max-width: 980px; margin: 0 auto; padding: 28px 18px 56px; }}
+    .nav {{ margin-bottom: 18px; }}
+    .nav a {{
+      text-decoration: none;
+      color: var(--text);
+      background: #f4f8f4;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 9px 14px;
+      font-weight: 700;
+    }}
     .panel {{
-      background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 24px; box-shadow: var(--shadow);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 28px;
+      box-shadow: var(--shadow);
+    }}
+    .meta-row {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 18px;
     }}
     .tag {{
-      display: inline-block; background: #ebf9ed; color: var(--primary); border-radius: 999px; padding: 7px 10px; font-size: 12px; font-weight: 700; margin-bottom: 12px;
+      display: inline-block;
+      background: var(--primary-soft);
+      color: var(--primary);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
     }}
-    h1 {{ font-size: clamp(1.9rem, 4vw, 2.7rem); margin: 10px 0 18px; }}
-    p, li {{ color: var(--muted); line-height: 1.8; }}
-    ul {{ padding-left: 20px; }}
-    .section {{ margin-top: 20px; }}
-    .section h2 {{ margin-bottom: 10px; font-size: 1.2rem; }}
-    .nav {{ margin-bottom: 18px; }}
-    .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
+    .status {{
+      display: inline-block;
+      background: #fff3da;
+      color: #9a5d00;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 800;
+    }}
+    h1 {{ font-size: clamp(2rem, 4vw, 3rem); margin: 0 0 18px; line-height: 1.2; }}
+    .summary {{
+      background: linear-gradient(180deg, #f7faf6 0%, #edf9f2 100%);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 18px;
+      margin-bottom: 22px;
+    }}
+    .summary strong {{ display: block; margin-bottom: 6px; }}
+    p, li {{ color: var(--muted); line-height: 1.9; }}
+    ul {{ padding-left: 18px; }}
+    .section {{ margin-top: 24px; }}
+    .section h2 {{ margin: 0 0 10px; font-size: 1.2rem; }}
+    .source-box {{
+      margin-top: 22px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      background: #f8fbf8;
+      border-radius: 16px;
+    }}
+    @media (max-width: 640px) {{
+      .panel {{ padding: 20px; }}
+      .meta-row {{ flex-direction: column; align-items: flex-start; }}
+    }}
   </style>
 </head>
 <body>
@@ -2024,9 +2462,17 @@ def scheme_detail_page(scheme_id: str):
       <a href="/government-schemes">← அரசுத் திட்டங்கள்</a>
     </div>
     <div class="panel">
-      <span class="tag">{entry['category']}</span>
+      <div class="meta-row">
+        <span class="tag">{entry['category']}</span>
+        <span class="status">சேவை கிடைக்கிறது</span>
+      </div>
+
       <h1>{entry['title_ta']}</h1>
-      <p><strong>சுருக்கம்:</strong> {entry['summary_ta']}</p>
+
+      <div class="summary">
+        <strong>சுருக்கம்</strong>
+        <p>{entry['summary_ta']}</p>
+      </div>
 
       <div class="section">
         <h2>தகுதி</h2>
@@ -2043,7 +2489,7 @@ def scheme_detail_page(scheme_id: str):
         <p>{entry['apply_steps_ta']}</p>
       </div>
 
-      <div class="section">
+      <div class="source-box">
         <h2>மூலம்</h2>
         <p>{entry['source_name']}</p>
       </div>

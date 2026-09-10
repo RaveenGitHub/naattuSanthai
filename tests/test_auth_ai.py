@@ -19,6 +19,21 @@ def test_login_returns_token_for_valid_user():
     assert payload["role"] == "operator"
 
 
+def test_lowercase_bearer_authorization_is_accepted():
+    login = client.post(
+        "/auth/login",
+        json={"username": "admin1", "password": "admin123"},
+    )
+    token = login.json()["token"]
+
+    response = client.get(
+        "/api/admin/overview",
+        headers={"authorization": f"bearer {token}"},
+    )
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+
+
 def test_ai_diagnosis_returns_recommendation():
     login = client.post(
         "/auth/login",
@@ -267,6 +282,28 @@ def test_admin_overview_page_renders_monitoring_metrics():
     assert "செயல்பாடு" in response.text or "Activity" in response.text
     assert "தரம்" in response.text or "Quality" in response.text
     assert "வானிலை" in response.text or "Weather" in response.text
+
+
+def test_admin_monitoring_api_reports_health_and_backup_status():
+    admin_login = client.post(
+        "/auth/login",
+        json={"username": "admin1", "password": "admin123"},
+    )
+    token = admin_login.json()["token"]
+
+    response = client.get(
+        "/api/admin/overview",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert "service_status" in body["data"]
+    assert "database_status" in body["data"]
+    assert "weather_status" in body["data"]
+    assert "scheme_status" in body["data"]
+    assert "backup_status" in body["data"]
+    assert "alerts" in body["data"]
 
 
 def test_admin_quality_gate_api_reports_source_and_fetch_checks():
