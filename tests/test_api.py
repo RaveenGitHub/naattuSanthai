@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 from app import app
 from database import create_db_backup, get_migration_status, record_migration_status
 from security import create_user
+from services import get_scheme_fetch_status
+from services import get_scheme_fetch_status
 
 client = TestClient(app)
 
@@ -278,6 +280,37 @@ def test_market_intelligence_page_renders_price_trend_and_action():
     assert "rice" in response.text.lower() or "நெல்" in response.text
     assert "விலை" in response.text or "Price" in response.text
     assert "பரிந்துரை" in response.text or "Recommendation" in response.text
+
+
+def test_scheme_ai_validation_flags_incomplete_or_generic_records():
+    with __import__("sqlite3").connect("digital_farming.db") as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO government_scheme_updates (
+                id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
+                category, scheme_type, source_name, source_url, is_archived, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "SCHEME-QUALITY-REVIEW",
+                "General Support",
+                "N/A",
+                "",
+                "",
+                "",
+                "subsidy",
+                "central",
+                "Manual Review Source",
+                "https://example.com/manual-review",
+                0,
+                __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+            ),
+        )
+
+    status = get_scheme_fetch_status()
+    assert status["ai_validation"]["status"] == "warning"
+    assert status["ai_validation"]["manual_review_required"] is True
+    assert status["ai_validation"]["summary_quality_score"] < 100
 
 
 def test_admin_quality_gate_page_renders_fetch_and_source_health():

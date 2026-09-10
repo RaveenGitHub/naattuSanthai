@@ -399,6 +399,12 @@ def get_scheme_fetch_status() -> dict:
         category_rows = conn.execute(
             "SELECT category, COUNT(*) AS count FROM government_scheme_updates GROUP BY category ORDER BY count DESC"
         ).fetchall()
+        scheme_rows = conn.execute(
+            """
+            SELECT id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta
+            FROM government_scheme_updates
+            """
+        ).fetchall()
 
     last_source_name = latest_row["source_name"] if latest_row else None
     trusted_sources = {"PM-Kisan", "Tamil Nadu Agriculture Department", "National Portal"}
@@ -413,13 +419,42 @@ def get_scheme_fetch_status() -> dict:
         "required_records": 1,
         "actual_records": total_count,
     }
+
+    generic_tokens = {"n/a", "na", "not available", "general support", "general scheme", "tbd", "to be updated", "placeholder"}
+    invalid_records = []
+    valid_scores = []
+    for row in scheme_rows:
+        title = (row["title_ta"] or "").strip()
+        summary = (row["summary_ta"] or "").strip()
+        eligibility = (row["eligibility_ta"] or "").strip()
+        benefits = (row["benefits_ta"] or "").strip()
+        steps = (row["apply_steps_ta"] or "").strip()
+        summary_lower = summary.lower()
+        issues = []
+        if not title or len(title) < 8:
+            issues.append("title")
+        if not summary or len(summary) < 20 or any(token in summary_lower for token in generic_tokens):
+            issues.append("summary")
+        if not eligibility:
+            issues.append("eligibility")
+        if not benefits:
+            issues.append("benefits")
+        if not steps:
+            issues.append("steps")
+        score = max(0, 100 - (len(issues) * 20))
+        valid_scores.append(score)
+        if issues:
+            invalid_records.append({"id": row["id"], "issues": issues})
+
+    average_score = round(sum(valid_scores) / (len(valid_scores) or 1), 2) if valid_scores else 0
+    has_warning = bool(invalid_records) or total_count == 0
     ai_validation = {
-        "status": "pass" if total_count >= 1 and last_source_name else "warning",
-        "summary_quality_score": 88,
-        "readability_check": "pass",
-        "manual_review_required": False,
+        "status": "warning" if has_warning else "pass",
+        "summary_quality_score": average_score,
+        "readability_check": "pass" if average_score >= 80 else "warning",
+        "manual_review_required": has_warning,
         "confidence_threshold": 0.8,
-        "notes": "Tamil summaries and eligibility text are present and align to seed records.",
+        "notes": "Manual review is required for incomplete or generic scheme summaries." if has_warning else "Tamil summaries and eligibility text meet the minimum quality threshold.",
     }
 
     return {
