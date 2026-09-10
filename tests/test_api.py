@@ -306,6 +306,14 @@ def test_admin_operations_checklist_page_renders_backup_and_migration_readiness(
     assert "Migration" in response.text or "மாற்றம்" in response.text or "migration" in response.text.lower()
 
 
+def test_login_page_exposes_registration_and_recovery_ctas():
+    response = client.get("/login")
+    assert response.status_code == 200
+    assert "Login" in response.text or "உள்நுழை" in response.text
+    assert "Register" in response.text or "பதிவு" in response.text
+    assert "Forgot password" in response.text or "கடவுச்சொல்" in response.text
+
+
 def test_registration_page_renders_farmer_onboarding_steps():
     response = client.get("/register")
     assert response.status_code == 200
@@ -313,6 +321,22 @@ def test_registration_page_renders_farmer_onboarding_steps():
     assert "கிராமம்" in response.text or "Village" in response.text
     assert "நிலம்" in response.text or "Farm" in response.text
     assert "படிவம்" in response.text or "Form" in response.text
+
+
+def test_password_recovery_pages_render_public_auth_flow_paths():
+    forgot = client.get("/forgot-password")
+    assert forgot.status_code == 200
+    assert "Forgot" in forgot.text or "கடவுச்சொல்" in forgot.text
+
+    reset = client.get("/reset-password")
+    assert reset.status_code == 200
+    assert "Reset" in reset.text or "மீட்டமை" in reset.text
+
+
+def test_protected_pages_redirect_to_login_without_session_cookie():
+    response = client.get("/dashboard", follow_redirects=False)
+    assert response.status_code in {302, 307}
+    assert response.headers.get("location", "").startswith("/login")
 
 
 def test_profile_page_renders_user_and_farm_summary():

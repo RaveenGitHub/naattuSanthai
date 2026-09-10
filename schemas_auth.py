@@ -23,3 +23,21 @@ class UserCreateRequest(BaseModel):
 class PasswordResetRequest(BaseModel):
     current_password: str
     new_password: str
+
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+    role: str = "farmer"
+    full_name: str = ""
+    email: str = None
+    phone: str = None
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class AuthResetPasswordRequest(BaseModel):
+    username: str
+    new_password: str
