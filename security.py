@@ -146,6 +146,24 @@ def reset_password(username: str, current_password: str, new_password: str) -> D
     return {"username": username, "status": "updated"}
 
 
+def unlock_user(username: str) -> Dict[str, str]:
+    if not username:
+        raise ValueError("Username is required")
+
+    user = _get_user(username)
+    if user is None:
+        raise ValueError("User not found")
+
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE users SET status = ?, failed_login_attempts = 0, otp_code = NULL, otp_expires_at = NULL, updated_at = ? WHERE username = ?",
+            ("active", datetime.now(timezone.utc).isoformat(), username),
+        )
+
+    record_audit_log(username, "user_unlocked", "users", "success", "Admin reset lockout state")
+    return {"username": username, "status": "active"}
+
+
 def _get_user(username: str) -> Optional[Dict[str, str]]:
     with get_connection() as conn:
         row = conn.execute(

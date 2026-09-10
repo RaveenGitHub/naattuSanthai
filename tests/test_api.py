@@ -406,6 +406,37 @@ def test_failed_login_attempts_lock_account_after_threshold():
     assert row[1] >= 5
 
 
+def test_admin_can_unlock_a_locked_user():
+    username = f"unlock_{__import__('uuid').uuid4().hex[:8]}"
+    isolated_client = TestClient(app)
+    create_user(username, "StrongPass123", "farmer")
+
+    with __import__("sqlite3").connect("digital_farming.db") as conn:
+        conn.execute(
+            "UPDATE users SET status = ?, failed_login_attempts = ? WHERE username = ?",
+            ("locked", 5, username),
+        )
+
+    admin_login = isolated_client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    assert admin_login.status_code == 200
+    token = admin_login.json()["token"]
+
+    response = isolated_client.post(
+        f"/api/users/{username}/unlock",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["data"]["status"] == "active"
+
+    with __import__("sqlite3").connect("digital_farming.db") as conn:
+        row = conn.execute("SELECT status, failed_login_attempts FROM users WHERE username = ?", (username,)).fetchone()
+    assert row is not None
+    assert row[0] == "active"
+    assert row[1] == 0
+
+
 def test_login_page_exposes_registration_and_recovery_ctas():
     response = client.get("/login")
     assert response.status_code == 200

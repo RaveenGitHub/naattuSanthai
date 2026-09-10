@@ -27,6 +27,7 @@ from security import (
     record_audit_log,
     refresh_access_token,
     reset_password,
+    unlock_user,
     verify_otp,
     verify_token,
 )
@@ -1114,6 +1115,23 @@ def create_user_endpoint(payload: UserCreateRequest, authorization: Optional[str
         result = create_user(payload.username, payload.password, payload.role)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"success": True, "data": result, "error": None}
+
+
+@app.post("/api/users/{username}/unlock")
+def unlock_user_endpoint(username: str, authorization: Optional[str] = Header(default=None)):
+    token = get_bearer_token(authorization)
+    try:
+        payload = verify_token(token)
+    except Exception as exc:  # pragma: no cover - security exception path
+        raise HTTPException(status_code=401, detail="Invalid token") from exc
+    if payload.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        result = unlock_user(username)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"success": True, "data": result, "error": None}
 
 
