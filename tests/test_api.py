@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from app import app
 from database import create_db_backup, get_migration_status, record_migration_status
 from security import create_user
-from services import get_scheme_fetch_status
+from services import get_scheme_fetch_status, list_archived_scheme_updates
 from services import get_scheme_fetch_status
 
 client = TestClient(app)
@@ -311,6 +311,36 @@ def test_scheme_ai_validation_flags_incomplete_or_generic_records():
     assert status["ai_validation"]["status"] == "warning"
     assert status["ai_validation"]["manual_review_required"] is True
     assert status["ai_validation"]["summary_quality_score"] < 100
+
+
+def test_archived_scheme_updates_include_year_grouping_metadata():
+    with __import__("sqlite3").connect("digital_farming.db") as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO government_scheme_updates (
+                id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
+                category, scheme_type, source_name, source_url, is_archived, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "SCHEME-ARCHIVE-YEAR-2024",
+                "2024 பழைய உதவி",
+                "2024 ஆம் ஆண்டுக்கான பழைய அரசு உதவி சுருக்கம்",
+                "2024 தகுதி",
+                "2024 நன்மை",
+                "2024 விண்ணப்ப படிகள்",
+                "subsidy",
+                "state",
+                "Archive Audit Source",
+                "https://example.com/archive-year",
+                1,
+                "2024-03-15T10:00:00+00:00",
+            ),
+        )
+
+    archived = list_archived_scheme_updates()
+    assert any(item.get("year_group") == "2024" for item in archived)
+    assert any(item.get("year_group") == "2026" for item in archived)
 
 
 def test_admin_quality_gate_page_renders_fetch_and_source_health():

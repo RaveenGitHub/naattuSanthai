@@ -321,6 +321,15 @@ def seed_weather_alerts() -> None:
             )
 
 
+def _year_group_for_timestamp(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value).strftime("%Y")
+    except (TypeError, ValueError):
+        return None
+
+
 def list_latest_scheme_updates(category: Optional[str] = None, search: Optional[str] = None) -> List[dict]:
     cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     query = """
@@ -340,7 +349,10 @@ def list_latest_scheme_updates(category: Optional[str] = None, search: Optional[
     query += " ORDER BY created_at DESC"
     with get_connection() as conn:
         rows = conn.execute(query, params).fetchall()
-    return [dict(row) for row in rows]
+    items = [dict(row) for row in rows]
+    for item in items:
+        item["year_group"] = _year_group_for_timestamp(item.get("created_at"))
+    return items
 
 
 def list_archived_scheme_updates(category: Optional[str] = None, search: Optional[str] = None) -> List[dict]:
@@ -362,7 +374,10 @@ def list_archived_scheme_updates(category: Optional[str] = None, search: Optiona
     query += " ORDER BY created_at DESC"
     with get_connection() as conn:
         rows = conn.execute(query, params).fetchall()
-    return [dict(row) for row in rows]
+    items = [dict(row) for row in rows]
+    for item in items:
+        item["year_group"] = _year_group_for_timestamp(item.get("created_at"))
+    return items
 
 
 def get_scheme_update_by_id(scheme_id: str) -> Optional[dict]:
