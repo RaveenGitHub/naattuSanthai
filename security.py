@@ -63,6 +63,7 @@ def create_user(
     email: Optional[str] = None,
     phone: Optional[str] = None,
     full_name: str = "",
+    village: str = "",
     status: str = "active",
 ) -> Dict[str, str]:
     if not username or not password:
@@ -86,9 +87,9 @@ def create_user(
 
         conn.execute(
             """
-            INSERT INTO users (id, username, password, role, email, phone, full_name, status, otp_code, otp_expires_at,
+            INSERT INTO users (id, username, password, role, email, phone, full_name, village, status, otp_code, otp_expires_at,
             failed_login_attempts, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
             """,
             (
                 f"USR-{uuid4().hex}",
@@ -98,6 +99,7 @@ def create_user(
                 email,
                 phone,
                 full_name,
+                village,
                 status,
                 otp_code,
                 otp_expires_at,

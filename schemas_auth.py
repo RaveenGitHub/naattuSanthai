@@ -32,6 +32,7 @@ class RegisterRequest(BaseModel):
     full_name: str = ""
     email: str = None
     phone: str = None
+    village: str = ""
 
 
 class ForgotPasswordRequest(BaseModel):

@@ -36,6 +36,8 @@ def _ensure_user_verification_columns() -> None:
             conn.execute("ALTER TABLE users ADD COLUMN phone TEXT")
         if "full_name" not in columns:
             conn.execute("ALTER TABLE users ADD COLUMN full_name TEXT DEFAULT ''")
+        if "village" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN village TEXT DEFAULT ''")
         if "status" not in columns:
             conn.execute("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'")
         if "otp_code" not in columns:
