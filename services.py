@@ -622,11 +622,6 @@ def get_scheme_fetch_status() -> dict:
         "duplicate_sources": sorted(set(duplicate_sources)),
     }
     retention_days = 14
-    quality_gate = {
-        "status": "pass" if total_count >= 1 and latest_count > 0 else "warning",
-        "required_records": 1,
-        "actual_records": total_count,
-    }
 
     generic_tokens = {"n/a", "na", "not available", "general support", "general scheme", "tbd", "to be updated", "placeholder"}
     invalid_records = []
@@ -689,6 +684,23 @@ def get_scheme_fetch_status() -> dict:
         "pending_count": len(review_queue_items),
         "items": review_queue_items,
         "last_reviewed_at": None,
+    }
+
+    quality_gate = {
+        "status": (
+            "warning"
+            if total_count == 0
+            or latest_count == 0
+            or review_queue["status"] == "warning"
+            or ai_validation["status"] == "warning"
+            or source_compliance["status"] == "warning"
+            else "pass"
+        ),
+        "required_records": 1,
+        "actual_records": total_count,
+        "flagged_records": review_queue["flagged_count"],
+        "source_risk_level": source_compliance.get("risk_level", "low"),
+        "review_status": review_queue["status"],
     }
 
     source_registry = {

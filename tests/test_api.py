@@ -475,6 +475,37 @@ def test_admin_quality_gate_page_surfaces_source_risk_and_review_backlog():
     assert "Review Queue" in response.text or "மதிப்பாய்வு" in response.text
 
 
+def test_quality_gate_flags_low_quality_or_generic_scheme_content():
+    with __import__("sqlite3").connect("digital_farming.db") as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO government_scheme_updates (
+                id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
+                category, scheme_type, source_name, source_url, is_archived, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "SCHEME-QUALITY-LOW-001",
+                "N/A",
+                "N/A",
+                "",
+                "",
+                "",
+                "subsidy",
+                "central",
+                "PM-Kisan",
+                "https://pmkisan.gov.in/",
+                0,
+                __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+            ),
+        )
+
+    status = get_scheme_fetch_status()
+    assert status["ai_validation"]["status"] == "warning"
+    assert status["review_queue"]["status"] == "warning"
+    assert status["quality_gate"]["status"] == "warning"
+
+
 def test_scheme_review_queue_tracks_flagged_records_and_admin_actions():
     with __import__("sqlite3").connect("digital_farming.db") as conn:
         conn.execute(
