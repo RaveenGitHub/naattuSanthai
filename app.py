@@ -1500,6 +1500,176 @@ def admin_fetch_history_page(authorization: Optional[str] = Header(default=None)
 """
 
 
+@app.get("/api/admin/pilot-readiness")
+def admin_pilot_readiness_api(authorization: Optional[str] = Header(default=None)):
+    token = get_bearer_token(authorization)
+    try:
+        payload = verify_token(token)
+    except Exception as exc:  # pragma: no cover - security exception path
+        raise HTTPException(status_code=401, detail="Invalid token") from exc
+    if payload.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    scheme_status = get_scheme_fetch_status()
+    weather_status = get_weather_fetch_status()
+    scheme_gate = scheme_status.get("quality_gate", {}).get("status", "warning")
+    weather_gate = weather_status.get("quality_gate", {}).get("status", "warning")
+    readiness_status = "pass" if scheme_gate == "pass" and weather_gate == "pass" else "warning"
+
+    checklist = [
+        {"item": "Source compliance reviewed for government scheme feeds", "status": "pass" if scheme_gate == "pass" else "warning"},
+        {"item": "Weather source compliance reviewed before pilot launch", "status": "pass" if weather_gate == "pass" else "warning"},
+        {"item": "Admin quality gate and review queue inspected", "status": "pass"},
+        {"item": "Tamil readability and content clarity reviewed with sample farmers", "status": "pending"},
+        {"item": "Field pilot feedback logged for iteration and bug fixes", "status": "pending"},
+    ]
+
+    feedback_template = {
+        "district": "",
+        "village": "",
+        "farmer_group": "",
+        "scheme_under_test": "",
+        "clarity_score": "",
+        "usefulness_score": "",
+        "issues": [],
+        "recommended_change": "",
+        "feedback_notes": "",
+    }
+
+    return {
+        "success": True,
+        "data": {
+            "status": readiness_status,
+            "checklist": checklist,
+            "feedback_template": feedback_template,
+            "notes": "Pilot readiness must confirm source compliance, readability, and field usefulness before any broader rollout.",
+        },
+        "error": None,
+    }
+
+
+@app.get("/admin/pilot-readiness", response_class=HTMLResponse)
+def admin_pilot_readiness_page(authorization: Optional[str] = Header(default=None)):
+    token = get_bearer_token(authorization)
+    try:
+        payload = verify_token(token)
+    except Exception as exc:  # pragma no cover - security exception path
+        raise HTTPException(status_code=401, detail="Invalid token") from exc
+    if payload.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    scheme_status = get_scheme_fetch_status()
+    weather_status = get_weather_fetch_status()
+    scheme_gate = scheme_status.get("quality_gate", {}).get("status", "warning")
+    weather_gate = weather_status.get("quality_gate", {}).get("status", "warning")
+    readiness_status = "PASS" if scheme_gate == "pass" and weather_gate == "pass" else "WARNING"
+
+    checklist = [
+        {"item": "Source compliance reviewed for government scheme feeds", "status": "pass" if scheme_gate == "pass" else "warning"},
+        {"item": "Weather source compliance reviewed before pilot launch", "status": "pass" if weather_gate == "pass" else "warning"},
+        {"item": "Admin quality gate and review queue inspected", "status": "pass"},
+        {"item": "Tamil readability and content clarity reviewed with sample farmers", "status": "pending"},
+        {"item": "Field pilot feedback logged for iteration and bug fixes", "status": "pending"},
+    ]
+    checklist_html = "".join(
+        """
+        <li><span class='status {status}'>{status_label}</span> {item}</li>
+        """.format(
+            status=escape(str(entry["status"])),
+            status_label=escape(str(entry["status"]).upper()),
+            item=escape(str(entry["item"])),
+        )
+        for entry in checklist
+    )
+
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pilot Readiness</title>
+  <style>
+    :root {{
+      --bg: #f4f8f1;
+      --panel: #ffffff;
+      --primary: #2d7d46;
+      --secondary: #4aa6d6;
+      --warning: #d97706;
+      --pending: #6b7280;
+      --text: #17301d;
+      --muted: #567163;
+      --line: #dfe9df;
+      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif; background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%); color: var(--text); }}
+    .container {{ max-width: 1100px; margin: 0 auto; padding: 28px 18px 52px; }}
+    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }}
+    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 700; }}
+    .logo {{ width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
+    .nav {{ display: flex; gap: 10px; flex-wrap: wrap; }}
+    .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
+    h1 {{ margin: 28px 0 10px; font-size: clamp(2rem, 4vw, 3rem); }}
+    .lede {{ color: var(--muted); line-height: 1.8; max-width: 72ch; }}
+    .hero {{ display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 18px; margin-top: 22px; }}
+    .panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 22px; box-shadow: var(--shadow); }}
+    .status-badge {{ display: inline-block; padding: 8px 12px; border-radius: 999px; background: #ebf9ed; color: var(--primary); font-weight: 800; }}
+    ul {{ margin: 18px 0 0; padding-left: 18px; color: var(--muted); line-height: 1.9; }}
+    li {{ margin-bottom: 8px; }}
+    .status {{ display: inline-block; padding: 4px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; margin-right: 8px; }}
+    .status.pass {{ background: #ebf9ed; color: var(--primary); }}
+    .status.warning {{ background: #fff7ed; color: var(--warning); }}
+    .status.pending {{ background: #f3f4f6; color: var(--pending); }}
+    @media (max-width: 760px) {{ .hero {{ grid-template-columns: 1fr; }} .topbar {{ flex-direction: column; align-items: flex-start; }} }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🚀</div>
+        <span>Pilot Readiness / பைலட் தயார் நிலை</span>
+      </div>
+      <nav class="nav">
+        <a href="/admin/overview">Admin</a>
+        <a href="/admin/quality-gate">Quality Gate</a>
+        <a href="/admin/release-runbook">Release Runbook</a>
+        <a href="/admin/operations-checklist">Operations Checklist</a>
+      </nav>
+    </header>
+
+    <h1>Pilot Readiness</h1>
+    <p class="lede">Before a wider release, the module must demonstrate trust, readability, and field usefulness across the selected farmer or field-staff pilot.</p>
+
+    <section class="hero">
+      <div class="panel">
+        <h2>Current readiness</h2>
+        <div class="status-badge">{readiness_status}</div>
+        <ul>
+          <li>Source compliance and admin quality gate checks are reviewed before deployment.</li>
+          <li>Farmer-facing content is tested for clarity, usefulness, and gist comprehension.</li>
+          <li>Field feedback is captured to drive the next revision cycle.</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h2>Feedback template</h2>
+        <p class="lede">District, village, scheme tested, clarity score, usefulness score, issues, and change recommendation should be logged for every pilot interaction.</p>
+      </div>
+    </section>
+
+    <section class="panel" style="margin-top: 20px;">
+      <h2>Prepared checklist</h2>
+      <ul>
+        {checklist_html}
+      </ul>
+    </section>
+  </div>
+</body>
+</html>
+"""
+
+
 @app.get("/admin/review-queue", response_class=HTMLResponse)
 def admin_review_queue_page():
     review_queue = get_scheme_fetch_status().get("review_queue", {"status": "pass", "flagged_count": 0, "pending_count": 0, "items": []})
