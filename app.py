@@ -1535,12 +1535,15 @@ def admin_pilot_readiness_api(authorization: Optional[str] = Header(default=None
     weather_status = get_weather_fetch_status()
     scheme_gate = scheme_status.get("quality_gate", {}).get("status", "warning")
     weather_gate = weather_status.get("quality_gate", {}).get("status", "warning")
-    readiness_status = "pass" if scheme_gate == "pass" and weather_gate == "pass" else "warning"
+    source_risk = scheme_status.get("source_compliance", {}).get("risk_level", "low")
+    review_queue = scheme_status.get("review_queue", {})
+    review_warning = review_queue.get("status") == "warning" or (review_queue.get("flagged_count", 0) > 0)
+    readiness_status = "pass" if scheme_gate == "pass" and weather_gate == "pass" and source_risk in {"low", "medium"} and not review_warning else "warning"
 
     checklist = [
-        {"item": "Source compliance reviewed for government scheme feeds", "status": "pass" if scheme_gate == "pass" else "warning"},
+        {"item": "Source compliance reviewed for government scheme feeds", "status": "pass" if scheme_gate == "pass" and source_risk in {"low", "medium"} else "warning"},
         {"item": "Weather source compliance reviewed before pilot launch", "status": "pass" if weather_gate == "pass" else "warning"},
-        {"item": "Admin quality gate and review queue inspected", "status": "pass"},
+        {"item": "Admin quality gate and review queue inspected", "status": "pass" if not review_warning else "warning"},
         {"item": "Tamil readability and content clarity reviewed with sample farmers", "status": "pending"},
         {"item": "Field pilot feedback logged for iteration and bug fixes", "status": "pending"},
     ]
@@ -1583,12 +1586,15 @@ def admin_pilot_readiness_page(authorization: Optional[str] = Header(default=Non
     weather_status = get_weather_fetch_status()
     scheme_gate = scheme_status.get("quality_gate", {}).get("status", "warning")
     weather_gate = weather_status.get("quality_gate", {}).get("status", "warning")
-    readiness_status = "PASS" if scheme_gate == "pass" and weather_gate == "pass" else "WARNING"
+    source_risk = scheme_status.get("source_compliance", {}).get("risk_level", "low")
+    review_queue = scheme_status.get("review_queue", {})
+    review_warning = review_queue.get("status") == "warning" or (review_queue.get("flagged_count", 0) > 0)
+    readiness_status = "PASS" if scheme_gate == "pass" and weather_gate == "pass" and source_risk in {"low", "medium"} and not review_warning else "WARNING"
 
     checklist = [
-        {"item": "Source compliance reviewed for government scheme feeds", "status": "pass" if scheme_gate == "pass" else "warning"},
+        {"item": "Source compliance reviewed for government scheme feeds", "status": "pass" if scheme_gate == "pass" and source_risk in {"low", "medium"} else "warning"},
         {"item": "Weather source compliance reviewed before pilot launch", "status": "pass" if weather_gate == "pass" else "warning"},
-        {"item": "Admin quality gate and review queue inspected", "status": "pass"},
+        {"item": "Admin quality gate and review queue inspected", "status": "pass" if not review_warning else "warning"},
         {"item": "Tamil readability and content clarity reviewed with sample farmers", "status": "pending"},
         {"item": "Field pilot feedback logged for iteration and bug fixes", "status": "pending"},
     ]

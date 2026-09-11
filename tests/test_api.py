@@ -697,6 +697,40 @@ def test_admin_pilot_readiness_and_feedback_loop_are_exposed_on_api_and_page():
     assert "Pilot Readiness" in page_response.text or "பைலட் தயார் நிலை" in page_response.text
 
 
+def test_pilot_readiness_warns_when_source_risk_or_review_queue_is_unhealthy():
+    with __import__("sqlite3").connect("digital_farming.db") as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO government_scheme_updates (
+                id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
+                category, scheme_type, source_name, source_url, is_archived, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "SCHEME-PILOT-READINESS-WARN",
+                "Pilot readiness warning sample",
+                "This sample should trigger a pilot readiness warning because it comes from an untrusted source.",
+                "Eligibility details",
+                "Benefits details",
+                "Application steps",
+                "subsidy",
+                "central",
+                "Unverified Local Notice Board",
+                "https://example.com/pilot-warning",
+                0,
+                __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+            ),
+        )
+
+    admin_login = client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    token = admin_login.json()["token"]
+    response = client.get("/api/admin/pilot-readiness", headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["data"]["status"] == "warning"
+    assert any(item["status"] == "warning" for item in payload["data"]["checklist"])
+
+
 def test_shell_home_navigation_does_not_reload_the_shell():
     response = TestClient(app).get("/", headers={"accept": "text/html"})
     assert response.status_code == 200
