@@ -641,6 +641,15 @@ def test_source_registry_and_scheduler_metadata_are_exposed_to_admins():
     assert "Scheduler" in page_response.text or "திட்டமிடுபவர்" in page_response.text
 
 
+def test_source_registry_distinguishes_official_sources_from_fallbacks_and_trust_flags():
+    status = get_scheme_fetch_status()
+    sources = status["source_registry"]["sources"]
+    assert any(source.get("is_official") is True for source in sources)
+    assert any(source.get("is_fallback") is True for source in sources)
+    assert any(source.get("status") == "active" for source in sources)
+    assert "official_sources" in status["source_registry"] or "fallback_sources" in status["source_registry"]
+
+
 def test_admin_audit_logs_are_exposed_on_api_and_page():
     admin_login = client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
     assert admin_login.status_code == 200

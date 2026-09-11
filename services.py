@@ -68,6 +68,9 @@ def get_source_registry() -> list[dict]:
             "source_url": "https://pmkisan.gov.in/",
             "trust_level": "high",
             "status": "active",
+            "is_official": True,
+            "is_fallback": False,
+            "source_policy": "official",
             "last_sync": latest_row["created_at"] if latest_row else None,
         },
         {
@@ -77,6 +80,9 @@ def get_source_registry() -> list[dict]:
             "source_url": "https://agri.tn.gov.in/",
             "trust_level": "high",
             "status": "active",
+            "is_official": True,
+            "is_fallback": False,
+            "source_policy": "official",
             "last_sync": latest_row["created_at"] if latest_row else None,
         },
         {
@@ -86,6 +92,21 @@ def get_source_registry() -> list[dict]:
             "source_url": "https://www.tn.gov.in/",
             "trust_level": "medium",
             "status": "active",
+            "is_official": True,
+            "is_fallback": False,
+            "source_policy": "official",
+            "last_sync": latest_row["created_at"] if latest_row else None,
+        },
+        {
+            "id": "local-notice-board",
+            "name": "Local Notice Board",
+            "type": "fallback",
+            "source_url": "https://example.com/local-notice-board",
+            "trust_level": "medium",
+            "status": "fallback",
+            "is_official": False,
+            "is_fallback": True,
+            "source_policy": "fallback",
             "last_sync": latest_row["created_at"] if latest_row else None,
         },
     ]
@@ -703,10 +724,13 @@ def get_scheme_fetch_status() -> dict:
         "review_status": review_queue["status"],
     }
 
+    registry_sources = get_source_registry()
     source_registry = {
         "status": "active" if source_compliance.get("status") in {"pass", "warning"} else "paused",
         "risk_level": source_compliance.get("risk_level", "low"),
-        "sources": get_source_registry(),
+        "official_sources": [source["name"] for source in registry_sources if source.get("is_official") is True],
+        "fallback_sources": [source["name"] for source in registry_sources if source.get("is_fallback") is True],
+        "sources": registry_sources,
         "notes": "Scheme sources are verified against the trusted registry and reviewed for duplicate or untrusted entries.",
     }
     scheduler = get_scheme_scheduler()

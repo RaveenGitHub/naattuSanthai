@@ -1944,18 +1944,24 @@ def admin_source_registry_page():
           <div class='meta-row'>
             <span class='badge'>{name}</span>
             <span class='pill'>{type}</span>
+            <span class='pill'>{policy}</span>
           </div>
           <h3>{title}</h3>
           <p><strong>Source URL:</strong> <a href='{url}'>{url}</a></p>
           <p><strong>Trust level:</strong> {trust}</p>
+          <p><strong>Official source:</strong> {official}</p>
+          <p><strong>Fallback source:</strong> {fallback}</p>
           <p><strong>Last sync:</strong> {last_sync}</p>
         </article>
         """.format(
             name=escape(str(source.get("name", "Unknown source"))),
             type=escape(str(source.get("type", "general"))),
+            policy=escape(str(source.get("source_policy", "official"))),
             title=escape(str(source.get("name", "Unknown source"))),
             url=escape(str(source.get("source_url", "#"))),
             trust=escape(str(source.get("trust_level", "medium"))),
+            official=escape(str(source.get("is_official", False))),
+            fallback=escape(str(source.get("is_fallback", False))),
             last_sync=escape(str(source.get("last_sync") or "Not synced yet")),
         )
         for source in sources
