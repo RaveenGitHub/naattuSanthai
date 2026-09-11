@@ -4898,6 +4898,10 @@ def admin_quality_gate_page():
 
     weather_source_status = quality_gate["weather"].get("source_compliance", {}).get("status", "warning")
     scheme_source_status = quality_gate["schemes"].get("source_compliance", {}).get("status", "warning")
+    scheme_source_risk = quality_gate["schemes"].get("source_compliance", {}).get("risk_level", "low")
+    review_queue = quality_gate["schemes"].get("review_queue", {})
+    review_status = review_queue.get("status", "pass")
+    flagged_count = review_queue.get("flagged_count", 0)
     ai_validation = quality_gate["schemes"].get("ai_validation", {})
     ai_status = ai_validation.get("status", "warning")
     readability_state = ai_validation.get("readability_check", "warning")
@@ -4911,6 +4915,7 @@ def admin_quality_gate_page():
     ]
     source_names = [item for item in source_names if item]
     sources_text = " | ".join(source_names) if source_names else "மூலம் எதுவும் பதிவு செய்யப்படவில்லை"
+    risk_summary = f"Source risk: {scheme_source_risk} | Review queue: {review_status} ({flagged_count} flagged)"
 
     return f"""
 <!DOCTYPE html>
@@ -5016,8 +5021,9 @@ def admin_quality_gate_page():
     </section>
 
     <section class="panel" style="margin-top: 20px;">
-      <h2>AI validation / செயற்கை நுண்ணறிவு மதிப்பீடு</h2>
+      <h2>Risk and review backlog / ஆபத்து மற்றும் மதிப்பாய்வு வரிசை</h2>
       <ul>
+        <li>{escape(risk_summary)}</li>
         <li>AI status: {escape(str(ai_status))}</li>
         <li>Readability / படித்தல்: {escape(str(readability_state))}</li>
         <li>Summary quality score: {ai_validation.get('summary_quality_score', 0)}</li>

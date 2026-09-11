@@ -443,6 +443,38 @@ def test_admin_quality_gate_page_renders_fetch_and_source_health():
     assert "Readability" in response.text or "படித்தல்" in response.text or "readability" in response.text.lower()
 
 
+def test_admin_quality_gate_page_surfaces_source_risk_and_review_backlog():
+    with __import__("sqlite3").connect("digital_farming.db") as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO government_scheme_updates (
+                id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
+                category, scheme_type, source_name, source_url, is_archived, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "SCHEME-QUALITY-GATE-RISK-001",
+                "Quality gate risk sample",
+                "This scheme is risky and should trigger a quality gate warning.",
+                "Eligibility details",
+                "Benefits details",
+                "Application steps",
+                "subsidy",
+                "central",
+                "Unverified Local Notice Board",
+                "https://example.com/quality-gate-risk",
+                0,
+                __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+            ),
+        )
+
+    response = client.get("/admin/quality-gate")
+    assert response.status_code == 200
+    assert "risk" in response.text.lower() or "Risk" in response.text
+    assert "warning" in response.text.lower() or "WARNING" in response.text
+    assert "Review Queue" in response.text or "மதிப்பாய்வு" in response.text
+
+
 def test_scheme_review_queue_tracks_flagged_records_and_admin_actions():
     with __import__("sqlite3").connect("digital_farming.db") as conn:
         conn.execute(
