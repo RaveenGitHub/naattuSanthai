@@ -714,6 +714,20 @@ def test_scheme_fetch_scheduler_is_active_service_with_operational_state():
     assert scheduler.next_run is not None
 
 
+def test_scheme_scheduler_exposes_normalized_operational_status_contract():
+    from services import get_scheme_scheduler
+
+    scheduler = get_scheme_scheduler()
+    payload = scheduler.to_dict()
+    assert "status" in payload
+    assert "frequency" in payload
+    assert "cron_expression" in payload
+    assert "last_run" in payload
+    assert "next_run" in payload
+    assert payload["status"] in {"active", "running", "paused"}
+    assert payload["next_run"] is not None
+
+
 def test_source_registry_and_fetch_job_use_authoritative_sources_and_record_operation():
     from services import get_source_registry, run_scheme_fetch_job
 

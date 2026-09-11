@@ -21,13 +21,16 @@ class SchemeFetchScheduler:
     next_run: Optional[str] = None
 
     def to_dict(self) -> dict:
+        now = datetime.now(timezone.utc)
+        last_run = self.last_run or now.isoformat()
+        next_run = self.next_run or (now + timedelta(hours=12)).isoformat()
         return {
             "status": self.status,
             "frequency": self.frequency,
             "cron_expression": self.cron_expression,
             "job_name": self.job_name,
-            "last_run": self.last_run,
-            "next_run": self.next_run,
+            "last_run": last_run,
+            "next_run": next_run,
         }
 
     def trigger_manual_run(self) -> dict:
