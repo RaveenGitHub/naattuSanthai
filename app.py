@@ -241,7 +241,7 @@ ROOT_PAGE = """
         <span>டிஜிட்டல் விவசாய ஆதரவு மையம்</span>
       </div>
       <nav class="nav" aria-label="முக்கிய வழிசெலுத்தல்">
-        <a class="pill" href="/">முகப்பு</a>
+        <a class="pill" href="/home">முகப்பு</a>
         <a class="pill" href="/dashboard">டாஷ்போர்டு</a>
         <a class="pill" href="/health">நிலை</a>
       </nav>
@@ -473,7 +473,7 @@ DASHBOARD_PAGE = """
         <span>விவசாயி புல டாஷ்போர்டு / Farmer Field Dashboard</span>
       </div>
       <nav class="nav" aria-label="டாஷ்போர்டு வழிசெலுத்தல்">
-        <a href="/">முகப்பு</a>
+        <a href="/home">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
         <a href="/weather">வானிலை</a>
         <a href="/soil-health">மண் சோதனை</a>
@@ -622,7 +622,7 @@ SERVICES_PAGE = """
         <span>விவசாய சேவைகள்</span>
       </div>
       <nav class="nav" aria-label="சேவைகள் வழிசெலுத்தல்">
-        <a href="/">முகப்பு</a>
+        <a href="/home">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
         <a href="/weather">வானிலை</a>
         <a href="/soil-health">மண் சோதனை</a>
@@ -2246,7 +2246,7 @@ def admin_overview_page():
         <span>Admin Overview / அட்மின் கண்ணோட்டம்</span>
       </div>
       <nav class="nav" aria-label="Admin navigation">
-        <a href="/">முகப்பு</a>
+        <a href="/home">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
         <a href="/weather">வானிலை</a>
         <a href="/soil-health">மண் சோதனை</a>
@@ -2375,7 +2375,7 @@ ADVISORY_PAGE = """
         <span>பயிர் ஆலோசனை</span>
       </div>
       <nav class="nav" aria-label="பயிர் ஆலோசனை வழிசெலுத்தல்">
-        <a href="/">முகப்பு</a>
+        <a href="/home">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
         <a href="/weather">வானிலை</a>
         <a href="/soil-health">மண் சோதனை</a>
@@ -2544,7 +2544,7 @@ def disease_detection_page(
         <span>நோய் கண்டறிதல்</span>
       </div>
       <nav class="nav" aria-label="நோய் கண்டறிதல் வழிசெலுத்தல்">
-        <a href="/">முகப்பு</a>
+        <a href="/home">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
         <a href="/weather">வானிலை</a>
         <a href="/soil-health">மண் சோதனை</a>
@@ -2677,7 +2677,7 @@ def disease_history_page():
         <span>கண்டறிதல் வரலாறு / Diagnosis History</span>
       </div>
       <nav class="nav" aria-label="History navigation">
-        <a href="/">முகப்பு</a>
+        <a href="/home">முகப்பு</a>
         <a href="/disease-detection">நோய் கண்டறிதல்</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
       </nav>
@@ -2798,7 +2798,7 @@ def soil_health_page(
         <span>மண் சோதனை &amp; உர மேலாண்மை</span>
       </div>
       <nav class="nav" aria-label="மண் சோதனை வழிசெலுத்தல்">
-        <a href="/">முகப்பு</a>
+        <a href="/home">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
         <a href="/weather">வானிலை</a>
         <a href="/disease-detection">நோய் கண்டறிதல்</a>
@@ -2930,7 +2930,7 @@ def soil_testing_page():
         <span>மண் சோதனை</span>
       </div>
       <nav class="nav" aria-label="மண் சோதனை வழிசெலுத்தல்">
-        <a href="/">முகப்பு</a>
+        <a href="/home">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
         <a href="/weather">வானிலை</a>
         <a href="/disease-detection">நோய் கண்டறிதல்</a>
@@ -3069,7 +3069,7 @@ GOVERNMENT_SCHEMES_PAGE = """
         <span>அரசுத் திட்டங்கள்</span>
       </div>
       <nav class="nav" aria-label="அரசு திட்டங்கள் வழிசெலுத்தல்">
-        <a href="/">முகப்பு</a>
+        <a href="/home">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
         <a href="/services">சேவைகள்</a>
       </nav>
@@ -3710,7 +3710,7 @@ WEATHER_MARKET_PAGE = """
         <span>வானிலை மற்றும் சந்தை</span>
       </div>
       <nav class="nav" aria-label="வானிலை மற்றும் சந்தை வழிசெலுத்தல்">
-        <a href="/">முகப்பு</a>
+        <a href="/home">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
         <a href="/weather">வானிலை</a>
         <a href="/soil-health">மண் சோதனை</a>
@@ -3967,7 +3967,7 @@ def weather_page(
         <span>{escape(region_name)} வானிலை / Weather</span>
       </div>
       <nav class="nav">
-        <a href="/">முகப்பு</a>
+        <a href="/home">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
         <a href="/soil-health">மண் சோதனை</a>
         <a href="/disease-detection">நோய் கண்டறிதல்</a>
@@ -4046,7 +4046,7 @@ def weather_quality_page():
         <span>Trusted weather sources / நம்பகமான வானிலை மூலங்கள்</span>
       </div>
       <nav class="nav">
-        <a href="/">முகப்பு</a>
+        <a href="/home">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
         <a href="/weather">வானிலை</a>
         <a href="/soil-health">மண் சோதனை</a>
@@ -4146,7 +4146,7 @@ def market_intelligence_page(crop: str = "rice", market: str = "Kallakurichi"):
         <span>{market_name} சந்தை / Market</span>
       </div>
       <nav class="nav">
-        <a href="/">முகப்பு</a>
+        <a href="/home">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
         <a href="/weather">வானிலை</a>
         <a href="/soil-health">மண் சோதனை</a>
@@ -4283,7 +4283,7 @@ def weather_market_page(region: str = "Kallakurichi"):
         <span>{escape(region_name)} - வானிலை மற்றும் சந்தை</span>
       </div>
       <nav class="nav" aria-label="வானிலை மற்றும் சந்தை வழிசெலுத்தல்">
-        <a href="/">முகப்பு</a>
+        <a href="/home">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
         <a href="/weather">வானிலை</a>
         <a href="/soil-health">மண் சோதனை</a>
@@ -4416,7 +4416,7 @@ def sustainability_page(
         <span>நிலையான விவசாயம்</span>
       </div>
       <nav class="nav">
-        <a href="/">முகப்பு</a>
+        <a href="/home">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
         <a href="/weather">வானிலை</a>
         <a href="/soil-health">மண் சோதனை</a>
@@ -4538,7 +4538,7 @@ def traceability_page(
         <span>கால்நடை/பயிர் கண்காணிப்பு</span>
       </div>
       <nav class="nav">
-        <a href="/">முகப்பு</a>
+        <a href="/home">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
         <a href="/weather">வானிலை</a>
         <a href="/soil-health">மண் சோதனை</a>
@@ -4647,7 +4647,7 @@ def admin_content_config_page():
         <span>Content Configuration / உள்ளடக்க கட்டுப்பாடு</span>
       </div>
       <nav class="nav">
-        <a href="/">முகப்பு</a>
+        <a href="/home">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
         <a href="/admin/overview">Admin</a>
         <a href="/admin/quality-gate">Quality Gate</a>
@@ -4730,7 +4730,7 @@ def admin_release_runbook_page():
         <span>Release Runbook / ரிலீஸ் ரன்ன்புக்</span>
       </div>
       <nav class="nav">
-        <a href="/">முகப்பு</a>
+        <a href="/home">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
         <a href="/weather">வானிலை</a>
         <a href="/soil-health">மண் சோதனை</a>
@@ -4827,7 +4827,7 @@ def admin_operations_checklist_page():
         <span>Operations Checklist / இயக்கத் தேர்வுப்பட்டி</span>
       </div>
       <nav class="nav">
-        <a href="/">முகப்பு</a>
+        <a href="/home">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
         <a href="/weather">வானிலை</a>
         <a href="/soil-health">மண் சோதனை</a>
@@ -4953,7 +4953,7 @@ def admin_quality_gate_page():
         <span>Quality Gate / தரக் கட்டுப்பாடு</span>
       </div>
       <nav class="nav">
-        <a href="/">முகப்பு</a>
+        <a href="/home">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
         <a href="/weather">வானிலை</a>
         <a href="/soil-health">மண் சோதனை</a>
@@ -5084,7 +5084,7 @@ def login_page():
         <span>Digital Farming Support Center</span>
       </div>
       <nav class="nav">
-        <a href="/">Home</a>
+        <a href="/home">Home</a>
         <a href="/dashboard">Dashboard</a>
         <a href="/government-schemes">Schemes</a>
         <a href="/register">Register</a>
@@ -5362,7 +5362,7 @@ def register_page():
         <span>விவசாயி பதிவு / Farmer Registration</span>
       </div>
       <nav class="nav">
-        <a href="/">முகப்பு</a>
+        <a href="/home">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
         <a href="/weather">வானிலை</a>
         <a href="/soil-health">மண் சோதனை</a>
@@ -5505,7 +5505,7 @@ def profile_page(username: str = "operator1"):
         <span>சுயவிபரம் / Profile</span>
       </div>
       <nav class="nav">
-        <a href="/">முகப்பு</a>
+        <a href="/home">முகப்பு</a>
         <a href="/dashboard">டாஷ்போர்டு</a>
         <a href="/weather">வானிலை</a>
         <a href="/soil-health">மண் சோதனை</a>
