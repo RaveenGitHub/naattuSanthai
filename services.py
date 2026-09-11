@@ -98,6 +98,12 @@ def run_scheme_fetch_job(force: bool = False) -> dict:
     failed_sources = []
     retry_count = 0
     now = datetime.now(timezone.utc)
+    retry_policy = {
+        "max_retries": 3,
+        "timeout_seconds": 15,
+        "backoff_seconds": 5,
+        "retry_on_status": ["warning", "failed"],
+    }
 
     for source in registry:
         source_name = source["name"]
@@ -150,6 +156,7 @@ def run_scheme_fetch_job(force: bool = False) -> dict:
         "failed_sources": failed_sources,
         "attempts": attempts,
         "retry_count": retry_count,
+        "retry_policy": retry_policy,
         "fetched_at": scheduler.last_run,
         "next_run": scheduler.next_run,
     }

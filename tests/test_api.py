@@ -652,6 +652,10 @@ def test_scheme_fetch_job_tracks_retries_and_source_failures():
     assert "attempts" in result
     assert "failed_sources" in result
     assert "retry_count" in result
+    assert "retry_policy" in result
+    assert result["retry_policy"]["max_retries"] >= 2
+    assert result["retry_policy"]["timeout_seconds"] >= 10
+    assert "backoff_seconds" in result["retry_policy"]
     assert len(result["attempts"]) >= 2
 
     history = get_scheme_fetch_history()
