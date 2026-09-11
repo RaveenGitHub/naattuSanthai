@@ -691,6 +691,48 @@ def test_admin_pilot_readiness_and_feedback_loop_are_exposed_on_api_and_page():
     assert "Pilot Readiness" in page_response.text or "பைலட் தயார் நிலை" in page_response.text
 
 
+def test_shell_home_navigation_does_not_reload_the_shell():
+    response = TestClient(app).get("/", headers={"accept": "text/html"})
+    assert response.status_code == 200
+    assert 'data-page="/home"' in response.text
+    assert 'data-page="/"' not in response.text
+    assert 'src="/dashboard"' in response.text
+
+
+def test_form_submission_registers_user_and_persists_data():
+    username = f"form_user_{__import__('uuid').uuid4().hex[:8]}"
+    isolated_client = TestClient(app)
+
+    response = isolated_client.post(
+        "/api/v1/auth/register",
+        data={
+            "username": username,
+            "password": "SecurePass123",
+            "role": "farmer",
+            "full_name": "Form Farmer",
+            "email": "formfarmer@example.com",
+            "phone": "9876543211",
+            "village": "Kallakurichi",
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["data"]["status"] == "pending_verification"
+
+    with __import__("sqlite3").connect("digital_farming.db") as conn:
+        row = conn.execute(
+            "SELECT username, full_name, email, phone, status FROM users WHERE username = ?",
+            (username,),
+        ).fetchone()
+    assert row is not None
+    assert row[0] == username
+    assert row[1] == "Form Farmer"
+    assert row[2] == "formfarmer@example.com"
+    assert row[3] == "9876543211"
+    assert row[4] == "pending_verification"
+
+
 def test_registration_creates_pending_user_and_requires_otp_verification_before_login():
     username = f"otp_user_{__import__('uuid').uuid4().hex[:8]}"
     isolated_client = TestClient(app)

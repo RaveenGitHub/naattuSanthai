@@ -809,7 +809,7 @@ APP_SHELL_PAGE = """
         <span>Digital Farming Support Center</span>
       </div>
       <nav class="nav" aria-label="Main navigation">
-        <a href="/" class="nav-link active" data-page="/">Home</a>
+        <a href="/home" class="nav-link active" data-page="/home">Home</a>
         <a href="/dashboard" class="nav-link" data-page="/dashboard">Dashboard</a>
         <a href="/services" class="nav-link" data-page="/services">Services</a>
         <a href="/weather-market" class="nav-link" data-page="/weather-market">Weather</a>
@@ -832,14 +832,15 @@ APP_SHELL_PAGE = """
         link.classList.toggle('active', active);
       });
     };
+    const normalizePage = (page) => page === '/' ? '/home' : page;
     links.forEach((link) => {
       link.addEventListener('click', (event) => {
         event.preventDefault();
-        const page = link.dataset.page || '/';
+        const page = normalizePage(link.dataset.page || '/home');
         setActiveLink(page);
         frame.src = page;
         if (history.pushState) {
-          history.pushState({ page }, '', page === '/' ? '/' : page);
+          history.pushState({ page }, '', page);
         }
       });
     });
@@ -849,11 +850,11 @@ APP_SHELL_PAGE = """
       setActiveLink(page);
     });
     window.addEventListener('load', () => {
-      const initialPage = new URL(window.location.href).pathname || '/';
-      if (initialPage && initialPage !== '/') {
+      const initialPage = normalizePage(new URL(window.location.href).pathname || '/');
+      if (initialPage && initialPage !== '/home') {
         frame.src = initialPage;
-        setActiveLink(initialPage);
       }
+      setActiveLink(initialPage);
     });
   </script>
 </body>
@@ -920,7 +921,20 @@ def api_v1_login(payload: LoginRequest):
 
 
 @app.post("/api/v1/auth/register")
-def api_v1_register(payload: RegisterRequest):
+async def api_v1_register(request: Request):
+    content_type = request.headers.get("content-type", "")
+
+    if "application/json" in content_type.lower():
+        data = await request.json()
+    else:
+        form_data = await request.form()
+        data = {key: value for key, value in form_data.items()}
+
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Request body is required")
+
+    payload = RegisterRequest(**data)
+
     if not payload.username or not payload.password:
         raise HTTPException(status_code=400, detail="Username and password are required")
     if not payload.email and not payload.phone:
@@ -939,6 +953,7 @@ def api_v1_register(payload: RegisterRequest):
             email=(payload.email or "").strip() or None,
             phone=(payload.phone or "").strip() or None,
             full_name=(payload.full_name or "").strip(),
+            village=(payload.village or "").strip(),
             status="pending_verification",
         )
     except ValueError as exc:
@@ -951,6 +966,7 @@ def api_v1_register(payload: RegisterRequest):
             "status": result["status"],
             "email": payload.email,
             "phone": payload.phone,
+            "village": payload.village,
             "otp_code": result.get("otp_code"),
         },
         "message": "Registration submitted successfully. Please complete activation.",
@@ -1186,6 +1202,11 @@ def read_root(request: Request):
     if "text/html" in accept_header.lower():
         return HTMLResponse(content=APP_SHELL_PAGE)
     return JSONResponse({"message": "Digital Farming Support Center API", "status": "ok"})
+
+
+@app.get("/home", response_class=HTMLResponse)
+def home_page():
+    return ROOT_PAGE
 
 
 @app.get("/shell", response_class=HTMLResponse)
@@ -3386,7 +3407,7 @@ def government_schemes_page(category: Optional[str] = None, search: Optional[str
         <span>அரசுத் திட்டங்கள்</span>
       </div>
       <nav class="nav" aria-label="அரசு திட்டங்கள் வழிசெலுத்தல்">
-        <a href="/" class="nav-link" data-page="/">முகப்பு</a>
+        <a href="/home" class="nav-link" data-page="/home">முகப்பு</a>
         <a href="/dashboard" class="nav-link" data-page="/dashboard">டாஷ்போர்டு</a>
         <a href="/services" class="nav-link" data-page="/services">சேவைகள்</a>
         <a href="/government-schemes" class="nav-link active" data-page="/government-schemes">அரசுத் திட்டங்கள்</a>
@@ -3461,10 +3482,11 @@ def government_schemes_page(category: Optional[str] = None, search: Optional[str
   </div>
   <script>
     const activePath = window.location.pathname || '/';
+    const normalizePath = (path) => path === '/' ? '/home' : path;
     const navLinks = document.querySelectorAll('.nav-link');
     navLinks.forEach((link) => {
-      const page = link.dataset.page || '/';
-      link.classList.toggle('active', page === activePath || (page === '/' && activePath === '/'));
+      const page = normalizePath(link.dataset.page || '/home');
+      link.classList.toggle('active', page === normalizePath(activePath));
     });
   </script>
 </body>
