@@ -427,6 +427,8 @@ def test_scheme_source_compliance_flags_untrusted_or_duplicate_sources():
     compliance = status["source_compliance"]
     assert compliance["status"] == "warning"
     assert compliance["issues"]
+    assert compliance["risk_level"] in {"medium", "high"}
+    assert status["source_registry"]["risk_level"] == compliance["risk_level"]
     assert any("untrusted" in issue.lower() or "duplicate" in issue.lower() for issue in compliance["issues"])
 
 

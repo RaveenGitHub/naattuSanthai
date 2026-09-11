@@ -599,8 +599,15 @@ def get_scheme_fetch_status() -> dict:
     if source_issues or not last_source_name or (last_source_name.casefold() not in trusted_source_names):
         source_status = "warning"
 
+    risk_level = "low"
+    if source_issues:
+        risk_level = "high" if any("untrusted" in issue.lower() for issue in source_issues) else "medium"
+    elif source_status == "warning":
+        risk_level = "medium"
+
     source_compliance = {
         "status": source_status,
+        "risk_level": risk_level,
         "trusted_sources": sorted(trusted_sources),
         "current_source": last_source_name,
         "issues": source_issues,
@@ -679,6 +686,7 @@ def get_scheme_fetch_status() -> dict:
 
     source_registry = {
         "status": "active" if source_compliance.get("status") in {"pass", "warning"} else "paused",
+        "risk_level": source_compliance.get("risk_level", "low"),
         "sources": get_source_registry(),
         "notes": "Scheme sources are verified against the trusted registry and reviewed for duplicate or untrusted entries.",
     }
