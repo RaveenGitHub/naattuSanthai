@@ -739,6 +739,18 @@ def get_scheme_fetch_status() -> dict:
     if scheduler.next_run is None:
         scheduler.next_run = (datetime.now(timezone.utc) + timedelta(hours=12)).isoformat()
 
+    fetch_monitoring = {
+        "status": "healthy" if quality_gate["status"] == "pass" and source_compliance["status"] == "pass" else "warning",
+        "channel_health": "healthy" if source_compliance["status"] == "pass" else "warning" if source_compliance["status"] == "warning" else "degraded",
+        "fetch_success": "success" if latest_count > 0 else "warning",
+        "retry_policy": {
+            "max_retries": 3,
+            "timeout_seconds": 15,
+            "backoff_seconds": 5,
+            "retry_on_status": ["warning", "failed"],
+        },
+    }
+
     return {
         "total_schemes": total_count,
         "latest_count": latest_count,
@@ -753,6 +765,7 @@ def get_scheme_fetch_status() -> dict:
         "review_queue": review_queue,
         "source_registry": source_registry,
         "scheduler": scheduler.to_dict(),
+        "fetch_monitoring": fetch_monitoring,
     }
 
 

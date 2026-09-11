@@ -650,6 +650,18 @@ def test_source_registry_distinguishes_official_sources_from_fallbacks_and_trust
     assert "official_sources" in status["source_registry"] or "fallback_sources" in status["source_registry"]
 
 
+def test_scheme_fetch_status_has_coherent_source_monitoring_contract():
+    status = get_scheme_fetch_status()
+    assert "fetch_monitoring" in status
+    monitoring = status["fetch_monitoring"]
+    assert "status" in monitoring
+    assert "channel_health" in monitoring
+    assert "fetch_success" in monitoring
+    assert "retry_policy" in monitoring
+    assert monitoring["retry_policy"]["max_retries"] >= 2
+    assert monitoring["channel_health"] in {"healthy", "warning", "degraded"}
+
+
 def test_admin_audit_logs_are_exposed_on_api_and_page():
     admin_login = client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
     assert admin_login.status_code == 200
