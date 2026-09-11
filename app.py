@@ -1,5 +1,8 @@
+import os
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from html import escape
+from time import monotonic
 from typing import Optional
 from uuid import uuid4
 
@@ -235,18 +238,6 @@ ROOT_PAGE = """
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🌾</div>
-        <span>டிஜிட்டல் விவசாய ஆதரவு மையம்</span>
-      </div>
-      <nav class="nav" aria-label="முக்கிய வழிசெலுத்தல்">
-        <a class="pill" href="/home">முகப்பு</a>
-        <a class="pill" href="/dashboard">டாஷ்போர்டு</a>
-        <a class="pill" href="/health">நிலை</a>
-      </nav>
-    </header>
-
     <main class="hero">
       <section class="panel">
         <span class="eyebrow">செயல்திறன் நிறைந்த விவசாயம்</span>
@@ -467,27 +458,7 @@ DASHBOARD_PAGE = """
 </head>
 <body>
   <div class="wrapper">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🌿</div>
-        <span>விவசாயி புல டாஷ்போர்டு / Farmer Field Dashboard</span>
-      </div>
-      <nav class="nav" aria-label="டாஷ்போர்டு வழிசெலுத்தல்">
-        <a href="/home">முகப்பு</a>
-        <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/weather">வானிலை</a>
-        <a href="/soil-health">மண் சோதனை</a>
-        <a href="/disease-detection">நோய் கண்டறிதல்</a>
-        <a href="/government-schemes">அரசு திட்டங்கள்</a>
-        <a href="/market-intelligence">சந்தை</a>
-        <a href="/sustainability">நிலைத்தன்மை</a>
-        <a href="/traceability">கண்காணிப்பு</a>
-        <a href="/register">பதிவு</a>
-        <a href="/profile">சுயவிபரம்</a>
-        <a href="/admin/overview">Admin</a>
-      </nav>
-    </header>
-
+    <h1 style="margin: 0 0 16px; font-size: clamp(2rem, 3vw, 2.6rem);">Farmer Field Dashboard</h1>
     <section class="header-box">
       <div class="panel">
         <div class="status">புல கண்ணோட்டம் / Field overview</div>
@@ -616,27 +587,6 @@ SERVICES_PAGE = """
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🌾</div>
-        <span>விவசாய சேவைகள்</span>
-      </div>
-      <nav class="nav" aria-label="சேவைகள் வழிசெலுத்தல்">
-        <a href="/home">முகப்பு</a>
-        <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/weather">வானிலை</a>
-        <a href="/soil-health">மண் சோதனை</a>
-        <a href="/disease-detection">நோய் கண்டறிதல்</a>
-        <a href="/government-schemes">அரசு திட்டங்கள்</a>
-        <a href="/market-intelligence">சந்தை</a>
-        <a href="/sustainability">நிலைத்தன்மை</a>
-        <a href="/traceability">கண்காணிப்பு</a>
-        <a href="/register">பதிவு</a>
-        <a href="/profile">சுயவிபரம்</a>
-        <a href="/admin/overview">Admin</a>
-      </nav>
-    </header>
-
     <h1>விவசாயிகளுக்கு தேவையான முக்கிய சேவைகள்</h1>
     <p class="intro">
       மண் பரிசோதனை, வானிலை முன்னறிவிப்பு, பயிர் ஆலோசனை, பூச்சி கண்டறிதல் மற்றும் அரசு திட்டங்கள் உள்ளிட்ட சேவைகள் ஒரே இடத்தில் வழங்கப்படுகின்றன.
@@ -825,46 +775,117 @@ APP_SHELL_PAGE = """
 
   <script>
     const frame = document.getElementById('page-frame');
-    const links = document.querySelectorAll('.nav-link');
+    const links = Array.from(document.querySelectorAll('.nav-link'));
+    const normalizePage = (page) => {
+      const value = (page || '/').toString();
+      if (!value || value === '/') return '/home';
+      if (value.startsWith('http')) {
+        return new URL(value).pathname || '/home';
+      }
+      return value;
+    };
     const setActiveLink = (page) => {
+      const target = normalizePage(page);
       links.forEach((link) => {
-        const active = link.dataset.page === page;
+        const active = normalizePage(link.dataset.page || '/home') === target;
         link.classList.toggle('active', active);
       });
     };
-    const normalizePage = (page) => page === '/' ? '/home' : page;
+    const navigateTo = (page, mode = 'push') => {
+      const target = normalizePage(page);
+      const currentSrc = normalizePage(frame.getAttribute('src') || '/dashboard');
+      setActiveLink(target);
+      if (currentSrc !== target) {
+        frame.setAttribute('src', target);
+      }
+      if (history && history.pushState && mode === 'push') {
+        const currentPath = normalizePage(window.location.pathname || '/');
+        if (currentPath !== target) {
+          history.pushState({ page: target }, '', target);
+        }
+      }
+      if (history && history.replaceState && mode === 'replace') {
+        history.replaceState({ page: target }, '', target);
+      }
+    };
     links.forEach((link) => {
       link.addEventListener('click', (event) => {
         event.preventDefault();
-        const page = normalizePage(link.dataset.page || '/home');
-        setActiveLink(page);
-        frame.src = page;
-        if (history.pushState) {
-          history.pushState({ page }, '', page);
-        }
+        navigateTo(link.dataset.page || '/home', 'push');
       });
     });
     window.addEventListener('popstate', (event) => {
-      const page = event.state && event.state.page ? event.state.page : '/dashboard';
-      frame.src = page;
-      setActiveLink(page);
+      const page = event.state && event.state.page ? event.state.page : normalizePage(window.location.pathname || '/home');
+      navigateTo(page, 'replace');
     });
-    window.addEventListener('load', () => {
-      const initialPage = normalizePage(new URL(window.location.href).pathname || '/');
-      if (initialPage && initialPage !== '/home') {
-        frame.src = initialPage;
-      }
-      setActiveLink(initialPage);
-    });
+    const initialPage = normalizePage(new URL(window.location.href).pathname || '/');
+    if (initialPage && initialPage !== '/home') {
+      frame.setAttribute('src', initialPage);
+    }
+    setActiveLink(initialPage);
   </script>
 </body>
 </html>
 """
 
 app = FastAPI(title="Digital Farming Support Center")
+app.state.started_at = datetime.now(timezone.utc)
 app.include_router(router)
 
 PROTECTED_PAGE_PATHS = {"/dashboard"}
+
+AUTH_RATE_LIMIT_WINDOW_SECONDS = 60
+AUTH_RATE_LIMIT_MAX_REQUESTS = 5
+_AUTH_REQUEST_BUCKETS = defaultdict(list)
+
+
+def get_client_ip(request: Request) -> str:
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip() or "unknown"
+    if request.client:
+        return request.client.host or "unknown"
+    return "unknown"
+
+
+def clear_auth_rate_limit(request: Request, endpoint_name: str, *, key_suffix: str = "") -> None:
+    client_ip = get_client_ip(request)
+    bucket_key = f"{endpoint_name}:{client_ip}:{key_suffix}" if key_suffix else f"{endpoint_name}:{client_ip}"
+    _AUTH_REQUEST_BUCKETS.pop(bucket_key, None)
+
+
+def enforce_auth_rate_limit(request: Request, endpoint_name: str, *, key_suffix: str = "", max_requests: int = AUTH_RATE_LIMIT_MAX_REQUESTS, window_seconds: int = AUTH_RATE_LIMIT_WINDOW_SECONDS) -> None:
+    client_ip = get_client_ip(request)
+    bucket_key = f"{endpoint_name}:{client_ip}:{key_suffix}" if key_suffix else f"{endpoint_name}:{client_ip}"
+    now = monotonic()
+    bucket = _AUTH_REQUEST_BUCKETS[bucket_key]
+    bucket[:] = [ts for ts in bucket if now - ts < window_seconds]
+    if len(bucket) >= max_requests:
+        raise HTTPException(status_code=429, detail="Too many requests. Please slow down and try again later.")
+    bucket.append(now)
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "base-uri 'self'; "
+        "form-action 'self'; "
+        "img-src 'self' data:; "
+        "style-src 'self' 'unsafe-inline'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        "connect-src 'self'; "
+        "frame-ancestors 'self'; "
+        "object-src 'none'"
+    )
+    if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 
 @app.middleware("http")
@@ -886,7 +907,8 @@ async def require_authenticated_session(request: Request, call_next):
 
 
 @app.post("/auth/login")
-def login(payload: LoginRequest):
+def login(request: Request, payload: LoginRequest):
+    username_key = (payload.username or "").strip()
     user_row = None
     with get_connection() as conn:
         user_row = conn.execute(
@@ -902,26 +924,32 @@ def login(payload: LoginRequest):
     try:
         result = authenticate(payload.username, payload.password)
     except ValueError as exc:
+        if username_key:
+            enforce_auth_rate_limit(request, "login_failed", key_suffix=username_key, max_requests=5, window_seconds=60)
         raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    clear_auth_rate_limit(request, "login_failed", key_suffix=username_key)
     response = JSONResponse({"success": True, "token": result["token"], "role": result["role"]})
+    secure_cookie = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
     response.set_cookie(
         key="digital_farming_session",
         value=result["token"],
         httponly=True,
-        samesite="lax",
-        secure=False,
+        samesite="Lax",
+        secure=secure_cookie,
         path="/",
     )
     return response
 
 
 @app.post("/api/v1/auth/login")
-def api_v1_login(payload: LoginRequest):
-    return login(payload)
+def api_v1_login(request: Request, payload: LoginRequest):
+    return login(request, payload)
 
 
 @app.post("/api/v1/auth/register")
 async def api_v1_register(request: Request):
+    enforce_auth_rate_limit(request, "register")
     content_type = request.headers.get("content-type", "")
 
     if "application/json" in content_type.lower():
@@ -974,7 +1002,8 @@ async def api_v1_register(request: Request):
 
 
 @app.post("/api/v1/auth/forgot-password")
-def api_v1_forgot_password(payload: ForgotPasswordRequest):
+def api_v1_forgot_password(request: Request, payload: ForgotPasswordRequest):
+    enforce_auth_rate_limit(request, "forgot-password")
     email = (payload.email or "").strip()
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="Please provide a valid registered email address")
@@ -985,7 +1014,8 @@ def api_v1_forgot_password(payload: ForgotPasswordRequest):
 
 
 @app.post("/api/v1/auth/reset-password")
-def api_v1_reset_password(payload: AuthResetPasswordRequest):
+def api_v1_reset_password(request: Request, payload: AuthResetPasswordRequest):
+    enforce_auth_rate_limit(request, "reset-password")
     if not payload.username or not payload.new_password:
         raise HTTPException(status_code=400, detail="Username and new password are required")
 
@@ -1007,7 +1037,8 @@ def api_v1_reset_password(payload: AuthResetPasswordRequest):
 
 
 @app.post("/api/v1/auth/verify-otp")
-def api_v1_verify_otp(payload: dict):
+def api_v1_verify_otp(request: Request, payload: dict):
+    enforce_auth_rate_limit(request, "verify-otp")
     username = str((payload or {}).get("username", "")).strip()
     otp_code = str((payload or {}).get("otp_code", "")).strip()
     try:
@@ -1484,18 +1515,6 @@ def admin_fetch_history_page(authorization: Optional[str] = Header(default=None)
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🧾</div>
-        <span>Fetch History / டேட்டா பரிமாற்ற வரலாறு</span>
-      </div>
-      <nav class="nav">
-        <a href="/admin/overview">Admin</a>
-        <a href="/admin/source-registry">Source Registry</a>
-        <a href="/admin/scheduler">Scheduler</a>
-        <a href="/admin/audit-logs">Audit Logs</a>
-      </nav>
-    </header>
 
     <h1>Fetch History</h1>
     <p class="lede">Each source fetch attempt is logged here so admins can see retry behavior, warnings, and source-level operational states.</p>
@@ -1653,18 +1672,6 @@ def admin_pilot_readiness_page(authorization: Optional[str] = Header(default=Non
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🚀</div>
-        <span>Pilot Readiness / பைலட் தயார் நிலை</span>
-      </div>
-      <nav class="nav">
-        <a href="/admin/overview">Admin</a>
-        <a href="/admin/quality-gate">Quality Gate</a>
-        <a href="/admin/release-runbook">Release Runbook</a>
-        <a href="/admin/operations-checklist">Operations Checklist</a>
-      </nav>
-    </header>
 
     <h1>Pilot Readiness</h1>
     <p class="lede">Before a wider release, the module must demonstrate trust, readability, and field usefulness across the selected farmer or field-staff pilot.</p>
@@ -1785,18 +1792,6 @@ def admin_review_queue_page():
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🧭</div>
-        <span>Review Queue / மதிப்பாய்வு வரிசை</span>
-      </div>
-      <nav class="nav">
-        <a href="/admin/overview">Admin</a>
-        <a href="/admin/quality-gate">Quality Gate</a>
-        <a href="/admin/release-runbook">Release Runbook</a>
-        <a href="/admin/operations-checklist">Operations Checklist</a>
-      </nav>
-    </header>
 
     <h1>Review Queue</h1>
     <p class="lede">Flagged scheme records are routed here for manual validation before publication or wider farmer-facing rollout.</p>
@@ -1889,18 +1884,6 @@ def admin_audit_logs_page():
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🧾</div>
-        <span>Audit Logs / ஆடிட் பதிவுகள்</span>
-      </div>
-      <nav class="nav">
-        <a href="/admin/overview">Admin</a>
-        <a href="/admin/quality-gate">Quality Gate</a>
-        <a href="/admin/review-queue">Review Queue</a>
-        <a href="/admin/source-registry">Source Registry</a>
-      </nav>
-    </header>
 
     <h1>Audit Logs</h1>
     <p class="lede">Every privileged action is recorded here so admins can review authentication, scheme review, and operational changes with an auditable trail.</p>
@@ -2014,18 +1997,6 @@ def admin_source_registry_page():
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🧾</div>
-        <span>Source Registry / மூலப் பதிவு</span>
-      </div>
-      <nav class="nav">
-        <a href="/admin/overview">Admin</a>
-        <a href="/admin/quality-gate">Quality Gate</a>
-        <a href="/admin/review-queue">Review Queue</a>
-        <a href="/admin/content-config">Content Config</a>
-      </nav>
-    </header>
 
     <h1>Source Registry</h1>
     <p class="lede">The trusted source registry tracks active government and public scheme feeds, their compliance posture, and the scheduler that refreshes them.</p>
@@ -2145,18 +2116,6 @@ def admin_scheduler_page():
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">⏱️</div>
-        <span>Scheduler / திட்டமிடுபவர்</span>
-      </div>
-      <nav class="nav">
-        <a href="/admin/overview">Admin</a>
-        <a href="/admin/source-registry">Source Registry</a>
-        <a href="/admin/review-queue">Review Queue</a>
-        <a href="/admin/audit-logs">Audit Logs</a>
-      </nav>
-    </header>
 
     <h1>Scheduler</h1>
     <p class="lede">Government and weather refresh jobs are coordinated here so source syncs stay consistent, auditable, and aligned with operational windows.</p>
@@ -2252,27 +2211,6 @@ def admin_overview_page():
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🛡️</div>
-        <span>Admin Overview / அட்மின் கண்ணோட்டம்</span>
-      </div>
-      <nav class="nav" aria-label="Admin navigation">
-        <a href="/home">முகப்பு</a>
-        <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/weather">வானிலை</a>
-        <a href="/soil-health">மண் சோதனை</a>
-        <a href="/disease-detection">நோய் கண்டறிதல்</a>
-        <a href="/government-schemes">அரசு திட்டங்கள்</a>
-        <a href="/market-intelligence">சந்தை</a>
-        <a href="/sustainability">நிலைத்தன்மை</a>
-        <a href="/traceability">கண்காணிப்பு</a>
-        <a href="/admin/quality-gate">Quality Gate</a>
-        <a href="/admin/release-runbook">Release Runbook</a>
-        <a href="/admin/operations-checklist">Operations Checklist</a>
-        <a href="/admin/content-config">Content Config</a>
-      </nav>
-    </header>
 
     <h1>அட்மின் செயல்பாடு மற்றும் தர மேலாண்மை</h1>
     <p class="intro">
@@ -2381,26 +2319,6 @@ ADVISORY_PAGE = """
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🌿</div>
-        <span>பயிர் ஆலோசனை</span>
-      </div>
-      <nav class="nav" aria-label="பயிர் ஆலோசனை வழிசெலுத்தல்">
-        <a href="/home">முகப்பு</a>
-        <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/weather">வானிலை</a>
-        <a href="/soil-health">மண் சோதனை</a>
-        <a href="/disease-detection">நோய் கண்டறிதல்</a>
-        <a href="/government-schemes">அரசு திட்டங்கள்</a>
-        <a href="/market-intelligence">சந்தை</a>
-        <a href="/sustainability">நிலைத்தன்மை</a>
-        <a href="/traceability">கண்காணிப்பு</a>
-        <a href="/register">பதிவு</a>
-        <a href="/profile">சுயவிபரம்</a>
-        <a href="/admin/overview">Admin</a>
-      </nav>
-    </header>
 
     <h1>மிகச் சிறந்த பருவ பயிர் முடிவுகளுக்கு ஆலோசனை</h1>
     <p class="intro">
@@ -2550,25 +2468,6 @@ def disease_detection_page(
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🩺</div>
-        <span>நோய் கண்டறிதல்</span>
-      </div>
-      <nav class="nav" aria-label="நோய் கண்டறிதல் வழிசெலுத்தல்">
-        <a href="/home">முகப்பு</a>
-        <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/weather">வானிலை</a>
-        <a href="/soil-health">மண் சோதனை</a>
-        <a href="/government-schemes">அரசு திட்டங்கள்</a>
-        <a href="/market-intelligence">சந்தை</a>
-        <a href="/sustainability">நிலைத்தன்மை</a>
-        <a href="/traceability">கண்காணிப்பு</a>
-        <a href="/register">பதிவு</a>
-        <a href="/profile">சுயவிபரம்</a>
-        <a href="/admin/overview">Admin</a>
-      </nav>
-    </header>
 
     <h1>பயிரின் நோய் மற்றும் அழுத்த நிலையை விரைவாக கண்டறியுங்கள்</h1>
     <p class="intro">
@@ -2683,17 +2582,6 @@ def disease_history_page():
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🩺</div>
-        <span>கண்டறிதல் வரலாறு / Diagnosis History</span>
-      </div>
-      <nav class="nav" aria-label="History navigation">
-        <a href="/home">முகப்பு</a>
-        <a href="/disease-detection">நோய் கண்டறிதல்</a>
-        <a href="/dashboard">டாஷ்போர்டு</a>
-      </nav>
-    </header>
 
     <section class="panel">
       <h1>கண்டறிதல் வரலாறு</h1>
@@ -2804,25 +2692,6 @@ def soil_health_page(
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🌱</div>
-        <span>மண் சோதனை &amp; உர மேலாண்மை</span>
-      </div>
-      <nav class="nav" aria-label="மண் சோதனை வழிசெலுத்தல்">
-        <a href="/home">முகப்பு</a>
-        <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/weather">வானிலை</a>
-        <a href="/disease-detection">நோய் கண்டறிதல்</a>
-        <a href="/government-schemes">அரசு திட்டங்கள்</a>
-        <a href="/market-intelligence">சந்தை</a>
-        <a href="/sustainability">நிலைத்தன்மை</a>
-        <a href="/traceability">கண்காணிப்பு</a>
-        <a href="/register">பதிவு</a>
-        <a href="/profile">சுயவிபரம்</a>
-        <a href="/admin/overview">Admin</a>
-      </nav>
-    </header>
 
     <h1>{crop_label} பயிருக்கு மண் நிலை அறிக்கை</h1>
     <p class="lede">
@@ -2936,25 +2805,6 @@ def soil_testing_page():
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🌾</div>
-        <span>மண் சோதனை</span>
-      </div>
-      <nav class="nav" aria-label="மண் சோதனை வழிசெலுத்தல்">
-        <a href="/home">முகப்பு</a>
-        <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/weather">வானிலை</a>
-        <a href="/disease-detection">நோய் கண்டறிதல்</a>
-        <a href="/government-schemes">அரசு திட்டங்கள்</a>
-        <a href="/market-intelligence">சந்தை</a>
-        <a href="/sustainability">நிலைத்தன்மை</a>
-        <a href="/traceability">கண்காணிப்பு</a>
-        <a href="/register">பதிவு</a>
-        <a href="/profile">சுயவிபரம்</a>
-        <a href="/admin/overview">Admin</a>
-      </nav>
-    </header>
 
     <section class="panel">
       <h1>மண் சோதனை மற்றும் உர திட்டம்</h1>
@@ -3075,17 +2925,6 @@ GOVERNMENT_SCHEMES_PAGE = """
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">💡</div>
-        <span>அரசுத் திட்டங்கள்</span>
-      </div>
-      <nav class="nav" aria-label="அரசு திட்டங்கள் வழிசெலுத்தல்">
-        <a href="/home">முகப்பு</a>
-        <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/services">சேவைகள்</a>
-      </nav>
-    </header>
 
     <h1>அரசு திட்டங்கள் மற்றும் நிதி உதவிகள்</h1>
     <p class="intro">
@@ -3413,18 +3252,12 @@ def government_schemes_page(category: Optional[str] = None, search: Optional[str
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">💡</div>
-        <span>அரசுத் திட்டங்கள்</span>
-      </div>
-      <nav class="nav" aria-label="அரசு திட்டங்கள் வழிசெலுத்தல்">
-        <a href="/home" class="nav-link" data-page="/home">முகப்பு</a>
-        <a href="/dashboard" class="nav-link" data-page="/dashboard">டாஷ்போர்டு</a>
-        <a href="/services" class="nav-link" data-page="/services">சேவைகள்</a>
-        <a href="/government-schemes" class="nav-link active" data-page="/government-schemes">அரசுத் திட்டங்கள்</a>
-      </nav>
-    </header>
+    <nav class="nav" aria-label="Government scheme navigation" style="margin-bottom: 18px; justify-content: flex-start;">
+      <a href="/home" class="nav-link" data-page="/home">முகப்பு</a>
+      <a href="/dashboard" class="nav-link" data-page="/dashboard">டாஷ்போர்டு</a>
+      <a href="/services" class="nav-link" data-page="/services">சேவைகள்</a>
+      <a href="/government-schemes" class="nav-link active" data-page="/government-schemes">அரசுத் திட்டங்கள்</a>
+    </nav>
 
     <section class="hero">
       <div class="hero-copy">
@@ -3716,26 +3549,6 @@ WEATHER_MARKET_PAGE = """
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🌤️</div>
-        <span>வானிலை மற்றும் சந்தை</span>
-      </div>
-      <nav class="nav" aria-label="வானிலை மற்றும் சந்தை வழிசெலுத்தல்">
-        <a href="/home">முகப்பு</a>
-        <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/weather">வானிலை</a>
-        <a href="/soil-health">மண் சோதனை</a>
-        <a href="/disease-detection">நோய் கண்டறிதல்</a>
-        <a href="/government-schemes">அரசு திட்டங்கள்</a>
-        <a href="/market-intelligence">சந்தை</a>
-        <a href="/sustainability">நிலைத்தன்மை</a>
-        <a href="/traceability">கண்காணிப்பு</a>
-        <a href="/register">பதிவு</a>
-        <a href="/profile">சுயவிபரம்</a>
-        <a href="/admin/overview">Admin</a>
-      </nav>
-    </header>
 
     <h1>வானிலை முன்னறிவிப்பு மற்றும் சந்தை விலை மேலாண்மை</h1>
     <p class="intro">
@@ -3973,25 +3786,6 @@ def weather_page(
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🌤️</div>
-        <span>{escape(region_name)} வானிலை / Weather</span>
-      </div>
-      <nav class="nav">
-        <a href="/home">முகப்பு</a>
-        <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/soil-health">மண் சோதனை</a>
-        <a href="/disease-detection">நோய் கண்டறிதல்</a>
-        <a href="/government-schemes">அரசு திட்டங்கள்</a>
-        <a href="/market-intelligence">சந்தை</a>
-        <a href="/sustainability">நிலைத்தன்மை</a>
-        <a href="/traceability">கண்காணிப்பு</a>
-        <a href="/register">பதிவு</a>
-        <a href="/profile">சுயவிபரம்</a>
-        <a href="/admin/overview">Admin</a>
-      </nav>
-    </header>
 
     <h1>வானிலை முன்னறிவிப்பு</h1>
     <p class="lede">{summary}</p>
@@ -4052,26 +3846,6 @@ def weather_quality_page():
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🛰️</div>
-        <span>Trusted weather sources / நம்பகமான வானிலை மூலங்கள்</span>
-      </div>
-      <nav class="nav">
-        <a href="/home">முகப்பு</a>
-        <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/weather">வானிலை</a>
-        <a href="/soil-health">மண் சோதனை</a>
-        <a href="/disease-detection">நோய் கண்டறிதல்</a>
-        <a href="/government-schemes">அரசு திட்டங்கள்</a>
-        <a href="/market-intelligence">சந்தை</a>
-        <a href="/sustainability">நிலைத்தன்மை</a>
-        <a href="/traceability">கண்காணிப்பு</a>
-        <a href="/register">பதிவு</a>
-        <a href="/profile">சுயவிபரம்</a>
-        <a href="/admin/overview">Admin</a>
-      </nav>
-    </header>
 
     <h1>வானிலை தரக் கட்டுப்பாடு</h1>
     <p class="lede">அதிகாரப்பூர்வ வானிலை ஆதாரங்கள், தக்கவைப்பு கொள்கை மற்றும் அட்மின் கண்காணிப்பு ஆகியவற்றை ஒரே பார்வையில் சரிபார்க்கிறது.</p>
@@ -4152,25 +3926,6 @@ def market_intelligence_page(crop: str = "rice", market: str = "Kallakurichi"):
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">📈</div>
-        <span>{market_name} சந்தை / Market</span>
-      </div>
-      <nav class="nav">
-        <a href="/home">முகப்பு</a>
-        <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/weather">வானிலை</a>
-        <a href="/soil-health">மண் சோதனை</a>
-        <a href="/disease-detection">நோய் கண்டறிதல்</a>
-        <a href="/government-schemes">அரசு திட்டங்கள்</a>
-        <a href="/sustainability">நிலைத்தன்மை</a>
-        <a href="/traceability">கண்காணிப்பு</a>
-        <a href="/register">பதிவு</a>
-        <a href="/profile">சுயவிபரம்</a>
-        <a href="/admin/overview">Admin</a>
-      </nav>
-    </header>
 
     <h1>{crop_name} பயிர் சந்தை நுண்ணறிவு</h1>
     <p class="lede">சந்தை போக்கு, விலை நிலை, மற்றும் விற்பனை முடிவுகளுக்கு தேவையான குறிப்புகளை தமிழில் காண்பிக்கிறது.</p>
@@ -4289,26 +4044,6 @@ def weather_market_page(region: str = "Kallakurichi"):
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🌤️</div>
-        <span>{escape(region_name)} - வானிலை மற்றும் சந்தை</span>
-      </div>
-      <nav class="nav" aria-label="வானிலை மற்றும் சந்தை வழிசெலுத்தல்">
-        <a href="/home">முகப்பு</a>
-        <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/weather">வானிலை</a>
-        <a href="/soil-health">மண் சோதனை</a>
-        <a href="/disease-detection">நோய் கண்டறிதல்</a>
-        <a href="/government-schemes">அரசு திட்டங்கள்</a>
-        <a href="/market-intelligence">சந்தை</a>
-        <a href="/sustainability">நிலைத்தன்மை</a>
-        <a href="/traceability">கண்காணிப்பு</a>
-        <a href="/register">பதிவு</a>
-        <a href="/profile">சுயவிபரம்</a>
-        <a href="/admin/overview">Admin</a>
-      </nav>
-    </header>
 
     <h1>வானிலை முன்னறிவிப்பு மற்றும் சந்தை விலை மேலாண்மை</h1>
     <p class="intro">
@@ -4422,25 +4157,6 @@ def sustainability_page(
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🌱</div>
-        <span>நிலையான விவசாயம்</span>
-      </div>
-      <nav class="nav">
-        <a href="/home">முகப்பு</a>
-        <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/weather">வானிலை</a>
-        <a href="/soil-health">மண் சோதனை</a>
-        <a href="/disease-detection">நோய் கண்டறிதல்</a>
-        <a href="/government-schemes">அரசு திட்டங்கள்</a>
-        <a href="/market-intelligence">சந்தை</a>
-        <a href="/traceability">கண்காணிப்பு</a>
-        <a href="/register">பதிவு</a>
-        <a href="/profile">சுயவிபரம்</a>
-        <a href="/admin/overview">Admin</a>
-      </nav>
-    </header>
 
     <h1>நிலையான விவசாய மதிப்பீடு</h1>
     <p class="lede">மண்ணின் கார்பன், நீர் பயன்பாடு மற்றும் ஆற்றல் திறன் ஆகியவற்றை ஒரே பார்வையில் மதிப்பிட்டு, அடுத்த பருவத்திற்கான முன்னேற்றத்தை திட்டமிடுகிறது.</p>
@@ -4544,25 +4260,6 @@ def traceability_page(
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">📦</div>
-        <span>கால்நடை/பயிர் கண்காணிப்பு</span>
-      </div>
-      <nav class="nav">
-        <a href="/home">முகப்பு</a>
-        <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/weather">வானிலை</a>
-        <a href="/soil-health">மண் சோதனை</a>
-        <a href="/disease-detection">நோய் கண்டறிதல்</a>
-        <a href="/government-schemes">அரசு திட்டங்கள்</a>
-        <a href="/market-intelligence">சந்தை</a>
-        <a href="/sustainability">நிலைத்தன்மை</a>
-        <a href="/register">பதிவு</a>
-        <a href="/profile">சுயவிபரம்</a>
-        <a href="/admin/overview">Admin</a>
-      </nav>
-    </header>
 
     <h1>கால்காணிப்பு மற்றும் லாட் கண்காணிப்பு</h1>
     <p class="lede">பயிர், விவசாயி, இருப்பிடம் மற்றும் தரம் ஆகியவற்றை ஒரே வரிசையில் புரிந்து கொண்டு, கொள்முதல் மற்றும் பரிமாற்ற செயல்முறையை தெளிவாக்குகிறது.</p>
@@ -4653,20 +4350,6 @@ def admin_content_config_page():
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">📣</div>
-        <span>Content Configuration / உள்ளடக்க கட்டுப்பாடு</span>
-      </div>
-      <nav class="nav">
-        <a href="/home">முகப்பு</a>
-        <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/admin/overview">Admin</a>
-        <a href="/admin/quality-gate">Quality Gate</a>
-        <a href="/admin/release-runbook">Release Runbook</a>
-        <a href="/admin/operations-checklist">Operations Checklist</a>
-      </nav>
-    </header>
 
     <h1>Special News & Advertising</h1>
     <p class="lede">This content management screen allows admins to review special news announcements and advertising placements intended for the farmer experience.</p>
@@ -4736,25 +4419,6 @@ def admin_release_runbook_page():
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🚀</div>
-        <span>Release Runbook / ரிலீஸ் ரன்ன்புக்</span>
-      </div>
-      <nav class="nav">
-        <a href="/home">முகப்பு</a>
-        <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/weather">வானிலை</a>
-        <a href="/soil-health">மண் சோதனை</a>
-        <a href="/disease-detection">நோய் கண்டறிதல்</a>
-        <a href="/government-schemes">அரசு திட்டங்கள்</a>
-        <a href="/market-intelligence">சந்தை</a>
-        <a href="/sustainability">நிலைத்தன்மை</a>
-        <a href="/traceability">கண்காணிப்பு</a>
-        <a href="/admin/quality-gate">Quality Gate</a>
-        <a href="/admin/operations-checklist">Operations Checklist</a>
-      </nav>
-    </header>
 
     <h1>Release Runbook</h1>
     <p class="lede">இந்த வெளியீட்டு விரிவுரை, மேம்பாடு, அரை-சோதனை, சுகாதார சரிபார்ப்பு, மற்றும் மீட்டெடுப்பு நடைமுறைகளை ஒரே இடத்தில் காட்டுகிறது.</p>
@@ -4833,26 +4497,6 @@ def admin_operations_checklist_page():
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🧰</div>
-        <span>Operations Checklist / இயக்கத் தேர்வுப்பட்டி</span>
-      </div>
-      <nav class="nav">
-        <a href="/home">முகப்பு</a>
-        <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/weather">வானிலை</a>
-        <a href="/soil-health">மண் சோதனை</a>
-        <a href="/disease-detection">நோய் கண்டறிதல்</a>
-        <a href="/government-schemes">அரசு திட்டங்கள்</a>
-        <a href="/market-intelligence">சந்தை</a>
-        <a href="/sustainability">நிலைத்தன்மை</a>
-        <a href="/traceability">கண்காணிப்பு</a>
-        <a href="/admin/overview">Admin</a>
-        <a href="/admin/quality-gate">Quality Gate</a>
-        <a href="/admin/release-runbook">Release Runbook</a>
-      </nav>
-    </header>
 
     <h1>Operations Checklist</h1>
     <p class="lede">தேவையான தரவு காப்புப்பிரதி, மைக்ரேஷன், செயல்பாட்டு சோதனை மற்றும் வெளியீட்டு சீரான செயல்பாட்டை உறுதிசெய்வதற்கான அட்மின் சின்னம் பட்டியல்.</p>
@@ -4964,26 +4608,6 @@ def admin_quality_gate_page():
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🛡️</div>
-        <span>Quality Gate / தரக் கட்டுப்பாடு</span>
-      </div>
-      <nav class="nav">
-        <a href="/home">முகப்பு</a>
-        <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/weather">வானிலை</a>
-        <a href="/soil-health">மண் சோதனை</a>
-        <a href="/disease-detection">நோய் கண்டறிதல்</a>
-        <a href="/government-schemes">அரசு திட்டங்கள்</a>
-        <a href="/market-intelligence">சந்தை</a>
-        <a href="/sustainability">நிலைத்தன்மை</a>
-        <a href="/traceability">கண்காணிப்பு</a>
-        <a href="/admin/overview">Admin</a>
-        <a href="/admin/release-runbook">Release Runbook</a>
-        <a href="/admin/operations-checklist">Operations Checklist</a>
-      </nav>
-    </header>
 
     <h1>Quality Gate</h1>
     <p class="lede">வானிலை தரவு, அரசு திட்ட புதுப்பிப்புகள், மற்றும் மூலநிலை ஆகியவற்றின் நம்பகத்தன்மை மற்றும் தர மதிப்பீடு ஆகியவற்றை ஒரே பார்வையில் சோதிக்கிறது.</p>
@@ -5096,18 +4720,6 @@ def login_page():
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🌾</div>
-        <span>Digital Farming Support Center</span>
-      </div>
-      <nav class="nav">
-        <a href="/home">Home</a>
-        <a href="/dashboard">Dashboard</a>
-        <a href="/government-schemes">Schemes</a>
-        <a href="/register">Register</a>
-      </nav>
-    </header>
 
     <div class="auth-shell">
       <div class="panel">
@@ -5218,16 +4830,6 @@ def forgot_password_page():
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🔐</div>
-        <span>Password Recovery</span>
-      </div>
-      <nav class="nav">
-        <a href="/login">Login</a>
-        <a href="/register">Register</a>
-      </nav>
-    </header>
     <div class="panel">
       <h1>Forgot password</h1>
       <p>Enter your registered email address to receive a secure reset link. The system validates the email and only sends the reset link if the account is registered.</p>
@@ -5291,16 +4893,6 @@ def reset_password_page():
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🔄</div>
-        <span>Reset password</span>
-      </div>
-      <nav class="nav">
-        <a href="/login">Login</a>
-        <a href="/forgot-password">Forgot password</a>
-      </nav>
-    </header>
     <div class="panel">
       <h1>Set a new password</h1>
       <p>Use the registered username and choose a new secure password. Passwords are hashed before storage.</p>
@@ -5374,25 +4966,6 @@ def register_page():
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🌾</div>
-        <span>விவசாயி பதிவு / Farmer Registration</span>
-      </div>
-      <nav class="nav">
-        <a href="/home">முகப்பு</a>
-        <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/weather">வானிலை</a>
-        <a href="/soil-health">மண் சோதனை</a>
-        <a href="/disease-detection">நோய் கண்டறிதல்</a>
-        <a href="/government-schemes">அரசு திட்டங்கள்</a>
-        <a href="/market-intelligence">சந்தை</a>
-        <a href="/sustainability">நிலைத்தன்மை</a>
-        <a href="/traceability">கண்காணிப்பு</a>
-        <a href="/profile">சுயவிபரம்</a>
-        <a href="/admin/overview">Admin</a>
-      </nav>
-    </header>
 
     <h1>பதிவு படிவம் / Registration Form</h1>
     <p class="lede">உங்கள் விவசாயப் பதிவு, கிராமம், நிலம், பயிர் மற்றும் தொடர்புத் தகவல்களை உள்ளிட்டு, அடுத்தகட்ட சேவைகளை அணுகவும்.</p>
@@ -5517,25 +5090,6 @@ def profile_page(username: str = "operator1"):
 </head>
 <body>
   <div class="container">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">👤</div>
-        <span>சுயவிபரம் / Profile</span>
-      </div>
-      <nav class="nav">
-        <a href="/home">முகப்பு</a>
-        <a href="/dashboard">டாஷ்போர்டு</a>
-        <a href="/weather">வானிலை</a>
-        <a href="/soil-health">மண் சோதனை</a>
-        <a href="/disease-detection">நோய் கண்டறிதல்</a>
-        <a href="/government-schemes">அரசு திட்டங்கள்</a>
-        <a href="/market-intelligence">சந்தை</a>
-        <a href="/sustainability">நிலைத்தன்மை</a>
-        <a href="/traceability">கண்காணிப்பு</a>
-        <a href="/register">பதிவு</a>
-        <a href="/admin/overview">Admin</a>
-      </nav>
-    </header>
 
     <h1>பயனர் சுயவிபரம்</h1>
     <p class="lede">விவசாயி மற்றும் நில மேலாண்மை தகவல்களை ஒரே இடத்தில் ஆய்வு செய்து, அடுத்த நடவடிக்கையை திட்டமிட உதவுகிறது.</p>
@@ -5589,10 +5143,40 @@ def health_check():
     except Exception:
         database_status = "unhealthy"
 
+    started_at = getattr(app.state, "started_at", datetime.now(timezone.utc))
+    uptime_seconds = max(0, int((datetime.now(timezone.utc) - started_at).total_seconds()))
+
     return {
-        "status": "healthy",
+        "status": "healthy" if database_status == "healthy" else "degraded",
         "service": "digital-farming-support-center",
+        "environment": os.getenv("APP_ENV", "development"),
+        "version": os.getenv("APP_VERSION", "0.2.0"),
+        "uptime_seconds": uptime_seconds,
         "database": {"status": database_status},
+    }
+
+
+@app.get("/ready")
+def readiness_check():
+    try:
+        with get_connection() as conn:
+            conn.execute("SELECT 1")
+        database_status = "healthy"
+    except Exception:
+        database_status = "unhealthy"
+
+    checks = {
+        "database": {"status": database_status, "detail": "SQLite connectivity check"},
+        "app": {"status": "healthy", "detail": "FastAPI app started successfully"},
+    }
+    overall_status = "ready" if database_status == "healthy" else "not_ready"
+
+    return {
+        "status": overall_status,
+        "service": "digital-farming-support-center",
+        "environment": os.getenv("APP_ENV", "development"),
+        "version": os.getenv("APP_VERSION", "0.2.0"),
+        "checks": checks,
     }
 
 

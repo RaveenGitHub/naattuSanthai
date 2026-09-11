@@ -14,53 +14,53 @@ def _build_treatment_and_prevention(crop_name: str, diagnosis: str) -> Dict[str,
 
     if "rice" in crop_key or "paddy" in crop_key:
         treatment_steps = [
-            "Apply a recommended fungicide spray at the first sign of lesions and rotate the spray schedule as needed.",
-            "Reduce waterlogging for 48 hours and drain excess standing water from affected patches.",
-            "Remove severely infected leaves to slow the spread to healthy tillers.",
+            "சிகிச்சை: பாதிக்கப்பட்ட வரிசைகளில் பூஞ்சைக் கொல்லியை உடனடியாகத் தெளிக்கவும்; உலர்ந்த அல்லது பாதிக்கப்பட்ட இலைகளை அகற்றவும்.",
+            "நீர் தேங்குவதை 48 மணி நேரம் குறைக்கவும்; சாகுபடி பகுதிகளில் அதிகப்படியான நீரை வடிகட்டவும்.",
+            "நெல் சாகுபடியில் மண் ஈரப்பதம் சீராக இருப்பதை உறுதிசெய்து, நோய் பரவலை குறைக்கவும்.",
         ]
         prevention_steps = [
-            "Maintain field drainage and avoid late-evening water stagnation.",
-            "Use balanced nitrogen and avoid excess canopy growth that raises humidity.",
-            "Monitor nearby fields for early blast symptoms after high humidity periods.",
+            "தடுப்பு: வயலில் நீர் வடிகால் சீராக உள்ளதா என்பதை தொடர்ந்து சரிபார்க்கவும்.",
+            "அதிக நைட்ரஜன் பயன்பாட்டைத் தவிர்த்து, மழை மற்றும் ஈரப்பதம் காரணமாக உச்சக்கட்ட வளர்ச்சி வராமல் பார்த்துக்கொள்ளவும்.",
+            "அருகிலுள்ள வயல்களை வாராந்திரமாக கண்காணித்து, ஆரம்ப அறிகுறிகள் இருந்தால் உடனடியாக செயல்படுங்கள்.",
         ]
     elif "groundnut" in crop_key:
         treatment_steps = [
-            "Apply a balanced fungicidal spray focused on the lower canopy where leaf spots first appear.",
-            "Use a nitrogen-phosphorus-potassium plan that supports pod filling without overfeeding the foliage.",
-            "Remove the most affected leaves and keep the field free from weeds that trap moisture.",
+            "சிகிச்சை: கீழ் இலைகளில் உருவாகும் இலைப் புள்ளிகளை குறிவைத்து, சீரான பூஞ்சைக் கொல்லி தீர்வு பயன்படுத்தவும்.",
+            "நைட்ரஜன்-பாஸ்பரஸ்-பொட்டாசியம் சமநிலையை சரிசெய்து, வேர்கள் மற்றும் காய் உருவாக்கத்திற்கு தேவையான உரத்தை வழங்கவும்.",
+            "மிகவும் பாதிக்கப்பட்ட இலைகளை அகற்றி, ஈரப்பதத்தை தக்கவைக்கும் களைகளை நீக்கவும்.",
         ]
         prevention_steps = [
-            "Avoid overhead irrigation during leaf wetness periods.",
-            "Rotate with non-host crops in the next season to reduce fungal buildup.",
-            "Inspect the field weekly for early lesions and patchy yellowing.",
+            "தடுப்பு: இலைகள் ஈரமாக இருக்கும் நேரங்களில் மேல் பாசனத்தை தவிர்க்கவும்.",
+            "அடுத்த பருவத்தில் பூஞ்சை வளர்சிதை மாற்றத்தை குறைக்க, பருவமாற்ற பயிர்களை பயன்படுத்துங்கள்.",
+            "வாரந்தோறும் வயலை ஆய்வு செய்து, முந்தைய அறிகுறிகள் மீண்டும் வருவதை எச்சரிக்கையுடன் கண்காணிக்கவும்.",
         ]
     elif "tomato" in crop_key:
         treatment_steps = [
-            "Apply a crop-safe fungicide or biological treatment on the affected leaves and stems.",
-            "Trim and dispose of infected foliage to prevent spread to healthy fruit clusters.",
-            "Review irrigation timing and reduce moisture on leaf surfaces.",
+            "சிகிச்சை: பாதிக்கப்பட்ட இலைகள் மற்றும் தண்டுகளில் பாதுகாப்பான பூஞ்சைக் கொல்லி அல்லது உயிரியல் சிகிச்சையை பயன்படுத்தவும்.",
+            "மருத்துவமுறைக்கு முன்னர் பாதிக்கப்பட்ட இலைகளை வெட்டி, சுகாதாரமான இடத்தில் அழிக்கவும்.",
+            "பாசன நேரத்தை சரிசெய்து, இலைகள் ஈரமாக இருப்பதை குறைக்கவும்.",
         ]
         prevention_steps = [
-            "Improve spacing between plants to improve airflow.",
-            "Use drip irrigation or controlled watering to keep leaves dry.",
-            "Inspect weekly for powdery mildew or leaf curl before the disease spreads.",
+            "தடுப்பு: தாவரங்களுக்கு இடைவெளி அதிகரித்து, காற்றோட்டத்தை மேம்படுத்தவும்.",
+            "மழைநீர் அல்லது மேல் பாசனத்தை குறைத்து, சொட்டுநீர் பாசனத்தை முன்னுரிமை செய்யுங்கள்.",
+            "வாரந்தோறும் தக்காளி இலை சுருங்குதல் அல்லது தூள் பாக்டீரியா அறிகுறிகளை நோக்கி கண்காணிக்கவும்.",
         ]
     else:
         treatment_steps = [
-            "Inspect the field closely and isolate the most affected plants before treatment.",
-            "Follow a crop-safe spray or treatment plan recommended for the observed stress pattern.",
-            "Review irrigation, nutrient balance, and canopy moisture before resuming the normal regimen.",
+            "சிகிச்சை: பாதிக்கப்பட்ட பயிர்களை தனிமைப்படுத்தி, வயலை நெருக்கமாக ஆய்வு செய்து பாசனமும் உரத்தையும் சரிசெய்யவும்.",
+            "குறிப்பிட்ட நோய் அல்லது அழுத்தத்தின் அடிப்படையில் பாதுகாப்பான சிகிச்சை திட்டத்தை பின்பற்றுங்கள்.",
+            "பாசனம், ஊட்டச்சத்து சமநிலை, மற்றும் இலை ஈரப்பதத்தை மறு ஆய்வு செய்து, வழக்கமான பராமரிப்பை தொடருங்கள்.",
         ]
         prevention_steps = [
-            "Keep field monitoring frequent during the next 7-10 days.",
-            "Maintain balanced nutrient and irrigation schedules to reduce recurring stress.",
-            "Consult an agronomist if symptoms continue or spread to more plants.",
+            "தடுப்பு: அடுத்த 7-10 நாட்களில் வயலை அடிக்கடி கண்காணிக்கவும்.",
+            "சமநிலையான ஊட்டச்சத்து மற்றும் நீர் மேலாண்மையை பராமரித்து, மீண்டும் அழுத்தம் வராமல் பாதுகாக்கவும்.",
+            "அறிகுறிகள் தொடர்ந்தால் விவசாய நிபுணரை ஆலோசிக்கவும்.",
         ]
 
     if "leaf blast" in (diagnosis or "").lower() or "fungal" in (diagnosis or "").lower():
-        treatment_steps.insert(0, "Start field treatment immediately in the affected patches to keep the disease from spreading to neighboring rows.")
+        treatment_steps.insert(0, "சிகிச்சை: பாதிக்கப்பட்ட பகுதிகளில் பூஞ்சை பரவாமல் தடுக்க உடனடியாக வயல் சிகிச்சையை தொடங்குங்கள்.")
     if "general stress" in (diagnosis or "").lower():
-        treatment_steps.insert(0, "Run a rapid field inspection and prioritize irrigation and nutrient checks before applying any chemical input.")
+        treatment_steps.insert(0, "சிகிச்சை: உயிரியல்/இயற்கை ஆய்வு செய்து, பூச்சிக் கொல்லி பயன்படுத்துவதற்கு முன் நீர் மற்றும் ஊட்டச்சத்து நிலையை முதலில் சரிபார்க்கவும்.")
 
     return {"treatment_steps": treatment_steps, "prevention_steps": prevention_steps}
 

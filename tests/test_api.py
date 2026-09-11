@@ -27,6 +27,36 @@ def test_health_endpoint():
     assert body["database"]["status"] == "healthy"
 
 
+def test_health_and_readiness_endpoints_expose_runtime_and_deployment_metadata():
+    health = client.get("/health")
+    assert health.status_code == 200
+    payload = health.json()
+    assert payload["service"] == "digital-farming-support-center"
+    assert payload["status"] == "healthy"
+    assert payload["environment"]
+    assert payload["version"]
+    assert payload["uptime_seconds"] >= 0
+    assert "database" in payload
+
+    ready = client.get("/ready")
+    assert ready.status_code == 200
+    ready_payload = ready.json()
+    assert ready_payload["status"] == "ready"
+    assert ready_payload["service"] == "digital-farming-support-center"
+    assert ready_payload["checks"]["database"]["status"] == "healthy"
+
+
+def test_security_headers_and_cookie_hardening_are_present():
+    response = client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    assert response.status_code == 200
+    assert response.headers.get("x-content-type-options") == "nosniff"
+    assert response.headers.get("x-frame-options") == "SAMEORIGIN"
+    assert "Content-Security-Policy" in response.headers
+    cookie = response.headers.get("set-cookie", "")
+    assert "HttpOnly" in cookie
+    assert "SameSite=Lax" in cookie
+
+
 def test_farmer_creation_and_listing():
     payload = {"name": "Raja", "phone": "9876543210", "village": "Kallakurichi", "language": "Tamil"}
     create_response = client.post("/api/farmers", json=payload)
@@ -650,6 +680,16 @@ def test_source_registry_distinguishes_official_sources_from_fallbacks_and_trust
     assert "official_sources" in status["source_registry"] or "fallback_sources" in status["source_registry"]
 
 
+def test_scheme_fetch_status_exposes_explicit_freshness_and_retention_policy():
+    status = get_scheme_fetch_status()
+    assert "freshness_policy" in status
+    policy = status["freshness_policy"]
+    assert policy["latest_window_days"] == 7
+    assert policy["archive_after_days"] == 7
+    assert policy["retention_days"] >= 7
+    assert policy["status"] in {"pass", "warning"}
+
+
 def test_scheme_fetch_status_has_coherent_source_monitoring_contract():
     status = get_scheme_fetch_status()
     assert "fetch_monitoring" in status
@@ -869,6 +909,26 @@ def test_form_submission_registers_user_and_persists_data():
     assert row[2] == "formfarmer@example.com"
     assert row[3] == "9876543211"
     assert row[4] == "pending_verification"
+
+
+def test_registration_is_rate_limited_per_ip():
+    client_with_ip = TestClient(app)
+    responses = []
+    for index in range(6):
+        username = f"rate_limit_ip_{__import__('uuid').uuid4().hex[:8]}_{index}"
+        response = client_with_ip.post(
+            "/api/v1/auth/register",
+            headers={"X-Forwarded-For": "198.51.100.7"},
+            data={
+                "username": username,
+                "password": "SecurePass123",
+                "role": "farmer",
+                "phone": "9876543210",
+            },
+        )
+        responses.append(response)
+
+    assert any(response.status_code == 429 for response in responses)
 
 
 def test_registration_creates_pending_user_and_requires_otp_verification_before_login():

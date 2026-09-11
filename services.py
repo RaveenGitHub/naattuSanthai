@@ -754,6 +754,14 @@ def get_scheme_fetch_status() -> dict:
         },
     }
 
+    freshness_policy = {
+        "latest_window_days": 7,
+        "archive_after_days": 7,
+        "retention_days": retention_days,
+        "status": "pass" if latest_count > 0 and retention_days >= 7 else "warning",
+        "notes": "Latest scheme records remain in the active window for 7 days before archival and retain a 14-day operational history.",
+    }
+
     return {
         "total_schemes": total_count,
         "latest_count": latest_count,
@@ -763,6 +771,7 @@ def get_scheme_fetch_status() -> dict:
         "categories": {row["category"]: row["count"] for row in category_rows},
         "source_compliance": source_compliance,
         "retention_days": retention_days,
+        "freshness_policy": freshness_policy,
         "quality_gate": quality_gate,
         "ai_validation": ai_validation,
         "review_queue": review_queue,

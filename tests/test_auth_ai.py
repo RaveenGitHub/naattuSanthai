@@ -81,6 +81,25 @@ def test_ai_diagnosis_history_is_available_to_authorized_user():
     assert any(item["crop_type"] == "Groundnut" for item in body["data"])
 
 
+def test_ai_diagnosis_returns_tamil_farmer_guidance():
+    login = client.post(
+        "/auth/login",
+        json={"username": "operator1", "password": "password123"},
+    )
+    token = login.json()["token"]
+
+    response = client.post(
+        "/api/diagnose",
+        json={"crop_type": "Rice", "image_url": "https://example.com/rice.jpg", "notes": "Yellowing leaves and spots"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    text = " ".join(body["data"]["treatment_steps"] + body["data"]["prevention_steps"])
+    assert any(word in text for word in ["சிகிச்சை", "தடுப்பு", "நெல்", "மழை", "நீர்"])
+    assert "Leaf blast" in body["data"]["diagnosis"] or "இலை" in body["data"]["diagnosis"]
+
+
 def test_new_user_can_be_created_and_authenticated_from_database():
     username = f"newoperator_{uuid.uuid4().hex[:8]}"
     result = create_user(username, "secretpass", "operator")
