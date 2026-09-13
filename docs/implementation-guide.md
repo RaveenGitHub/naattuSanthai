@@ -12,7 +12,7 @@
 ### Status summary
 
 - Runtime baseline: validated in the project venv
-- Test status: 83 focused validation checks passing across auth, RBAC, weather, market, soil, disease, sustainability, traceability, and release-readiness flows
+- Test status: 124 validation checks passing across auth, RBAC, weather, market, soil, disease, sustainability, traceability, and release-readiness flows
 - Main architecture: FastAPI app, modular agriculture services, SQLite-backed data layer, role-based access patterns, admin audit logging
 - Active implementation posture: release-readiness and operational hardening pass with verified app behavior across the current product stack
 
@@ -32,10 +32,10 @@
 | Persistence               | SQLite for MVP, extensible to PostgreSQL    |
 | Python target             | 3.8-compatible in the current configuration |
 | Validation command        | `& .\.venv\Scripts\python.exe -m pytest -q` |
-| Current validation result | 83 passed                                   |
+| Current validation result | 124 passed                                  |
 | Owner                     | Engineering team / product owner            |
 | Status                    | Active development / release-ready MVP      |
-| Last verified             | 2026-09-05                                  |
+| Last verified             | 2026-09-13                                  |
 
 ## 4. Prerequisites
 

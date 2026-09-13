@@ -73,6 +73,7 @@ def test_soil_health_route_uses_rice_specific_recommendations():
     assert "rice" in payload["recommendation_summary"].lower()
     assert any("rice" in str(item).lower() or "paddy" in str(item).lower() for item in payload["crop_recommendations"])
     assert any("irrigation" in str(item).lower() or "water" in str(item).lower() for item in payload["irrigation_guidance"])
+    assert any("standing water" in item.lower() for item in payload["irrigation_guidance"])
     assert any("nitrogen" in str(item.get("nutrient", "")).lower() for item in payload["fertilizer_plan"])
 
 

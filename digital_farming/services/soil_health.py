@@ -87,6 +87,21 @@ def assess_soil_health(crop: str, ph: float, nitrogen: float, phosphorus: float,
         "Avoid over-irrigation when the soil is near the target moisture range for the crop.",
     ]
 
+    if "rice" in crop_name or "paddy" in crop_name:
+        irrigation_guidance.extend(
+            [
+                "Maintain shallow standing water during establishment, then allow a short dry interval before the next irrigation.",
+                "Drain excess water before fertilizer application so nutrients reach the root zone instead of running off.",
+            ]
+        )
+    elif "groundnut" in crop_name:
+        irrigation_guidance.extend(
+            [
+                "Keep the pegging and pod-filling stages evenly moist, but avoid standing water around the pods.",
+                "Reduce irrigation near maturity so the field can dry gradually before harvest.",
+            ]
+        )
+
     if ph_status != "Balanced":
         irrigation_guidance.append("Correct the pH first, then calibrate irrigation to avoid nutrient locking in the root zone.")
 
