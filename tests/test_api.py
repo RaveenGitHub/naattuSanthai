@@ -1201,6 +1201,11 @@ def test_authenticated_farmer_profile_sets_weather_and_market_defaults():
     assert "Salem" in weather_response.text
     assert "Mettur" in weather_response.text
 
+    standalone_weather_response = isolated_client.get("/weather", follow_redirects=False)
+    assert standalone_weather_response.status_code == 200
+    assert "Salem" in standalone_weather_response.text
+    assert "Mettur" in standalone_weather_response.text
+
     market_response = isolated_client.get("/market-intelligence", follow_redirects=False)
     assert market_response.status_code == 200
     assert "Cotton" in market_response.text or "cotton" in market_response.text

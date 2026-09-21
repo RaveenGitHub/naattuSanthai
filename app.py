@@ -3665,16 +3665,25 @@ WEATHER_MARKET_PAGE = """
 
 @app.get("/weather", response_class=HTMLResponse)
 def weather_page(
+  request: Request,
     region: str = "Kallakurichi",
     period: str = "daily",
     district: str = "",
     taluk: str = "",
     village: str = "",
 ):
+    profile_defaults = resolve_profile_defaults(
+      request,
+      default_region=region,
+      default_village=village,
+      default_crop="rice",
+    )
     region_name = (region or "Kallakurichi").strip() or "Kallakurichi"
+    if region_name == "Kallakurichi":
+      region_name = profile_defaults["region"] or region_name
     district_name = (district or "").strip() or "Villupuram"
     taluk_name = (taluk or "").strip() or "Kallakurichi"
-    village_name = (village or "").strip() or "Periyar Nagar"
+    village_name = (village or "").strip() or profile_defaults["village"] or "Periyar Nagar"
     period_name = (period or "daily").strip().lower() or "daily"
     forecasts = list_weather_forecast(period_name, region_name)
     if not forecasts:
