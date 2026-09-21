@@ -858,6 +858,8 @@ def resolve_profile_defaults(request: Request, *, default_region: str = "Kallaku
         "region": default_region or "Kallakurichi",
         "village": default_village,
         "crop": default_crop or "rice",
+      "land_size": "",
+      "water_source": "",
     }
     session = get_session_payload(request)
     username = str(session.get("sub", "") or "").strip()
@@ -872,6 +874,8 @@ def resolve_profile_defaults(request: Request, *, default_region: str = "Kallaku
     region = str(profile.get("region") or "").strip()
     village = str(profile.get("village") or "").strip()
     crop = str(profile.get("primary_crop") or "").strip()
+    land_size = str(profile.get("land_size") or "").strip()
+    water_source = str(profile.get("water_source") or "").strip()
 
     if region:
         profile_defaults["region"] = region
@@ -879,6 +883,10 @@ def resolve_profile_defaults(request: Request, *, default_region: str = "Kallaku
         profile_defaults["village"] = village
     if crop:
         profile_defaults["crop"] = crop
+    if land_size:
+      profile_defaults["land_size"] = land_size
+    if water_source:
+      profile_defaults["water_source"] = water_source
 
     return profile_defaults
 
@@ -2451,8 +2459,24 @@ ADVISORY_PAGE = """
 
 
 @app.get("/advisory", response_class=HTMLResponse)
-def advisory_page():
-    return ADVISORY_PAGE
+def advisory_page(request: Request, crop: str = "rice", land_size: str = ""):
+    profile_defaults = resolve_profile_defaults(request, default_crop=crop)
+    effective_crop = crop if crop and crop.lower() not in {"", "rice"} else profile_defaults["crop"]
+    effective_land_size = (land_size or "").strip() or profile_defaults["land_size"] or "பொது நில அளவு"
+    crop_label = escape(str(effective_crop).strip() or "பயிர்")
+    land_size_label = escape(str(effective_land_size))
+    water_source_label = escape(str(profile_defaults["water_source"] or "பொது நீர் ஆதாரம்"))
+    context_panel = f"""
+    <section class="panel" style="margin-top: 20px;">
+      <h2>உங்கள் பண்ணை சூழல் / Your farm context</h2>
+      <div class="stats">
+        <div class="stat"><span>முக்கிய பயிர்</span><strong>{crop_label}</strong></div>
+        <div class="stat"><span>நில அளவு</span><strong>{land_size_label}</strong></div>
+        <div class="stat"><span>நீர் ஆதாரம்</span><strong>{water_source_label}</strong></div>
+      </div>
+    </section>
+    """
+    return ADVISORY_PAGE.replace("    <p class=\"intro\">", context_panel + "\n    <p class=\"intro\">")
 
 
 @app.get("/disease-detection", response_class=HTMLResponse)

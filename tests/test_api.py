@@ -1218,6 +1218,11 @@ def test_authenticated_farmer_profile_sets_weather_and_market_defaults():
     assert disease_response.status_code == 200
     assert 'value="Cotton"' in disease_response.text or 'value="cotton"' in disease_response.text
 
+    advisory_response = isolated_client.get("/advisory", follow_redirects=False)
+    assert advisory_response.status_code == 200
+    assert "cotton" in advisory_response.text.lower()
+    assert "நில அளவு" in advisory_response.text
+
 
 def test_sustainability_and_traceability_pages_render_farmer_summary():
     sustainability_response = client.get("/sustainability?farm_size_ha=5&soil_carbon_tons=2.4&water_use_liters=4200&energy_use_kwh=320")
