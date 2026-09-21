@@ -1214,6 +1214,10 @@ def test_authenticated_farmer_profile_sets_weather_and_market_defaults():
     assert soil_response.status_code == 200
     assert "Cotton" in soil_response.text or "cotton" in soil_response.text
 
+    disease_response = isolated_client.get("/disease-detection", follow_redirects=False)
+    assert disease_response.status_code == 200
+    assert 'value="Cotton"' in disease_response.text or 'value="cotton"' in disease_response.text
+
 
 def test_sustainability_and_traceability_pages_render_farmer_summary():
     sustainability_response = client.get("/sustainability?farm_size_ha=5&soil_carbon_tons=2.4&water_use_liters=4200&energy_use_kwh=320")

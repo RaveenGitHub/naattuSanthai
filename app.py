@@ -2457,16 +2457,19 @@ def advisory_page():
 
 @app.get("/disease-detection", response_class=HTMLResponse)
 def disease_detection_page(
+    request: Request,
     crop_type: str = "Rice",
     image_url: str = "https://example.com/crop-scan.jpg",
     notes: str = "Yellowing leaves and spots observed",
 ):
-    result = diagnose_crop_issue(crop_type, image_url, notes)
+    profile_defaults = resolve_profile_defaults(request, default_crop=crop_type)
+    effective_crop_type = crop_type if crop_type and crop_type.lower() not in {"", "rice"} else profile_defaults["crop"]
+    result = diagnose_crop_issue(effective_crop_type, image_url, notes)
     diagnosis = escape(str(result.get("diagnosis", "General stress pattern detected")))
     recommendation = escape(str(result.get("recommendation", "Inspect the field and review nutrient balance.")))
     confidence = escape(str(result.get("confidence", "High")))
     manual_review = "Manual review required" if str(result.get("confidence", "High")).lower() in {"low", "medium"} else "Assessment ready"
-    crop_label = escape(str(crop_type or "Rice"))
+    crop_label = escape(str(effective_crop_type or "Rice"))
     notes_text = escape(str(notes or "No additional notes provided."))
     image_text = escape(str(image_url or "https://example.com/crop-scan.jpg"))
     treatment_steps = "".join(f"<li>{escape(str(step))}</li>" for step in result.get("treatment_steps", [recommendation]))
