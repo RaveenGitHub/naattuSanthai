@@ -290,3 +290,114 @@ This backlog ensures:
 - **Robust session and redirect handling**
 
 This is the exact structure used in **enterprise agritech platforms**, ensuring your Tamil‑first agriculture app is production‑ready, scalable, and scientifically reliable.
+
+---
+
+# Pending Todo Implementation List
+
+## 1. Access control and session hardening
+
+- [ ] Enforce role-based checks for admin-only routes and protected pages
+- [ ] Validate session tokens and expiry state on every authenticated route transition
+- [ ] Restrict profile viewing and editing to the authenticated user’s own record
+- [ ] Add secure logout behavior that clears session state and invalidates tokens
+- [ ] Log denied auth and authorization events for later admin review
+- [ ] Redirect expired, invalid, or logged-out users to the safe login or home flow
+- [ ] Verify that guest and non-admin users cannot reach restricted pages via direct URL access
+
+Priority: High
+Owner: Backend + Frontend
+Acceptance: Protected pages remain inaccessible without valid authentication and role validation.
+
+## 2. Farmer onboarding and profile completion
+
+- [ ] Add mandatory registration fields: name, mobile, village, region, area, primary crop, land size, water source
+- [ ] Add optional profile details for farming method, secondary crops, tools, and irrigation type
+- [ ] Validate required data before registration is marked complete
+- [ ] Store profile details in the backend and expose them to recommendation logic
+- [ ] Add profile-update API and UI for farmers after login
+- [ ] Refresh advisory and dashboard data immediately after profile edits
+- [ ] Sanitize and validate all form input to prevent malformed or empty values
+
+Priority: High
+Owner: Backend + UX + Data Quality
+Acceptance: Each farmer profile contains enough trusted context for personalized recommendations.
+
+## 3. Auto-filter and personalization system
+
+- [ ] Build a profile-based filtering engine using village, region, crop, land, and water attributes
+- [ ] Add default public-mode values for guest users when no profile is available
+- [ ] Apply personalized filtering to dashboard, advisory, weather, market, soil, and disease views
+- [ ] Add fallback logic for missing or partially complete profile data
+- [ ] Prevent cross-region or cross-crop mismatches in recommendations
+- [ ] Optimize repeated filter queries so field pages remain responsive
+
+Priority: High
+Owner: Backend + Product + Agronomy
+Acceptance: Logged-in farmers see contextual recommendations and guests see safe generic content.
+
+## 4. Core service quality and agronomy guidance
+
+- [ ] Improve soil health recommendations with clear agronomy logic and Tamil-readable guidance
+- [ ] Finalize irrigation support rules from crop, land size, and water-source inputs
+- [ ] Normalize market data outputs for clarity and trust in farmer-facing cards
+- [ ] Add data-source quality checks and fallback messaging for weather scenes
+- [ ] Prepare disease detection scan and diagnosis flow with safe confidence messaging
+- [ ] Keep sustainability and traceability outputs consistent with real field workflows
+
+Priority: High
+Owner: Backend + Agronomy + Product
+Acceptance: Every service delivers actionable, trustworthy farmer guidance without exposing uncertain output.
+
+## 5. Admin monitoring and production readiness
+
+- [ ] Add admin visibility for auth failures, route denials, and review workflows
+- [ ] Track source quality, fetch health, and recommendation confidence for operational monitoring
+- [ ] Document backup, restore, and retention practices for SQLite-backed and session-related data
+- [ ] Complete rollback-ready deployment guidance with exact restore steps
+- [ ] Validate the full regression suite before releases and record the exact verification command
+- [ ] Review AI-generated recommendations for trust, quality, and Tamil language clarity
+- [ ] Maintain a release checklist covering secrets, configuration, deployment risk, and escalation plan
+
+Priority: Medium
+Owner: Engineering + Product + Ops
+Acceptance: The app can be released, monitored, and rolled back safely when field issues appear.
+
+## 6. QA, field validation, and readiness sign-off
+
+- [ ] Validate auth and route behavior across reload, tab reopen, and logout edge cases
+- [ ] Test role denial flows for admin, farmer, volunteer, and guest journeys
+- [ ] Review Tamil-readable farm content with sample users and field officers
+- [ ] Validate market, soil, and advisory outputs for real agronomy correctness
+- [ ] Confirm critical actions are logged with enough metadata for operational debugging
+- [ ] Run end-to-end regression coverage after auth and personalization changes
+
+Priority: High
+Owner: QA + Product + Field Ops
+Acceptance: The product behaves correctly in both technical validation and lived field operations.
+
+---
+
+## Suggested execution order
+
+1. Access control and session hardening
+2. Farmer onboarding and profile completion
+3. Auto-filter and personalization engine
+4. Domestic service quality and agronomy validation
+5. Monitoring, backup, and release readiness
+6. Final QA and sign-off
+
+## Definition of done for the next milestone
+
+- Auth and role checks work reliably for every protected route
+- Farmer profiles are complete, validated, and persisted consistently
+- Personalized data works across the app without mismatches or blank fallbacks
+- Core agricultural services remain useful, explainable, and safe for field use
+- Monitoring, rollback, and deployment guidance are documented and operational
+- Final validation passes in the project environment before release
+
+---
+
+### Implementation reminder
+
+The next milestone should prioritize secure access, farmer onboarding, personalized recommendation logic, and product readiness. After those are stable, the remaining product modules can expand without compromising the user experience.

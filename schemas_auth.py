@@ -33,6 +33,15 @@ class RegisterRequest(BaseModel):
     email: str = None
     phone: str = None
     village: str = ""
+    region: str = ""
+    area: str = ""
+    primary_crop: str = ""
+    land_size: str = ""
+    water_source: str = ""
+    farming_method: str = ""
+    secondary_crops: str = ""
+    tools: str = ""
+    irrigation_type: str = ""
 
 
 class ForgotPasswordRequest(BaseModel):

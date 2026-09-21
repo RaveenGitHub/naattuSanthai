@@ -832,11 +832,25 @@ app = FastAPI(title="Digital Farming Support Center")
 app.state.started_at = datetime.now(timezone.utc)
 app.include_router(router)
 
-PROTECTED_PAGE_PATHS = {"/dashboard"}
+PROTECTED_PAGE_PATHS = {"/dashboard", "/profile"}
+ADMIN_PAGE_PREFIXES = ("/admin/",)
 
 AUTH_RATE_LIMIT_WINDOW_SECONDS = 60
 AUTH_RATE_LIMIT_MAX_REQUESTS = 5
 _AUTH_REQUEST_BUCKETS = defaultdict(list)
+
+
+def get_session_payload(request: Request) -> dict:
+    token = request.cookies.get("digital_farming_session")
+    if not token:
+        return {}
+    try:
+        payload = verify_token(token)
+        if payload.get("sub"):
+            return payload
+    except Exception:
+        pass
+    return {}
 
 
 def get_client_ip(request: Request) -> str:
@@ -895,14 +909,19 @@ async def require_authenticated_session(request: Request, call_next):
     if path.startswith("/api/") or path.startswith("/auth/") or path in public_paths:
         return await call_next(request)
 
-    if path in PROTECTED_PAGE_PATHS:
-        token = request.cookies.get("digital_farming_session")
-        if not token:
+    if path in PROTECTED_PAGE_PATHS or path.startswith(ADMIN_PAGE_PREFIXES):
+        session = get_session_payload(request)
+        if not session:
             return RedirectResponse(url="/login", status_code=302)
-        try:
-            verify_token(token)
-        except Exception:
-            return RedirectResponse(url="/login", status_code=302)
+
+        if path.startswith("/admin/") and str(session.get("role", "")).lower() != "admin":
+            return RedirectResponse(url="/dashboard", status_code=302)
+
+        if path == "/profile":
+            requested_user = str((request.query_params.get("username") or session.get("sub", "")).strip())
+            if requested_user and requested_user != session.get("sub"):
+                return RedirectResponse(url=f"/profile?username={session.get('sub', '')}", status_code=302)
+
     return await call_next(request)
 
 
@@ -982,6 +1001,15 @@ async def api_v1_register(request: Request):
             phone=(payload.phone or "").strip() or None,
             full_name=(payload.full_name or "").strip(),
             village=(payload.village or "").strip(),
+            region=(payload.region or "").strip(),
+            area=(payload.area or "").strip(),
+            primary_crop=(payload.primary_crop or "").strip(),
+            land_size=(payload.land_size or "").strip(),
+            water_source=(payload.water_source or "").strip(),
+            farming_method=(payload.farming_method or "").strip(),
+            secondary_crops=(payload.secondary_crops or "").strip(),
+            tools=(payload.tools or "").strip(),
+            irrigation_type=(payload.irrigation_type or "").strip(),
             status="pending_verification",
         )
     except ValueError as exc:
@@ -5033,11 +5061,21 @@ def register_page():
 
 
 @app.get("/profile", response_class=HTMLResponse)
-def profile_page(username: str = "operator1"):
+def profile_page(request: Request, username: Optional[str] = None):
+    session = get_session_payload(request)
+    if username is None:
+        username = str(session.get("sub", "operator1") or "operator1")
+
+    if not session:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    if username != session.get("sub"):
+        raise HTTPException(status_code=403, detail="You can only view your own profile")
+
     try:
         profile = get_profile(username)
     except ValueError:
-        profile = {"username": username, "role": "operator"}
+        profile = {"username": username, "role": session.get("role", "operator")}
 
     role_label = {
         "farmer": "விவசாயி",

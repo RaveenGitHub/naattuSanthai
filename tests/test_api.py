@@ -971,6 +971,54 @@ def test_registration_creates_pending_user_and_requires_otp_verification_before_
     assert final_login.json()["role"] == "farmer"
 
 
+def test_registration_persists_farmer_profile_fields_for_onboarding():
+    username = f"profile_user_{__import__('uuid').uuid4().hex[:8]}"
+    isolated_client = TestClient(app)
+
+    response = isolated_client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": username,
+            "password": "SecurePass123",
+            "role": "farmer",
+            "full_name": "Muthu Selvan",
+            "email": "muthu@example.com",
+            "phone": "9876543211",
+            "village": "Kallakurichi",
+            "region": "Villupuram",
+            "area": "3.5",
+            "primary_crop": "rice",
+            "land_size": "2.5",
+            "water_source": "borewell",
+            "farming_method": "traditional",
+            "secondary_crops": "groundnut",
+            "tools": "tractor",
+            "irrigation_type": "drip",
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+
+    with __import__("sqlite3").connect("digital_farming.db") as conn:
+        row = conn.execute(
+            "SELECT full_name, village, region, area, primary_crop, land_size, water_source, farming_method, secondary_crops, tools, irrigation_type FROM users WHERE username = ?",
+            (username,),
+        ).fetchone()
+    assert row is not None
+    assert row[0] == "Muthu Selvan"
+    assert row[1] == "Kallakurichi"
+    assert row[2] == "Villupuram"
+    assert row[3] == "3.5"
+    assert row[4] == "rice"
+    assert row[5] == "2.5"
+    assert row[6] == "borewell"
+    assert row[7] == "traditional"
+    assert row[8] == "groundnut"
+    assert row[9] == "tractor"
+    assert row[10] == "drip"
+
+
 def test_refresh_token_returns_new_token_and_logout_clears_session_cookie():
     isolated_client = TestClient(app)
     login = isolated_client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
@@ -1095,9 +1143,37 @@ def test_protected_pages_redirect_to_login_without_session_cookie():
     assert response.status_code in {302, 307}
     assert response.headers.get("location", "").startswith("/login")
 
+    admin_response = isolated_client.get("/admin/overview", follow_redirects=False)
+    assert admin_response.status_code in {302, 307}
+    assert admin_response.headers.get("location", "").startswith("/login")
+
+
+def test_profile_page_requires_authentication_and_owner_access():
+    isolated_client = TestClient(app)
+
+    public_response = isolated_client.get("/profile?username=operator1", follow_redirects=False)
+    assert public_response.status_code in {302, 307}
+    assert public_response.headers.get("location", "").startswith("/login")
+
+    login_response = isolated_client.post("/auth/login", json={"username": "operator1", "password": "password123"})
+    assert login_response.status_code == 200
+
+    own_profile = isolated_client.get("/profile?username=operator1", follow_redirects=False)
+    assert own_profile.status_code == 200
+    assert "சுயவிபரம்" in own_profile.text or "Profile" in own_profile.text
+    assert "operator1" in own_profile.text or "ஆபரேட்டர்" in own_profile.text
+
+    other_profile = isolated_client.get("/profile?username=admin1", follow_redirects=False)
+    assert other_profile.status_code in {302, 307}
+    assert other_profile.headers.get("location", "").startswith("/profile")
+
 
 def test_profile_page_renders_user_and_farm_summary():
-    response = client.get("/profile?username=operator1")
+    isolated_client = TestClient(app)
+    login_response = isolated_client.post("/auth/login", json={"username": "operator1", "password": "password123"})
+    assert login_response.status_code == 200
+
+    response = isolated_client.get("/profile?username=operator1")
     assert response.status_code == 200
     assert "சுயவிபரம்" in response.text or "Profile" in response.text
     assert "operator1" in response.text or "ஆபரேட்டர்" in response.text

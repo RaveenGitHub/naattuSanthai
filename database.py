@@ -38,6 +38,24 @@ def _ensure_user_verification_columns() -> None:
             conn.execute("ALTER TABLE users ADD COLUMN full_name TEXT DEFAULT ''")
         if "village" not in columns:
             conn.execute("ALTER TABLE users ADD COLUMN village TEXT DEFAULT ''")
+        if "region" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN region TEXT DEFAULT ''")
+        if "area" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN area TEXT DEFAULT ''")
+        if "primary_crop" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN primary_crop TEXT DEFAULT ''")
+        if "land_size" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN land_size TEXT DEFAULT ''")
+        if "water_source" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN water_source TEXT DEFAULT ''")
+        if "farming_method" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN farming_method TEXT DEFAULT ''")
+        if "secondary_crops" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN secondary_crops TEXT DEFAULT ''")
+        if "tools" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN tools TEXT DEFAULT ''")
+        if "irrigation_type" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN irrigation_type TEXT DEFAULT ''")
         if "status" not in columns:
             conn.execute("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'")
         if "otp_code" not in columns:
@@ -158,6 +176,16 @@ def init_db() -> None:
                 email TEXT,
                 phone TEXT,
                 full_name TEXT DEFAULT '',
+                village TEXT DEFAULT '',
+                region TEXT DEFAULT '',
+                area TEXT DEFAULT '',
+                primary_crop TEXT DEFAULT '',
+                land_size TEXT DEFAULT '',
+                water_source TEXT DEFAULT '',
+                farming_method TEXT DEFAULT '',
+                secondary_crops TEXT DEFAULT '',
+                tools TEXT DEFAULT '',
+                irrigation_type TEXT DEFAULT '',
                 status TEXT NOT NULL DEFAULT 'active',
                 otp_code TEXT,
                 otp_expires_at TEXT,

@@ -64,6 +64,15 @@ def create_user(
     phone: Optional[str] = None,
     full_name: str = "",
     village: str = "",
+    region: str = "",
+    area: str = "",
+    primary_crop: str = "",
+    land_size: str = "",
+    water_source: str = "",
+    farming_method: str = "",
+    secondary_crops: str = "",
+    tools: str = "",
+    irrigation_type: str = "",
     status: str = "active",
 ) -> Dict[str, str]:
     if not username or not password:
@@ -87,9 +96,10 @@ def create_user(
 
         conn.execute(
             """
-            INSERT INTO users (id, username, password, role, email, phone, full_name, village, status, otp_code, otp_expires_at,
+            INSERT INTO users (id, username, password, role, email, phone, full_name, village, region, area, primary_crop,
+            land_size, water_source, farming_method, secondary_crops, tools, irrigation_type, status, otp_code, otp_expires_at,
             failed_login_attempts, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
             """,
             (
                 f"USR-{uuid4().hex}",
@@ -100,6 +110,15 @@ def create_user(
                 phone,
                 full_name,
                 village,
+                region,
+                area,
+                primary_crop,
+                land_size,
+                water_source,
+                farming_method,
+                secondary_crops,
+                tools,
+                irrigation_type,
                 status,
                 otp_code,
                 otp_expires_at,
@@ -127,7 +146,22 @@ def get_profile(username: str) -> Dict[str, str]:
     user = _get_user(username)
     if user is None:
         raise ValueError("User not found")
-    return {"username": user["username"], "role": user["role"], "status": user.get("status", "active")}
+    return {
+        "username": user["username"],
+        "role": user["role"],
+        "status": user.get("status", "active"),
+        "full_name": user.get("full_name", ""),
+        "village": user.get("village", ""),
+        "region": user.get("region", ""),
+        "area": user.get("area", ""),
+        "primary_crop": user.get("primary_crop", ""),
+        "land_size": user.get("land_size", ""),
+        "water_source": user.get("water_source", ""),
+        "farming_method": user.get("farming_method", ""),
+        "secondary_crops": user.get("secondary_crops", ""),
+        "tools": user.get("tools", ""),
+        "irrigation_type": user.get("irrigation_type", ""),
+    }
 
 
 def reset_password(username: str, current_password: str, new_password: str) -> Dict[str, str]:
@@ -170,7 +204,9 @@ def _get_user(username: str) -> Optional[Dict[str, str]]:
     with get_connection() as conn:
         row = conn.execute(
             """
-            SELECT username, password, role, status, otp_code, otp_expires_at, failed_login_attempts, email, phone
+            SELECT username, password, role, status, otp_code, otp_expires_at, failed_login_attempts,
+                   email, phone, full_name, village, region, area, primary_crop, land_size,
+                   water_source, farming_method, secondary_crops, tools, irrigation_type
             FROM users WHERE username = ?
             """,
             (username,),
@@ -195,6 +231,17 @@ def _get_user(username: str) -> Optional[Dict[str, str]]:
         "failed_login_attempts": row["failed_login_attempts"] or 0,
         "email": row["email"],
         "phone": row["phone"],
+        "full_name": row["full_name"],
+        "village": row["village"],
+        "region": row["region"],
+        "area": row["area"],
+        "primary_crop": row["primary_crop"],
+        "land_size": row["land_size"],
+        "water_source": row["water_source"],
+        "farming_method": row["farming_method"],
+        "secondary_crops": row["secondary_crops"],
+        "tools": row["tools"],
+        "irrigation_type": row["irrigation_type"],
     }
 
 
