@@ -2666,6 +2666,7 @@ def disease_history_page():
 
 @app.get("/soil-health", response_class=HTMLResponse)
 def soil_health_page(
+    request: Request,
     crop: str = "groundnut",
     ph: float = 6.5,
     nitrogen: float = 25,
@@ -2674,15 +2675,17 @@ def soil_health_page(
 ):
     from digital_farming.services.soil_health import assess_soil_health
 
+    profile_defaults = resolve_profile_defaults(request, default_crop=crop)
+    effective_crop = crop if crop and crop.lower() not in {"", "groundnut"} else profile_defaults["crop"]
     assessment = assess_soil_health(
-        crop=crop,
+        crop=effective_crop,
         ph=ph,
         nitrogen=nitrogen,
         phosphorus=phosphorus,
         potassium=potassium,
     )
 
-    crop_label = escape(str(crop or "பயிர்").strip() or "பயிர்")
+    crop_label = escape(str(effective_crop or "பயிர்").strip() or "பயிர்")
     soil_status = escape(str(assessment.get("soil_status", "")))
     ph_status = escape(str(assessment.get("ph_status", "")))
     nitrogen_status = escape(str(assessment.get("nitrogen_status", "")))
