@@ -1181,6 +1181,31 @@ def test_profile_page_renders_user_and_farm_summary():
     assert "நிலம்" in response.text or "Farm" in response.text
 
 
+def test_authenticated_farmer_profile_sets_weather_and_market_defaults():
+    isolated_client = TestClient(app)
+    username = f"filter_user_{__import__('uuid').uuid4().hex[:8]}"
+    create_user(
+        username,
+        "StrongPass123",
+        "farmer",
+        village="Mettur",
+        region="Salem",
+        primary_crop="cotton",
+    )
+
+    login_response = isolated_client.post("/auth/login", json={"username": username, "password": "StrongPass123"})
+    assert login_response.status_code == 200
+
+    weather_response = isolated_client.get("/weather-market", follow_redirects=False)
+    assert weather_response.status_code == 200
+    assert "Salem" in weather_response.text
+    assert "Mettur" in weather_response.text
+
+    market_response = isolated_client.get("/market-intelligence", follow_redirects=False)
+    assert market_response.status_code == 200
+    assert "Cotton" in market_response.text or "cotton" in market_response.text
+
+
 def test_sustainability_and_traceability_pages_render_farmer_summary():
     sustainability_response = client.get("/sustainability?farm_size_ha=5&soil_carbon_tons=2.4&water_use_liters=4200&energy_use_kwh=320")
     assert sustainability_response.status_code == 200

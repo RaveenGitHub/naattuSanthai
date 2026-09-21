@@ -853,6 +853,36 @@ def get_session_payload(request: Request) -> dict:
     return {}
 
 
+def resolve_profile_defaults(request: Request, *, default_region: str = "Kallakurichi", default_village: str = "", default_crop: str = "rice") -> dict:
+    profile_defaults = {
+        "region": default_region or "Kallakurichi",
+        "village": default_village,
+        "crop": default_crop or "rice",
+    }
+    session = get_session_payload(request)
+    username = str(session.get("sub", "") or "").strip()
+    if not username:
+        return profile_defaults
+
+    try:
+        profile = get_profile(username)
+    except ValueError:
+        return profile_defaults
+
+    region = str(profile.get("region") or "").strip()
+    village = str(profile.get("village") or "").strip()
+    crop = str(profile.get("primary_crop") or "").strip()
+
+    if region:
+        profile_defaults["region"] = region
+    if village:
+        profile_defaults["village"] = village
+    if crop:
+        profile_defaults["crop"] = crop
+
+    return profile_defaults
+
+
 def get_client_ip(request: Request) -> str:
     forwarded_for = request.headers.get("x-forwarded-for")
     if forwarded_for:
@@ -3903,12 +3933,16 @@ def weather_quality_page():
 
 
 @app.get("/market-intelligence", response_class=HTMLResponse)
-def market_intelligence_page(crop: str = "rice", market: str = "Kallakurichi"):
+def market_intelligence_page(request: Request, crop: str = "rice", market: str = "Kallakurichi"):
     from digital_farming.services.market_intelligence import get_market_intelligence
 
-    intelligence = get_market_intelligence(crop=crop, market=market)
-    crop_name = escape(str(crop or "நெல்").strip() or "நெல்")
-    market_name = escape(str(market or "கல்லக்குறிச்சி"))
+    profile_defaults = resolve_profile_defaults(request, default_region=market, default_village=market, default_crop=crop)
+    effective_crop = crop if crop and crop.lower() not in {"", "rice"} else profile_defaults["crop"]
+    effective_market = market if market and market.lower() not in {"", "kallakurichi"} else (profile_defaults["village"] or profile_defaults["region"] or market)
+
+    intelligence = get_market_intelligence(crop=effective_crop, market=effective_market)
+    crop_name = escape(str(effective_crop or "நெல்").strip() or "நெல்")
+    market_name = escape(str(effective_market or "கல்லக்குறிச்சி"))
     trend = escape(str(intelligence.get("market_trend", "Moderate")))
     base_price = float(intelligence.get("base_price_per_kg", 0.0))
     recommendation = escape(str(intelligence.get("recommended_action", "Monitor local buyer demand and negotiate before the next supply surge.")))
@@ -3990,8 +4024,12 @@ def market_intelligence_page(crop: str = "rice", market: str = "Kallakurichi"):
 
 
 @app.get("/weather-market", response_class=HTMLResponse)
-def weather_market_page(region: str = "Kallakurichi"):
+def weather_market_page(request: Request, region: str = "Kallakurichi"):
+    profile_defaults = resolve_profile_defaults(request, default_region=region, default_village="", default_crop="rice")
     region_name = (region or "Kallakurichi").strip() or "Kallakurichi"
+    if region_name == "Kallakurichi":
+        region_name = profile_defaults["region"] or region_name
+
     daily_forecast = list_weather_forecast("daily", region_name)
     if not daily_forecast:
         daily_forecast = list_weather_forecast("daily", "Kallakurichi")
@@ -4003,7 +4041,10 @@ def weather_market_page(region: str = "Kallakurichi"):
         "rainfall_mm": 18.0,
         "wind_kmh": 18.0,
     }
-    market_rows = list_market_prices()
+    filtered_crop = profile_defaults.get("crop") or "rice"
+    market_rows = list_market_prices(filtered_crop)
+    if not market_rows:
+        market_rows = list_market_prices()
     market_rows_html = "".join(
         f"<tr><td>{escape(str(getattr(item, 'crop_name', 'மாற்று பயிர்')))}<br><small>{escape(str(getattr(item, 'market_name', 'மண்டி')).replace('Mandi', 'மண்டி').replace('Market', 'மார்க்கெட்'))}</small></td><td>₹{float(getattr(item, 'price_per_kg', 0.0)):.2f} / கிலோ</td></tr>"
         for item in market_rows[:4]
@@ -4115,6 +4156,7 @@ def weather_market_page(region: str = "Kallakurichi"):
         <h3>வணிக பரிந்துரை</h3>
         <ul>
           <li>இன்று {escape(region_name)} பகுதியில் வானிலை கண்காணிப்பு முக்கியம்</li>
+          <li>விவசாயி பகுதி: {escape(str(profile_defaults.get('village') or region_name))}</li>
           <li>சந்தை விலைகள் மற்றும் மழை முன்னறிவிப்பு ஆகியவற்றை ஒரே பார்வையில் பார்க்கவும்</li>
           <li>பயிர் விற்பனை மற்றும் பாசன அட்டவணையை ஒருங்கிணைக்கவும்</li>
         </ul>
