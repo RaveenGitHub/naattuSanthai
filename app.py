@@ -1312,8 +1312,20 @@ def app_shell():
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
-def dashboard():
-    return DASHBOARD_PAGE
+def dashboard(request: Request, crop: str = "rice", region: str = "Kallakurichi"):
+  profile_defaults = resolve_profile_defaults(
+    request,
+    default_region=region,
+    default_crop=crop,
+  )
+  effective_crop = crop if crop and crop.lower() not in {"", "rice"} else profile_defaults["crop"]
+  effective_region = region if region and region.lower() not in {"", "kallakurichi"} else profile_defaults["region"]
+  crop_label = escape((str(effective_crop).strip() or "rice").title())
+  region_label = escape(str(effective_region).strip() or "Kallakurichi")
+  dashboard_page = DASHBOARD_PAGE.replace("Farmer Field Dashboard", f"{crop_label} Field Dashboard")
+  dashboard_page = dashboard_page.replace("வடக்கு பகுதி", region_label)
+  dashboard_page = dashboard_page.replace("நெல் விளைநிலங்களின்", f"{crop_label} விளைநிலங்களின்")
+  return dashboard_page
 
 
 @app.get("/services", response_class=HTMLResponse)
