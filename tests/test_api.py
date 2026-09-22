@@ -27,6 +27,31 @@ def test_health_endpoint():
     assert body["database"]["status"] == "healthy"
 
 
+def test_admin_route_denial_is_audited():
+    farmer_login = client.post("/auth/login", json={"username": "farmer1", "password": "farmer123"})
+    assert farmer_login.status_code == 200
+
+    response = client.get(
+        "/api/users",
+        headers={"Authorization": f"Bearer {farmer_login.json()['token']}"},
+    )
+    assert response.status_code == 403
+
+    with __import__("sqlite3").connect("digital_farming.db") as conn:
+        row = conn.execute(
+            "SELECT username, action, resource, outcome, details FROM audit_logs WHERE action = ? AND resource = ? ORDER BY created_at DESC LIMIT 1",
+            ("route_denied", "/api/users"),
+        ).fetchone()
+    assert row is not None
+    assert row[0] == "farmer1"
+    assert row[1:] == (
+        "route_denied",
+        "/api/users",
+        "failure",
+        "Access denied: Admin access required",
+    )
+
+
 def test_health_and_readiness_endpoints_expose_runtime_and_deployment_metadata():
     health = client.get("/health")
     assert health.status_code == 200

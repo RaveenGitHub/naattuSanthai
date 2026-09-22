@@ -1213,13 +1213,20 @@ def diagnose_history(authorization: Optional[str] = Header(default=None)):
 
 
 @app.get("/api/users")
-def get_users(authorization: Optional[str] = Header(default=None)):
+def get_users(request: Request, authorization: Optional[str] = Header(default=None)):
     token = get_bearer_token(authorization)
     try:
         payload = verify_token(token)
     except Exception as exc:  # pragma: no cover - security exception path
         raise HTTPException(status_code=401, detail="Invalid token") from exc
     if payload.get("role") != "admin":
+        record_audit_log(
+            payload.get("sub", "unknown"),
+            "route_denied",
+            request.url.path,
+            "failure",
+            "Access denied: Admin access required",
+        )
         raise HTTPException(status_code=403, detail="Admin access required")
     return {"success": True, "data": list_users(), "error": None}
 
