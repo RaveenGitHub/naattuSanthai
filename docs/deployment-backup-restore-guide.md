@@ -82,3 +82,15 @@ If the live database is corrupted or a deployment introduces incompatible data:
 7. Escalate unresolved data loss or authentication issues to the release owner.
 
 Review `docs/implementation-guide.md` and `docs/combined-roadmap.md` for release context, and use `/admin/release-runbook` for deployment rollback checks.
+
+## Activation Email Configuration
+
+Registration activation emails require SMTP settings in the deployment environment:
+
+- `SMTP_HOST`: SMTP server hostname.
+- `SMTP_PORT`: SMTP server port, normally `587`.
+- `SMTP_USERNAME` and `SMTP_PASSWORD`: SMTP credentials when required.
+- `SMTP_FROM_EMAIL`: verified sender address.
+- `SMTP_USE_TLS`: `true` for STARTTLS, which is the default.
+
+When these values are absent, the account is still created as pending verification, but no email can be delivered. Configure and test SMTP before enabling public registration.

@@ -34,6 +34,7 @@ from security import (
     record_audit_log,
     refresh_access_token,
     reset_password,
+    send_activation_email,
     update_profile,
     unlock_user,
     verify_otp,
@@ -1067,6 +1068,7 @@ async def api_v1_register(request: Request):
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    activation_email_sent = send_activation_email(payload.email, result["username"], result.get("otp_code"))
     if "text/html" in request.headers.get("accept", "").lower():
       return RedirectResponse(url="/login?registered=1", status_code=303)
     return {
@@ -1079,6 +1081,7 @@ async def api_v1_register(request: Request):
             "phone": payload.phone,
             "village": payload.village,
             "otp_code": result.get("otp_code"),
+            "activation_email_sent": activation_email_sent,
         },
         "message": "Registration submitted successfully. Please complete activation.",
     }

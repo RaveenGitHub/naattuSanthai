@@ -4,6 +4,8 @@ import base64
 import hashlib
 import hmac
 import os
+import smtplib
+from email.message import EmailMessage
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
@@ -129,6 +131,35 @@ def create_user(
 
     record_audit_log(username, "user_created", "users", "success", f"Created user with role {role} and status {status}")
     return {"username": username, "role": role, "status": status, "otp_code": otp_code}
+
+
+def send_activation_email(email: str, username: str, otp_code: Optional[str]) -> bool:
+    if not email or not otp_code or not settings.smtp_host or not settings.smtp_from_email:
+        return False
+
+    message = EmailMessage()
+    message["Subject"] = "Digital Farming account activation"
+    message["From"] = settings.smtp_from_email
+    message["To"] = email
+    message.set_content(
+        f"Hello {username},\n\n"
+        f"Your Digital Farming activation code is {otp_code}.\n"
+        "This code expires in 10 minutes.\n\n"
+        "If you did not create this account, ignore this email."
+    )
+
+    try:
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as smtp:
+            if settings.smtp_use_tls:
+                smtp.starttls()
+            if settings.smtp_username:
+                smtp.login(settings.smtp_username, settings.smtp_password)
+            smtp.send_message(message)
+        record_audit_log(username, "activation_email_sent", "auth", "success", email)
+        return True
+    except (OSError, smtplib.SMTPException) as exc:
+        record_audit_log(username, "activation_email_sent", "auth", "failure", str(exc)[:240])
+        return False
 
 
 def list_users() -> List[dict]:

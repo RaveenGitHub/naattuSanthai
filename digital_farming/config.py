@@ -33,6 +33,12 @@ class Settings:
     secret_key: str = os.getenv("SECRET_KEY", "digital-farming-support-center-secret-key")
     jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
     jwt_expiry_hours: int = _get_int("JWT_EXPIRY_HOURS", 12)
+    smtp_host: str = os.getenv("SMTP_HOST", "")
+    smtp_port: int = _get_int("SMTP_PORT", 587)
+    smtp_username: str = os.getenv("SMTP_USERNAME", "")
+    smtp_password: str = os.getenv("SMTP_PASSWORD", "")
+    smtp_from_email: str = os.getenv("SMTP_FROM_EMAIL", "")
+    smtp_use_tls: bool = _get_bool("SMTP_USE_TLS", True)
 
 
 settings = Settings()
