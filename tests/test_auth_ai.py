@@ -294,6 +294,22 @@ def test_disease_detection_page_shows_live_recommendation_from_query_params():
     assert "Apply" in response.text or "சிகிச்சை" in response.text
 
 
+def test_disease_detection_page_accepts_image_upload():
+    response = client.get("/disease-detection")
+    assert response.status_code == 200
+    assert 'type="file"' in response.text
+    assert 'enctype="multipart/form-data"' in response.text
+
+    upload = client.post(
+        "/disease-detection",
+        data={"crop_type": "Rice", "notes": "Yellow leaves and spots"},
+        files={"file": ("rice-leaf.jpg", b"fake-image-content", "image/jpeg")},
+    )
+    assert upload.status_code == 200
+    assert "Leaf blast" in upload.text
+    assert "Apply recommended fungicide spray" in upload.text
+
+
 def test_disease_upload_route_accepts_image_file_for_ai_diagnosis():
     username = f"uploadoperator_{uuid.uuid4().hex[:8]}"
     create_user(username, "uploadpass", "operator")

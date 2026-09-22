@@ -2647,7 +2647,7 @@ def disease_detection_page(
     <section class="hero">
       <div class="panel">
         <h2>படத்தை பதிவேற்று</h2>
-        <form method="get" action="/disease-detection">
+        <form method="post" action="/disease-detection" enctype="multipart/form-data">
           <label>
             பயிர் வகை
             <select name="crop_type">
@@ -2658,8 +2658,8 @@ def disease_detection_page(
             </select>
           </label>
           <label>
-            பட URL
-            <input type="text" name="image_url" value="{image_text}" />
+            படத்தை பதிவேற்று / Upload image
+            <input type="file" name="file" accept="image/*" required />
           </label>
           <label>
             அவதானிப்பு குறிப்புகள்
@@ -2699,6 +2699,19 @@ def disease_detection_page(
 </body>
 </html>
 """
+
+
+@app.post("/disease-detection", response_class=HTMLResponse)
+def disease_detection_upload(
+  request: Request,
+  crop_type: str = Form("Rice"),
+  notes: str = Form(""),
+  file: UploadFile = File(...),
+):
+  image_url = file.filename or "uploaded-crop-image"
+  if file.content_type:
+    image_url = f"{image_url}::{file.content_type}"
+  return disease_detection_page(request, crop_type, image_url, notes)
 
 
 @app.get("/disease-history", response_class=HTMLResponse)
