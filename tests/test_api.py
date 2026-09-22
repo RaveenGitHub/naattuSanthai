@@ -88,6 +88,18 @@ def test_admin_quality_gate_displays_fetch_health_metrics():
     assert "Retry policy:" in response.text
 
 
+def test_admin_release_checklist_covers_operational_signoff():
+    admin_login = client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    assert admin_login.status_code == 200
+    response = client.get(
+        "/admin/release-checklist",
+        headers={"Authorization": f"Bearer {admin_login.json()['token']}"},
+    )
+    assert response.status_code == 200
+    for section in ("Secrets validation", "Configuration validation", "Deployment risk", "Escalation plan"):
+        assert section in response.text
+
+
 def test_admin_and_farmer_role_journeys_reach_permitted_pages():
     admin_client = TestClient(app)
     admin_login = admin_client.post("/auth/login", json={"username": "admin1", "password": "admin123"})

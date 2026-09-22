@@ -4719,6 +4719,60 @@ def admin_release_runbook_page(request: Request, authorization: Optional[str] = 
 """
 
 
+@app.get("/admin/release-checklist", response_class=HTMLResponse)
+def admin_release_checklist_page(request: Request, authorization: Optional[str] = Header(default=None)):
+    require_admin_access(request, authorization)
+    return """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Release Checklist</title>
+  <style>
+    :root { --bg: #f4f8f2; --panel: #ffffff; --primary: #2d7d46; --text: #17301d; --muted: #567163; --line: #dfe9df; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif; background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%); color: var(--text); }
+    .container { max-width: 1000px; margin: 0 auto; padding: 28px 18px 48px; }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px; margin-top: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    .lede, li { color: var(--muted); line-height: 1.8; }
+    ul { padding-left: 20px; }
+    @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Release Checklist / வெளியீட்டு பட்டியல்</h1>
+    <p class="lede">Complete each operational review before promoting a build to production.</p>
+    <section class="grid">
+      <article class="panel"><h2>Secrets validation</h2><ul>
+        <li>Confirm JWT secret and signing algorithm come from the deployment secret store.</li>
+        <li>Check API keys and database credentials are present without exposing values in logs.</li>
+        <li>Verify default or development credentials are disabled for production.</li>
+      </ul></article>
+      <article class="panel"><h2>Configuration validation</h2><ul>
+        <li>Review environment, database path, CORS, rate limits, and cookie security settings.</li>
+        <li>Confirm backup directory, retention policy, and source allowlists are writable and correct.</li>
+        <li>Run health and readiness checks using the release configuration.</li>
+      </ul></article>
+      <article class="panel"><h2>Deployment risk</h2><ul>
+        <li>Review schema changes and confirm a tested rollback or restore point exists.</li>
+        <li>Run the regression suite and verify backward-compatible API and page behavior.</li>
+        <li>Record known risks, mitigations, feature flags, and the release owner.</li>
+      </ul></article>
+      <article class="panel"><h2>Escalation plan</h2><ul>
+        <li>Assign an incident owner and backup contact before deployment.</li>
+        <li>Route authentication, data quality, and field-service incidents to the responsible team.</li>
+        <li>Record decision authority, rollback triggers, timestamps, and stakeholder updates.</li>
+      </ul></article>
+    </section>
+  </div>
+</body>
+</html>
+"""
+
+
 @app.get("/admin/operations-checklist", response_class=HTMLResponse)
 def admin_operations_checklist_page(request: Request, authorization: Optional[str] = Header(default=None)):
     require_admin_access(request, authorization)
