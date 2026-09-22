@@ -4800,6 +4800,11 @@ def admin_quality_gate_page(authorization: Optional[str] = Header(default=None))
     ai_validation = quality_gate["schemes"].get("ai_validation", {})
     ai_status = ai_validation.get("status", "warning")
     readability_state = ai_validation.get("readability_check", "warning")
+    fetch_monitoring = quality_gate["schemes"].get("fetch_monitoring", {})
+    fetch_status = fetch_monitoring.get("status", "unknown")
+    channel_health = fetch_monitoring.get("channel_health", "unknown")
+    fetch_success = fetch_monitoring.get("fetch_success", "unknown")
+    retry_policy = fetch_monitoring.get("retry_policy", {})
 
     weather_regions = " | ".join(f"{key}:{value}" for key, value in (quality_gate["weather"].get("regions") or {}).items()) or "இல்லை"
     scheme_categories = " | ".join(f"{key}:{value}" for key, value in (quality_gate["schemes"].get("categories") or {}).items()) or "இல்லை"
@@ -4904,6 +4909,16 @@ def admin_quality_gate_page(authorization: Optional[str] = Header(default=None))
         <li>Summary quality score: {ai_validation.get('summary_quality_score', 0)}</li>
         <li>Manual review required: {escape(str(ai_validation.get('manual_review_required', False)))}</li>
         <li>Source compliance: weather={escape(str(weather_source_status))}, schemes={escape(str(scheme_source_status))}</li>
+      </ul>
+    </section>
+
+    <section class="panel" style="margin-top: 20px;">
+      <h2>Data pipeline health / தரவு பெறுதல் நிலை</h2>
+      <ul>
+        <li>Fetch status: {escape(str(fetch_status))}</li>
+        <li>Channel health: {escape(str(channel_health))}</li>
+        <li>Fetch success: {escape(str(fetch_success))}</li>
+        <li>Retry policy: max {retry_policy.get('max_retries', 3)} attempts, {retry_policy.get('timeout_seconds', 15)}s timeout</li>
       </ul>
     </section>
   </div>

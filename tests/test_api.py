@@ -75,6 +75,19 @@ def test_admin_html_pages_require_admin_role():
             assert response.headers.get("location", "").startswith(("/login", "/home", "/dashboard"))
 
 
+def test_admin_quality_gate_displays_fetch_health_metrics():
+    admin_login = client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    assert admin_login.status_code == 200
+    response = client.get(
+        "/admin/quality-gate",
+        headers={"Authorization": f"Bearer {admin_login.json()['token']}"},
+    )
+    assert response.status_code == 200
+    assert "Data pipeline health" in response.text
+    assert "Fetch status:" in response.text
+    assert "Retry policy:" in response.text
+
+
 def test_health_and_readiness_endpoints_expose_runtime_and_deployment_metadata():
     health = client.get("/health")
     assert health.status_code == 200
