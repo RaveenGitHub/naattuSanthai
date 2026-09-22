@@ -1019,6 +1019,27 @@ def test_registration_persists_farmer_profile_fields_for_onboarding():
     assert row[10] == "drip"
 
 
+def test_profile_payload_rejects_invalid_measurements_and_blank_context():
+    isolated_client = TestClient(app)
+    login = isolated_client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    assert login.status_code == 200
+    headers = {"Authorization": f"Bearer {login.json()['token']}"}
+
+    invalid_measurement = isolated_client.patch(
+        "/api/profile",
+        headers=headers,
+        json={"area": "not-a-number"},
+    )
+    blank_context = isolated_client.patch(
+        "/api/profile",
+        headers=headers,
+        json={"village": "   "},
+    )
+
+    assert invalid_measurement.status_code == 422
+    assert blank_context.status_code == 422
+
+
 def test_refresh_token_returns_new_token_and_logout_clears_session_cookie():
     isolated_client = TestClient(app)
     login = isolated_client.post("/auth/login", json={"username": "admin1", "password": "admin123"})

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import math
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class LoginRequest(BaseModel):
@@ -27,7 +28,7 @@ class PasswordResetRequest(BaseModel):
     new_password: str
 
 
-class ProfileUpdateRequest(BaseModel):
+class ProfileFieldsModel(BaseModel):
     full_name: Optional[str] = None
     village: Optional[str] = None
     region: Optional[str] = None
@@ -40,8 +41,49 @@ class ProfileUpdateRequest(BaseModel):
     tools: Optional[str] = None
     irrigation_type: Optional[str] = None
 
+    @field_validator(
+        "full_name",
+        "village",
+        "region",
+        "primary_crop",
+        "water_source",
+        "farming_method",
+        "secondary_crops",
+        "tools",
+        "irrigation_type",
+        mode="before",
+    )
+    @classmethod
+    def validate_profile_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = str(value).strip()
+        if not cleaned:
+            raise ValueError("Profile text fields cannot be empty")
+        if len(cleaned) > 120:
+            raise ValueError("Profile text fields must be 120 characters or fewer")
+        return cleaned
 
-class RegisterRequest(BaseModel):
+    @field_validator("area", "land_size", mode="before")
+    @classmethod
+    def validate_positive_measurement(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = str(value).strip()
+        try:
+            measurement = float(cleaned)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Area and land size must be positive numbers") from exc
+        if not math.isfinite(measurement) or measurement <= 0:
+            raise ValueError("Area and land size must be positive numbers")
+        return cleaned
+
+
+class ProfileUpdateRequest(ProfileFieldsModel):
+    pass
+
+
+class RegisterRequest(ProfileFieldsModel):
     username: str
     password: str
     role: str = "farmer"
