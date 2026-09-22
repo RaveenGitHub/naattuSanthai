@@ -1122,7 +1122,8 @@ def api_v1_verify_otp(request: Request, payload: dict):
 
 
 @app.post("/api/v1/auth/refresh")
-def api_v1_refresh(authorization: Optional[str] = Header(default=None)):
+def api_v1_refresh(request: Request, authorization: Optional[str] = Header(default=None)):
+    enforce_auth_rate_limit(request, "token_refresh")
     token = get_bearer_token(authorization)
     try:
         result = refresh_access_token(token)
@@ -1136,8 +1137,8 @@ def api_v1_refresh(authorization: Optional[str] = Header(default=None)):
 
 
 @app.post("/auth/refresh")
-def auth_refresh(authorization: Optional[str] = Header(default=None)):
-    return api_v1_refresh(authorization)
+def auth_refresh(request: Request, authorization: Optional[str] = Header(default=None)):
+    return api_v1_refresh(request, authorization)
 
 
 @app.post("/api/v1/auth/logout")

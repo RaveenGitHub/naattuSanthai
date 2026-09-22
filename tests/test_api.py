@@ -1046,6 +1046,27 @@ def test_refresh_token_returns_new_token_and_logout_clears_session_cookie():
     assert logout.cookies.get("digital_farming_session") in {"", None}
 
 
+def test_refresh_token_is_rate_limited_per_ip():
+    isolated_client = TestClient(app)
+    login = isolated_client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    assert login.status_code == 200
+    token = login.json()["token"]
+    headers = {"X-Forwarded-For": "198.51.100.28"}
+
+    responses = []
+    for _ in range(6):
+        response = isolated_client.post(
+            "/auth/refresh",
+            headers={**headers, "Authorization": f"Bearer {token}"},
+        )
+        responses.append(response)
+        if response.status_code == 200:
+            token = response.json()["data"]["token"]
+
+    assert [response.status_code for response in responses[:5]] == [200] * 5
+    assert responses[5].status_code == 429
+
+
 def test_failed_login_attempts_lock_account_after_threshold():
     username = f"lockout_{__import__('uuid').uuid4().hex[:8]}"
     isolated_client = TestClient(app)
