@@ -3238,7 +3238,7 @@ def government_schemes_page(category: Optional[str] = None, search: Optional[str
     archive_html = render_cards(archived_entries)
     latest_count = len(latest_entries)
     archive_count = len(archived_entries)
-    template = """
+    template = f"""
 <!DOCTYPE html>
 <html lang="ta">
 <head>
@@ -3536,10 +3536,10 @@ def government_schemes_page(category: Optional[str] = None, search: Optional[str
     const activePath = window.location.pathname || '/';
     const normalizePath = (path) => path === '/' ? '/home' : path;
     const navLinks = document.querySelectorAll('.nav-link');
-    navLinks.forEach((link) => {
+    navLinks.forEach((link) => {{
       const page = normalizePath(link.dataset.page || '/home');
       link.classList.toggle('active', page === normalizePath(activePath));
-    });
+    }});
   </script>
 </body>
 </html>

@@ -319,6 +319,9 @@ def test_government_scheme_latest_and_archive_endpoints():
     assert "PM-Kisan" in filtered_page_response.text or "subsidy" in filtered_page_response.text.lower()
     assert 'data-page="/government-schemes"' in filtered_page_response.text
     assert 'class="nav-link active"' in filtered_page_response.text
+    assert "__LATEST_HTML__" not in filtered_page_response.text
+    assert "{latest_count}" not in filtered_page_response.text
+    assert "--bg: #f4f9f1;" in filtered_page_response.text
 
     detailed_page_response = client.get("/scheme-page/SCHEME-NEW-001")
     assert detailed_page_response.status_code == 200
@@ -737,7 +740,12 @@ def test_scheme_review_queue_tracks_flagged_records_and_admin_actions():
     assert status["review_queue"]["flagged_count"] >= 1
     assert "review_queue" in status
 
-    response = client.get("/admin/review-queue")
+    admin_login = client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    assert admin_login.status_code == 200
+    response = client.get(
+        "/admin/review-queue",
+        headers={"Authorization": f"Bearer {admin_login.json()['token']}"},
+    )
     assert response.status_code == 200
     assert "Review Queue" in response.text or "மதிப்பாய்வு வரிசை" in response.text
     assert "Manual Review Source" in response.text or "Manual Review" in response.text
