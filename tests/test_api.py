@@ -300,6 +300,20 @@ def test_database_backup_and_migration_tracking_are_available():
     assert status["backup_policy"]["max_backups"] >= 1
 
 
+def test_backup_restore_documentation_covers_operational_procedures():
+    guide_path = Path("docs/deployment-backup-restore-guide.md")
+    assert guide_path.exists()
+    guide_content = guide_path.read_text(encoding="utf-8")
+    for section in (
+        "## Backup Architecture",
+        "## Retention Policy",
+        "## Restore Procedure",
+        "## Session Data Management",
+        "## Emergency Recovery",
+    ):
+        assert section in guide_content
+
+
 def test_soil_manual_entry_page_renders_farm_input_form():
     response = client.get("/soil-testing")
     assert response.status_code == 200
