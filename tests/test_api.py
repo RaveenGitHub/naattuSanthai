@@ -88,6 +88,35 @@ def test_admin_quality_gate_displays_fetch_health_metrics():
     assert "Retry policy:" in response.text
 
 
+def test_admin_and_farmer_role_journeys_reach_permitted_pages():
+    admin_client = TestClient(app)
+    admin_login = admin_client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    assert admin_login.status_code == 200
+    for page in ("/admin/overview", "/admin/quality-gate", "/admin/audit-logs", "/admin/scheduler"):
+        response = admin_client.get(page, follow_redirects=False)
+        assert response.status_code == 200, f"Admin should access {page}"
+
+    farmer_client = TestClient(app)
+    farmer_login = farmer_client.post("/auth/login", json={"username": "farmer1", "password": "farmer123"})
+    assert farmer_login.status_code == 200
+    for page in ("/dashboard", "/profile", "/advisory", "/weather", "/market-intelligence", "/soil-health", "/disease-detection"):
+        response = farmer_client.get(page, follow_redirects=False)
+        assert response.status_code == 200, f"Farmer should access {page}"
+    assert farmer_client.get("/admin/overview", follow_redirects=False).headers.get("location") == "/dashboard"
+
+
+def test_guest_journey_reaches_public_pages_and_redirects_from_protected_pages():
+    guest_client = TestClient(app)
+    for page in ("/", "/login", "/register", "/advisory", "/weather", "/market-intelligence", "/soil-health", "/disease-detection"):
+        response = guest_client.get(page, follow_redirects=False)
+        assert response.status_code == 200, f"Guest should access public {page}"
+
+    for page in ("/dashboard", "/profile", "/admin/overview"):
+        response = guest_client.get(page, follow_redirects=False)
+        assert response.status_code == 302
+        assert response.headers.get("location", "").startswith("/login")
+
+
 def test_health_and_readiness_endpoints_expose_runtime_and_deployment_metadata():
     health = client.get("/health")
     assert health.status_code == 200
