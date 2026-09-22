@@ -1304,6 +1304,22 @@ def update_user_profile(payload: ProfileUpdateRequest, authorization: Optional[s
     return {"success": True, "data": profile, "error": None}
 
 
+@app.post("/profile/update")
+async def update_profile_page(request: Request):
+    session = get_session_payload(request)
+    username = str(session.get("sub", "") or "")
+    if not username:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    form_data = await request.form()
+    try:
+        payload = ProfileUpdateRequest(**dict(form_data))
+        update_profile(username, payload.model_dump(exclude_unset=True))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return RedirectResponse(url="/profile", status_code=303)
+
+
 @app.post("/api/profile/reset-password")
 def reset_user_password(payload: PasswordResetRequest, authorization: Optional[str] = Header(default=None)):
     token = get_bearer_token(authorization)
@@ -5255,8 +5271,13 @@ def profile_page(request: Request, username: Optional[str] = None):
     .meta {{ display: grid; gap: 12px; margin-top: 14px; }}
     .meta-item {{ border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: #fbfdfb; }}
     .muted {{ color: var(--muted); }}
+    .edit-form {{ display: grid; gap: 14px; margin-top: 16px; }}
+    .edit-grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }}
+    .edit-form label {{ display: grid; gap: 6px; color: var(--muted); font-weight: 600; }}
+    .edit-form input {{ width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; font: inherit; color: var(--text); }}
+    .edit-form button {{ width: fit-content; border: 0; border-radius: 10px; padding: 11px 16px; background: var(--primary); color: white; font: inherit; font-weight: 700; cursor: pointer; }}
     ul {{ margin: 0; padding-left: 18px; color: var(--muted); line-height: 1.9; }}
-    @media (max-width: 760px) {{ .hero, .stats {{ grid-template-columns: 1fr; }} .topbar {{ flex-direction: column; align-items: flex-start; }} }}
+    @media (max-width: 760px) {{ .hero, .stats, .edit-grid {{ grid-template-columns: 1fr; }} .topbar {{ flex-direction: column; align-items: flex-start; }} }}
   </style>
 </head>
 <body>
@@ -5289,6 +5310,26 @@ def profile_page(request: Request, username: Optional[str] = None):
           <li>அரசு திட்டங்கள்: 2 புதிய உதவிகள் பொருந்துகின்றன.</li>
         </ul>
       </div>
+    </section>
+
+    <section class="panel" style="margin-top: 20px;">
+      <h2>சுயவிபரம் திருத்தம் / Edit profile</h2>
+      <form class="edit-form" method="post" action="/profile/update">
+        <div class="edit-grid">
+          <label>பெயர் / Name<input name="full_name" value="{escape(str(profile.get('full_name') or ''))}" /></label>
+          <label>கிராமம் / Village<input name="village" value="{escape(str(profile.get('village') or ''))}" /></label>
+          <label>மாவட்டம் / Region<input name="region" value="{escape(str(profile.get('region') or ''))}" /></label>
+          <label>பரப்பளவு / Area<input name="area" value="{escape(str(profile.get('area') or ''))}" /></label>
+          <label>முக்கிய பயிர் / Primary crop<input name="primary_crop" value="{escape(str(profile.get('primary_crop') or ''))}" /></label>
+          <label>நில அளவு / Land size<input name="land_size" value="{escape(str(profile.get('land_size') or ''))}" /></label>
+          <label>நீர் ஆதாரம் / Water source<input name="water_source" value="{escape(str(profile.get('water_source') or ''))}" /></label>
+          <label>விவசாய முறை / Farming method<input name="farming_method" value="{escape(str(profile.get('farming_method') or ''))}" /></label>
+          <label>இரண்டாம் பயிர்கள் / Secondary crops<input name="secondary_crops" value="{escape(str(profile.get('secondary_crops') or ''))}" /></label>
+          <label>கருவிகள் / Tools<input name="tools" value="{escape(str(profile.get('tools') or ''))}" /></label>
+          <label>பாசன வகை / Irrigation type<input name="irrigation_type" value="{escape(str(profile.get('irrigation_type') or ''))}" /></label>
+        </div>
+        <button type="submit">சுயவிபரத்தை சேமிக்கவும் / Save profile</button>
+      </form>
     </section>
 
     <section class="panel" style="margin-top: 20px;">

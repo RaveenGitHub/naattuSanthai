@@ -1065,6 +1065,36 @@ def test_profile_payload_rejects_invalid_measurements_and_blank_context():
     assert blank_context.status_code == 422
 
 
+def test_profile_edit_form_updates_user_and_refreshes_advisory_context():
+    username = f"profile_edit_{__import__('uuid').uuid4().hex[:8]}"
+    create_user(
+        username,
+        "SecurePass123",
+        "farmer",
+        primary_crop="rice",
+        village="Kallakurichi",
+    )
+    isolated_client = TestClient(app)
+    login = isolated_client.post("/auth/login", json={"username": username, "password": "SecurePass123"})
+    assert login.status_code == 200
+
+    profile_page = isolated_client.get("/profile")
+    assert profile_page.status_code == 200
+    assert 'action="/profile/update"' in profile_page.text
+    assert 'name="primary_crop"' in profile_page.text
+
+    update = isolated_client.post(
+        "/profile/update",
+        data={"primary_crop": "groundnut", "village": "Villupuram"},
+        follow_redirects=False,
+    )
+    assert update.status_code == 303
+
+    advisory = isolated_client.get("/advisory")
+    assert advisory.status_code == 200
+    assert "Groundnut blocks show drying stress" in advisory.text
+
+
 def test_refresh_token_returns_new_token_and_logout_clears_session_cookie():
     isolated_client = TestClient(app)
     login = isolated_client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
