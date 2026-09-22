@@ -235,6 +235,16 @@ def test_advisory_page_uses_crop_specific_guidance():
     assert "Inspect lower leaves" in groundnut.text
 
 
+def test_advisory_page_filters_guidance_by_land_size():
+    small_farm = client.get("/advisory?crop=rice&land_size=0.5")
+    large_farm = client.get("/advisory?crop=rice&land_size=10")
+
+    assert small_farm.status_code == 200
+    assert large_farm.status_code == 200
+    assert "small plots" in small_farm.text.lower()
+    assert "larger holdings" in large_farm.text.lower()
+
+
 def test_disease_detection_page_renders_for_users():
     response = client.get("/disease-detection")
     assert response.status_code == 200

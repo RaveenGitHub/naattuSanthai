@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict
 
 
-def get_field_advisory(crop: str, village: str = "general") -> Dict[str, Any]:
+def get_field_advisory(crop: str, village: str = "general", land_size: str = "") -> Dict[str, Any]:
     crop_name = (crop or "crop").strip().lower()
     village_name = village or "general"
 
@@ -35,9 +35,19 @@ def get_field_advisory(crop: str, village: str = "general") -> Dict[str, Any]:
             "Review market timing before harvest to improve farm-gate pricing.",
         ]
 
+    try:
+        size_value = float((land_size or "").strip())
+    except (TypeError, ValueError):
+        size_value = None
+    if size_value is not None and size_value < 1.0:
+        recommendations.append("Focus on intensive practices and high-value crops suitable for small plots.")
+    elif size_value is not None and size_value > 5.0:
+        recommendations.append("Consider mechanization and crop rotation strategies for larger holdings.")
+
     return {
         "crop": crop_name,
         "village": village_name,
+        "land_size": land_size,
         "soil_moisture_percent": soil_moisture,
         "risk_level": risk,
         "summary": summary,

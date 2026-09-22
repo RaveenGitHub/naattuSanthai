@@ -2532,6 +2532,7 @@ def advisory_page(request: Request, crop: str = "rice", land_size: str = ""):
     advisory = get_field_advisory(
         crop=effective_crop,
         village=profile_defaults["village"] or "general",
+      land_size=effective_land_size,
     )
     crop_label = escape(str(effective_crop).strip() or "பயிர்")
     land_size_label = escape(str(effective_land_size))
