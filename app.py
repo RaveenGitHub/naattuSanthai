@@ -5413,6 +5413,63 @@ def profile_page(request: Request, username: Optional[str] = None):
 """
 
 
+@app.get("/crop-calendar", response_class=HTMLResponse)
+def crop_calendar_page(request: Request, crop: str = "rice", season: str = "Kharif"):
+    from digital_farming.services.crop_calendar import build_crop_calendar
+
+    profile_defaults = resolve_profile_defaults(request, default_crop=crop)
+    effective_crop = crop if crop and crop.lower() not in {"", "rice"} else profile_defaults["crop"]
+    calendar = build_crop_calendar(crop=effective_crop, season=season)
+    crop_label = escape(str(calendar.get("crop", "crop")).title())
+    season_label = escape(str(calendar.get("season", "Kharif")))
+    activity_cards = "".join(
+        "<article class='card'>"
+        f"<h3>{escape(str(item.get('stage', 'Field activity')))}</h3>"
+        f"<p><strong>Window:</strong> {escape(str(item.get('window', 'As needed')))}</p>"
+        f"<p>{escape(str(item.get('focus', 'Monitor the field and keep records.')))}</p>"
+        "</article>"
+        for item in calendar.get("activities", [])
+    )
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Crop calendar</title>
+  <style>
+    :root {{ --bg: #f4f8f2; --panel: #ffffff; --primary: #2d7d46; --text: #17301d; --muted: #567163; --line: #dfe9df; }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif; background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%); color: var(--text); }}
+    .container {{ max-width: 1100px; margin: 0 auto; padding: 28px 18px 48px; }}
+    .topbar {{ display: flex; justify-content: space-between; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }}
+    .nav a {{ color: var(--text); margin-right: 12px; }}
+    h1 {{ margin: 28px 0 10px; }}
+    .lede, p {{ color: var(--muted); line-height: 1.8; }}
+    .stats, .grid {{ display: grid; gap: 16px; margin-top: 20px; }}
+    .stats {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+    .grid {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }}
+    .panel, .card {{ background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }}
+    .stat strong {{ display: block; font-size: 1.6rem; margin-top: 6px; }}
+    @media (max-width: 760px) {{ .stats, .grid {{ grid-template-columns: 1fr; }} }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="topbar"><strong>Digital Farming Support</strong><nav class="nav"><a href="/dashboard">Dashboard</a><a href="/advisory">Advisory</a></nav></div>
+    <h1>{crop_label} crop calendar</h1>
+    <p class="lede">Seasonal field activities, timing windows, and practical focus points for each growth stage.</p>
+    <section class="stats">
+      <div class="panel"><span>Crop / பயிர்</span><strong>{crop_label}</strong></div>
+      <div class="panel"><span>Season / பருவம்</span><strong>{season_label}</strong></div>
+    </section>
+    <section class="grid">{activity_cards}</section>
+  </div>
+</body>
+</html>
+"""
+
+
 @app.get("/health")
 def health_check():
     try:

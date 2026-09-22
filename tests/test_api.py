@@ -1375,3 +1375,16 @@ def test_sustainability_and_traceability_pages_render_farmer_summary():
     assert "கயிறு" in traceability_response.text or "Traceability" in traceability_response.text
     assert "Kumaran" in traceability_response.text or "குமரன்" in traceability_response.text
     assert "வகுப்பு" in traceability_response.text or "Grade" in traceability_response.text
+
+
+def test_crop_calendar_page_renders_profile_crop_stages():
+    rice_response = client.get("/crop-calendar?crop=rice&season=Kharif")
+    groundnut_response = client.get("/crop-calendar?crop=groundnut&season=Rabi")
+
+    assert rice_response.status_code == 200
+    assert "Rice crop calendar" in rice_response.text
+    assert "Transplanting" in rice_response.text
+    assert "Harvest readiness" in rice_response.text
+    assert groundnut_response.status_code == 200
+    assert "Groundnut crop calendar" in groundnut_response.text
+    assert "Pegging" in groundnut_response.text
