@@ -3011,19 +3011,19 @@ def soil_testing_page():
           </div>
           <div class="field">
             <label for="ph">pH</label>
-            <input id="ph" name="ph" type="number" step="0.1" value="6.5" placeholder="6.5" />
+            <input id="ph" name="ph" type="number" step="0.1" min="0" max="14" inputmode="decimal" value="6.5" placeholder="6.5" required />
           </div>
           <div class="field">
             <label for="nitrogen">நைட்ரஜன்</label>
-            <input id="nitrogen" name="nitrogen" type="number" step="1" value="25" placeholder="25" />
+            <input id="nitrogen" name="nitrogen" type="number" step="0.1" min="0" max="300" inputmode="decimal" value="25" placeholder="25" required />
           </div>
           <div class="field">
             <label for="phosphorus">பாஸ்பரஸ்</label>
-            <input id="phosphorus" name="phosphorus" type="number" step="1" value="20" placeholder="20" />
+            <input id="phosphorus" name="phosphorus" type="number" step="0.1" min="0" max="200" inputmode="decimal" value="20" placeholder="20" required />
           </div>
           <div class="field">
             <label for="potassium">பொட்டாசியம்</label>
-            <input id="potassium" name="potassium" type="number" step="1" value="180" placeholder="180" />
+            <input id="potassium" name="potassium" type="number" step="0.1" min="0" max="500" inputmode="decimal" value="180" placeholder="180" required />
           </div>
         </div>
 

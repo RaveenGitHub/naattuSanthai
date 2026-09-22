@@ -282,6 +282,15 @@ def test_soil_manual_entry_page_renders_farm_input_form():
     assert "சேமி" in response.text or "Submit" in response.text
 
 
+def test_soil_manual_entry_form_has_mobile_numeric_constraints():
+    response = client.get("/soil-testing")
+    assert response.status_code == 200
+    assert response.text.count('inputmode="decimal"') == 4
+    assert response.text.count('min="0"') == 4
+    assert 'max="300"' in response.text
+    assert 'max="500"' in response.text
+
+
 def test_soil_health_page_shows_crop_and_irrigation_guidance():
     response = client.get("/soil-health?crop=groundnut&ph=5.6&nitrogen=24&phosphorus=18&potassium=152")
     assert response.status_code == 200
