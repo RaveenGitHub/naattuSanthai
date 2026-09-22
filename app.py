@@ -3814,9 +3814,13 @@ def weather_page(
     taluk_name = (taluk or "").strip() or "Kallakurichi"
     village_name = (village or "").strip() or profile_defaults["village"] or "Periyar Nagar"
     period_name = (period or "daily").strip().lower() or "daily"
-    forecasts = list_weather_forecast(period_name, region_name)
+    requested_forecasts = list_weather_forecast(period_name, region_name)
+    forecast_source_status = "Regional forecast"
+    forecasts = requested_forecasts
     if not forecasts:
         forecasts = list_weather_forecast(period_name, "Kallakurichi")
+        if forecasts:
+            forecast_source_status = "Fallback Kallakurichi forecast"
     if not forecasts:
         forecasts = [{
             "region": region_name,
@@ -3828,8 +3832,10 @@ def weather_page(
             "wind_kmh": 18.0,
             "advisory_ta": "மண்ணின் ஈரப்பதத்தை பரிசோதித்து, குறைந்தபட்ச பாசன அட்டவணையை பின்பற்றவும்.",
         }]
+        forecast_source_status = "Fallback guidance only"
 
     forecast = forecasts[0]
+    forecast_source_status = str(forecast.get("source_name") or forecast_source_status)
     summary = escape(str(forecast.get("summary_ta", "இன்று வானம் மேகமூட்டமாக இருக்கும். மழை சாத்தியம் உள்ளது.")))
     advisory = escape(str(forecast.get("advisory_ta", "மண்ணின் ஈரப்பதத்தை பரிசோதித்து, குறைந்தபட்ச பாசன அட்டவணையை பின்பற்றவும்.")))
     temp = float(forecast.get("temperature_c", 29.0))
@@ -3880,6 +3886,7 @@ def weather_page(
             </ul>
           </div>
         </section>
+
         """
     elif period_name == "monthly":
         period_section = f"""
@@ -3993,6 +4000,11 @@ def weather_page(
     </div>
 
     {period_section}
+
+    <section class="panel" style="margin-top: 20px;">
+      <h2>தரவு நிலை / Forecast source status</h2>
+      <p class="intro">{escape(forecast_source_status)}. Verify local conditions before changing irrigation or field work.</p>
+    </section>
   </div>
 </body>
 </html>

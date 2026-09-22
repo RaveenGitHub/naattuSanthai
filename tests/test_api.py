@@ -327,6 +327,13 @@ def test_weather_page_supports_region_selector_for_district_taluk_and_village():
     assert "Kallakurichi" in response.text or "கல்லக்குறிச்சி" in response.text
 
 
+def test_weather_page_displays_forecast_source_status():
+    response = client.get("/weather?region=Kallakurichi&period=daily")
+    assert response.status_code == 200
+    assert "Forecast source status" in response.text
+    assert "forecast" in response.text.lower()
+
+
 def test_weather_weekly_page_renders_7_day_trend_and_crop_advisory():
     response = client.get("/weather?region=Kallakurichi&period=weekly")
     assert response.status_code == 200
