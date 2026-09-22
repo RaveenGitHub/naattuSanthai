@@ -335,6 +335,10 @@ def test_government_scheme_latest_and_archive_endpoints():
     assert "__LATEST_HTML__" not in filtered_page_response.text
     assert "{latest_count}" not in filtered_page_response.text
     assert "--bg: #f4f9f1;" in filtered_page_response.text
+    assert filtered_page_response.text.lower().count("<h1") == 1
+    assert filtered_page_response.text.count("புதிய அறிவிப்புகள்") >= 2
+    assert "காப்பக அறிவிப்புகள்" in filtered_page_response.text
+    assert "காப்பகப் பதிவுகள்" in filtered_page_response.text
 
     detailed_page_response = client.get("/scheme-page/SCHEME-NEW-001")
     assert detailed_page_response.status_code == 200
