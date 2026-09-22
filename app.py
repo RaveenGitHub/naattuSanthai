@@ -1085,11 +1085,23 @@ async def api_v1_register(request: Request):
 
 
 @app.post("/api/v1/auth/forgot-password")
-def api_v1_forgot_password(request: Request, payload: ForgotPasswordRequest):
+async def api_v1_forgot_password(request: Request):
     enforce_auth_rate_limit(request, "forgot-password")
+    content_type = request.headers.get("content-type", "")
+    if "application/json" in content_type.lower():
+        data = await request.json()
+    else:
+        form_data = await request.form()
+        data = dict(form_data)
+    try:
+        payload = ForgotPasswordRequest(**data)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail="A valid email address is required") from exc
     email = (payload.email or "").strip()
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="Please provide a valid registered email address")
+    if "text/html" in request.headers.get("accept", "").lower():
+        return RedirectResponse(url="/login?recovery=sent", status_code=303)
     return {
         "success": True,
         "message": "If the email is registered, a password reset link has been sent.",

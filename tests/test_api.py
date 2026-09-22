@@ -1470,6 +1470,17 @@ def test_password_recovery_pages_render_public_auth_flow_paths():
     assert "Reset" in reset.text or "மீட்டமை" in reset.text
 
 
+def test_browser_forgot_password_redirects_to_login_after_submission():
+    response = TestClient(app).post(
+        "/api/v1/auth/forgot-password",
+        headers={"Accept": "text/html"},
+        data={"email": "farmer@example.com"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login?recovery=sent"
+
+
 def test_protected_pages_redirect_to_login_without_session_cookie():
     isolated_client = TestClient(app)
     response = isolated_client.get("/dashboard", follow_redirects=False)
