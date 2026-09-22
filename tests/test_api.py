@@ -59,6 +59,63 @@ def test_admin_route_denial_is_audited():
     )
 
 
+def test_admin_user_management_lists_details_and_controls_status():
+    username = f"managed_user_{__import__('uuid').uuid4().hex[:8]}"
+    create_user(
+        username,
+        "SecurePass123",
+        "farmer",
+        email=f"{username}@example.com",
+        full_name="Managed Farmer",
+        village="Kallakurichi",
+        status="active",
+    )
+    admin_client = TestClient(app)
+    admin_login = admin_client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    assert admin_login.status_code == 200
+    headers = {"Authorization": f"Bearer {admin_login.json()['token']}"}
+
+    listing = admin_client.get("/api/admin/users?search=Managed%20Farmer&page_size=25", headers=headers)
+    assert listing.status_code == 200
+    assert listing.json()["data"]["items"][0]["username"] == username
+
+    detail = admin_client.get(f"/api/admin/users/{username}", headers=headers)
+    assert detail.status_code == 200
+    assert detail.json()["data"]["full_name"] == "Managed Farmer"
+    assert "password" not in detail.json()["data"]
+
+    deactivate = admin_client.post(
+        f"/api/admin/users/{username}/status",
+        headers=headers,
+        json={"action": "deactivate", "reason": "Support review"},
+    )
+    assert deactivate.status_code == 200
+    blocked_login = admin_client.post("/auth/login", json={"username": username, "password": "SecurePass123"})
+    assert blocked_login.status_code == 401
+
+    activate = admin_client.post(
+        f"/api/admin/users/{username}/status",
+        headers=headers,
+        json={"action": "reactivate"},
+    )
+    assert activate.status_code == 200
+    restored_login = admin_client.post("/auth/login", json={"username": username, "password": "SecurePass123"})
+    assert restored_login.status_code == 200
+
+
+def test_admin_user_management_page_requires_admin_and_renders_filters():
+    guest = TestClient(app)
+    assert guest.get("/admin/users", follow_redirects=False).status_code == 302
+
+    admin_login = client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    assert admin_login.status_code == 200
+    response = client.get("/admin/users", follow_redirects=False)
+    assert response.status_code == 200
+    assert "Registered users" in response.text
+    assert "Search name, email, phone, username" in response.text
+    assert "Activate" in response.text or "Deactivate" in response.text
+
+
 def test_admin_html_pages_require_admin_role():
     farmer_login = client.post("/auth/login", json={"username": "farmer1", "password": "farmer123"})
     assert farmer_login.status_code == 200

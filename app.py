@@ -15,6 +15,7 @@ from diagnostics import diagnose_crop_issue, list_diagnosis_history
 from routes import router
 from schemas_auth import (
     AuthResetPasswordRequest,
+    AdminUserStatusRequest,
     DiagnoseRequest,
     ForgotPasswordRequest,
     LoginRequest,
@@ -27,12 +28,14 @@ from security import (
     authenticate,
     create_user,
     get_profile,
+    get_admin_user_detail,
     hash_password,
     list_audit_logs,
     list_users,
     record_audit_log,
     refresh_access_token,
     reset_password,
+    set_user_status,
     send_activation_email,
     update_profile,
     unlock_user,
@@ -1192,12 +1195,12 @@ def get_bearer_token(authorization: Optional[str]) -> str:
 
 
 def require_admin_access(request: Request, authorization: Optional[str]) -> dict:
-  token = authorization and get_bearer_token(authorization)
-  if not token:
-    session = get_session_payload(request)
-    if session.get("role") == "admin":
-      return session
-    raise HTTPException(status_code=401, detail="Authentication required")
+    token = authorization and get_bearer_token(authorization)
+    if not token:
+        session = get_session_payload(request)
+        if session.get("role") == "admin":
+            return session
+        raise HTTPException(status_code=401, detail="Authentication required")
     try:
         payload = verify_token(token)
     except Exception as exc:  # pragma: no cover - security exception path
@@ -1271,7 +1274,50 @@ def get_users(request: Request, authorization: Optional[str] = Header(default=No
             "Access denied: Admin access required",
         )
         raise HTTPException(status_code=403, detail="Admin access required")
-    return {"success": True, "data": list_users(), "error": None}
+    return {"success": True, "data": list_users()["items"], "error": None}
+
+
+@app.get("/api/admin/users")
+def admin_users_endpoint(
+    request: Request,
+    search: str = "",
+    role: str = "",
+    status: str = "",
+    page: int = 1,
+    page_size: int = 25,
+    authorization: Optional[str] = Header(default=None),
+):
+    payload_token = require_admin_access(request, authorization)
+    result = list_users(search=search, role=role, status=status, page=page, page_size=page_size)
+    record_audit_log(payload_token.get("sub", "unknown"), "users_listed", "admin/users", "success", f"page={page}")
+    return {"success": True, "data": result, "error": None}
+
+
+@app.get("/api/admin/users/{username}")
+def admin_user_detail_endpoint(request: Request, username: str, authorization: Optional[str] = Header(default=None)):
+    payload_token = require_admin_access(request, authorization)
+    try:
+        detail = get_admin_user_detail(username)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    record_audit_log(payload_token.get("sub", "unknown"), "user_viewed", f"users/{username}", "success", "Admin viewed user profile")
+    return {"success": True, "data": detail, "error": None}
+
+
+@app.post("/api/admin/users/{username}/status")
+def admin_user_status_endpoint(
+    request: Request,
+    username: str,
+    payload: AdminUserStatusRequest,
+    authorization: Optional[str] = Header(default=None),
+):
+    admin_payload = require_admin_access(request, authorization)
+    try:
+        result = set_user_status(admin_payload.get("sub", "unknown"), username, payload.action, payload.reason)
+    except ValueError as exc:
+        record_audit_log(admin_payload.get("sub", "unknown"), f"user_{payload.action}", f"users/{username}", "failure", str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"success": True, "data": result, "error": None}
 
 
 @app.get("/api/audit/logs")
@@ -4580,6 +4626,80 @@ def traceability_page(
   </div>
 </body>
 </html>
+"""
+
+
+@app.get("/admin/users", response_class=HTMLResponse)
+def admin_users_page(
+    request: Request,
+    search: str = "",
+    role: str = "",
+    status: str = "",
+    page: int = 1,
+    authorization: Optional[str] = Header(default=None),
+):
+    require_admin_access(request, authorization)
+    result = list_users(search=search, role=role, status=status, page=page, page_size=25)
+    rows = "".join(
+        f"""
+        <tr>
+          <td>{escape(str(item.get('username', '')))}</td>
+          <td>{escape(str(item.get('full_name') or 'Not provided'))}</td>
+          <td>{escape(str(item.get('email') or 'Not provided'))}</td>
+          <td>{escape(str(item.get('role', '')))}</td>
+          <td><span class="status status-{escape(str(item.get('status', 'active')))}">{escape(str(item.get('status', 'active')))}</span></td>
+          <td>{escape(str(item.get('last_login_at') or 'Never'))}</td>
+          <td><button class="view-button" data-username="{escape(str(item.get('username', '')))}">View</button>
+          <button class="status-button" data-username="{escape(str(item.get('username', '')))}" data-status="{escape(str(item.get('status', 'active')))}">{('Deactivate' if item.get('status') == 'active' else 'Activate')}</button></td>
+        </tr>
+        """
+        for item in result["items"]
+    ) or "<tr><td colspan='7'>No users match the selected filters.</td></tr>"
+    query = f"search={escape(search)}&role={escape(role)}&status={escape(status)}"
+    pagination = ""
+    if result["page"] > 1:
+        pagination += f'<a href="/admin/users?{query}&page={result["page"] - 1}">Previous</a>'
+    if result["page"] < result["total_pages"]:
+        pagination += f'<a href="/admin/users?{query}&page={result["page"] + 1}">Next</a>'
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin User Management</title>
+  <style>
+    :root {{ --bg:#f4f8f2; --panel:#fff; --primary:#2d7d46; --text:#17301d; --muted:#567163; --line:#dfe9df; --danger:#b42318; --warning:#d97706; }}
+    * {{ box-sizing:border-box; }} body {{ margin:0; font-family:'Nirmala UI','Segoe UI',Arial,sans-serif; background:linear-gradient(180deg,#eefaf0,#f7f5ef); color:var(--text); }}
+    .container {{ max-width:1200px; margin:auto; padding:28px 18px 56px; }} .topbar {{ display:flex; justify-content:space-between; gap:14px; align-items:center; padding-bottom:18px; border-bottom:1px solid var(--line); }}
+    nav {{ display:flex; gap:10px; flex-wrap:wrap; }} nav a, button {{ border:1px solid var(--line); border-radius:10px; padding:9px 13px; background:#f4f8f4; color:var(--text); font:inherit; font-weight:700; text-decoration:none; cursor:pointer; }}
+    h1 {{ margin:28px 0 8px; }} .lede {{ color:var(--muted); line-height:1.8; }} .panel {{ background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:20px; margin-top:20px; box-shadow:0 12px 30px rgba(23,48,29,.07); }}
+    .filters {{ display:grid; grid-template-columns:2fr 1fr 1fr auto; gap:10px; }} input, select {{ width:100%; border:1px solid var(--line); border-radius:10px; padding:11px; font:inherit; }} .primary {{ background:var(--primary); color:#fff; border-color:var(--primary); }}
+    .table-wrap {{ overflow-x:auto; }} table {{ width:100%; min-width:900px; border-collapse:collapse; }} th,td {{ text-align:left; padding:12px 10px; border-bottom:1px solid var(--line); vertical-align:middle; }} th {{ color:var(--muted); font-size:.82rem; }}
+    .status {{ display:inline-block; border-radius:999px; padding:5px 9px; font-size:.78rem; font-weight:800; }} .status-active {{ background:#e7f6ea; color:var(--primary); }} .status-inactive,.status-locked {{ background:#fde8e7; color:var(--danger); }} .status-pending_verification {{ background:#fff3da; color:var(--warning); }}
+    .view-button {{ margin-right:6px; }} .status-button {{ background:#fff3da; }} .pagination {{ display:flex; gap:10px; margin-top:18px; }} .pagination a {{ color:var(--primary); font-weight:700; }}
+    @media (max-width:760px) {{ .topbar,.filters {{ grid-template-columns:1fr; flex-direction:column; align-items:stretch; }} }}
+  </style>
+</head>
+<body><main class="container">
+  <header class="topbar"><strong>Admin User Management</strong><nav><a href="/admin/overview">Overview</a><a href="/admin/audit-logs">Audit logs</a></nav></header>
+  <h1>Registered users</h1><p class="lede">Search profiles, review account status, and control access with audited actions.</p>
+  <section class="panel"><form class="filters" method="get"><input name="search" value="{escape(search)}" placeholder="Search name, email, phone, username" /><select name="role"><option value="">All roles</option><option value="admin" {'selected' if role == 'admin' else ''}>Admin</option><option value="farmer" {'selected' if role == 'farmer' else ''}>Farmer</option><option value="operator" {'selected' if role == 'operator' else ''}>Operator</option></select><select name="status"><option value="">All statuses</option><option value="active" {'selected' if status == 'active' else ''}>Active</option><option value="inactive" {'selected' if status == 'inactive' else ''}>Inactive</option><option value="pending_verification" {'selected' if status == 'pending_verification' else ''}>Pending</option><option value="locked" {'selected' if status == 'locked' else ''}>Locked</option></select><button class="primary" type="submit">Filter</button></form></section>
+  <section class="panel"><div><strong>{result['total']}</strong> matching users</div><div class="table-wrap"><table><thead><tr><th>Username</th><th>Full name</th><th>Email</th><th>Role</th><th>Status</th><th>Last login</th><th>Actions</th></tr></thead><tbody>{rows}</tbody></table></div><div class="pagination">{pagination}</div></section>
+  <script>
+    const statusButtons = document.querySelectorAll('.status-button');
+    statusButtons.forEach((button) => button.addEventListener('click', async () => {{
+      const username = button.dataset.username;
+      const action = button.dataset.status === 'active' ? 'deactivate' : 'activate';
+      if (!window.confirm(`${{action}} ${{username}}?`)) return;
+      const response = await fetch(`/api/admin/users/${{encodeURIComponent(username)}}/status`, {{method:'POST', headers:{{'Content-Type':'application/json'}}, credentials:'same-origin', body:JSON.stringify({{action}})}});
+      if (response.ok) window.location.reload(); else window.alert('Unable to update account status.');
+    }}));
+    document.querySelectorAll('.view-button').forEach((button) => button.addEventListener('click', async () => {{
+      const response = await fetch(`/api/admin/users/${{encodeURIComponent(button.dataset.username)}}`, {{credentials:'same-origin'}});
+      if (response.ok) window.alert(JSON.stringify((await response.json()).data, null, 2)); else window.alert('Unable to load user profile.');
+    }}));
+  </script>
+</main></body></html>
 """
 
 

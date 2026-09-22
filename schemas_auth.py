@@ -23,6 +23,11 @@ class UserCreateRequest(BaseModel):
     role: str = "farmer"
 
 
+class AdminUserStatusRequest(BaseModel):
+    action: str
+    reason: str = ""
+
+
 class PasswordResetRequest(BaseModel):
     current_password: str
     new_password: str

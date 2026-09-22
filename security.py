@@ -162,15 +162,73 @@ def send_activation_email(email: str, username: str, otp_code: Optional[str]) ->
         return False
 
 
-def list_users() -> List[dict]:
+def list_users(
+    *,
+    search: str = "",
+    role: str = "",
+    status: str = "",
+    page: int = 1,
+    page_size: int = 25,
+) -> Dict[str, object]:
+    page = max(1, page)
+    page_size = min(100, max(1, page_size))
+    clauses = []
+    params: List[object] = []
+    if search.strip():
+        term = f"%{search.strip().lower()}%"
+        clauses.append("(LOWER(username) LIKE ? OR LOWER(full_name) LIKE ? OR LOWER(email) LIKE ? OR phone LIKE ?)")
+        params.extend([term, term, term, term])
+    if role.strip():
+        clauses.append("role = ?")
+        params.append(role.strip())
+    if status.strip():
+        clauses.append("status = ?")
+        params.append(status.strip())
+    where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
     with get_connection() as conn:
+        total = conn.execute(f"SELECT COUNT(*) FROM users{where}", params).fetchone()[0]
         rows = conn.execute(
-            "SELECT username, role, created_at FROM users ORDER BY created_at ASC"
+            f"SELECT id, username, full_name, email, phone, role, status, created_at, last_login_at FROM users{where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (*params, page_size, (page - 1) * page_size),
         ).fetchall()
-    return [
-        {"username": row["username"], "role": row["role"], "created_at": row["created_at"]}
-        for row in rows
-    ]
+    return {
+        "items": [dict(row) for row in rows],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": max(1, (total + page_size - 1) // page_size),
+    }
+
+
+def get_admin_user_detail(username: str) -> Dict[str, object]:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT id, username, full_name, email, phone, village, region, area, primary_crop, land_size, water_source, farming_method, secondary_crops, tools, irrigation_type, role, status, failed_login_attempts, created_at, updated_at, last_login_at FROM users WHERE username = ?",
+            (username,),
+        ).fetchone()
+    if row is None:
+        raise ValueError("User not found")
+    return dict(row)
+
+
+def set_user_status(admin_username: str, username: str, action: str, reason: str = "") -> Dict[str, str]:
+    allowed_actions = {"activate": "active", "reactivate": "active", "deactivate": "inactive"}
+    if action not in allowed_actions:
+        raise ValueError("Unsupported account action")
+    if admin_username == username and action == "deactivate":
+        raise ValueError("An admin cannot deactivate their own account")
+    user = _get_user(username)
+    if user is None:
+        raise ValueError("User not found")
+    new_status = allowed_actions[action]
+    now = datetime.now(timezone.utc).isoformat()
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE users SET status = ?, failed_login_attempts = 0, otp_code = NULL, otp_expires_at = NULL, updated_at = ? WHERE username = ?",
+            (new_status, now, username),
+        )
+    record_audit_log(admin_username, f"user_{action}", f"users/{username}", "success", reason or f"Account status set to {new_status}")
+    return {"username": username, "status": new_status, "action": action}
 
 
 def get_profile(username: str) -> Dict[str, str]:
@@ -261,9 +319,10 @@ def _get_user(username: str) -> Optional[Dict[str, str]]:
     with get_connection() as conn:
         row = conn.execute(
             """
-            SELECT username, password, role, status, otp_code, otp_expires_at, failed_login_attempts,
+                 SELECT id, username, password, role, status, otp_code, otp_expires_at, failed_login_attempts,
                    email, phone, full_name, village, region, area, primary_crop, land_size,
-                   water_source, farming_method, secondary_crops, tools, irrigation_type
+                     water_source, farming_method, secondary_crops, tools, irrigation_type,
+                     created_at, updated_at, last_login_at
             FROM users WHERE username = ?
             """,
             (username,),
@@ -279,6 +338,7 @@ def _get_user(username: str) -> Optional[Dict[str, str]]:
         stored_password = migrated
 
     return {
+        "id": row["id"],
         "username": row["username"],
         "password": stored_password,
         "role": row["role"],
@@ -299,6 +359,9 @@ def _get_user(username: str) -> Optional[Dict[str, str]]:
         "secondary_crops": row["secondary_crops"],
         "tools": row["tools"],
         "irrigation_type": row["irrigation_type"],
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+        "last_login_at": row["last_login_at"],
     }
 
 
@@ -452,6 +515,9 @@ def authenticate(username: str, password: str) -> Dict[str, str]:
     if user.get("status") == "pending_verification":
         record_audit_log(username, "login", "auth", "failure", "Account pending verification")
         raise ValueError("Account is pending verification")
+    if user.get("status") == "inactive":
+        record_audit_log(username, "login", "auth", "failure", "Account inactive")
+        raise ValueError("Account is inactive")
     if user.get("status") == "locked":
         record_audit_log(username, "login", "auth", "failure", "Account locked")
         raise ValueError("Invalid username or password")
