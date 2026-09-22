@@ -1181,6 +1181,27 @@ def test_refresh_token_returns_new_token_and_logout_clears_session_cookie():
     assert logout.cookies.get("digital_farming_session") in {"", None}
 
 
+def test_logout_blocks_protected_pages_after_reload_and_tab_reopen():
+    isolated_client = TestClient(app)
+    login = isolated_client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    assert login.status_code == 200
+    assert isolated_client.get("/dashboard", follow_redirects=False).status_code == 200
+
+    logout = isolated_client.post("/auth/logout")
+    assert logout.status_code == 200
+    assert logout.cookies.get("digital_farming_session") in {"", None}
+
+    for path in ("/dashboard", "/admin/overview", "/profile?username=admin1"):
+        response = isolated_client.get(path, follow_redirects=False)
+        assert response.status_code in {302, 307}
+        assert response.headers.get("location", "").startswith("/login")
+
+    fresh_client = TestClient(app)
+    fresh_response = fresh_client.get("/dashboard", follow_redirects=False)
+    assert fresh_response.status_code in {302, 307}
+    assert fresh_response.headers.get("location", "").startswith("/login")
+
+
 def test_refresh_token_is_rate_limited_per_ip():
     isolated_client = TestClient(app)
     login = isolated_client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
