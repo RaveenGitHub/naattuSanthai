@@ -3,7 +3,14 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 
-def assess_soil_health(crop: str, ph: float, nitrogen: float, phosphorus: float, potassium: float) -> Dict[str, Any]:
+def assess_soil_health(
+    crop: str,
+    ph: float,
+    nitrogen: float,
+    phosphorus: float,
+    potassium: float,
+    water_source: str = "",
+) -> Dict[str, Any]:
     crop_name = (crop or "crop").strip().lower()
 
     if ph < 5.8:
@@ -81,11 +88,25 @@ def assess_soil_health(crop: str, ph: float, nitrogen: float, phosphorus: float,
         soil_improvement_actions.append("Add potassium support to improve water efficiency and fruit or pod development.")
     soil_improvement_actions.append("Schedule the next soil test in 2 to 3 weeks to validate nutrient recovery.")
 
-    irrigation_guidance = [
-        "Irrigate at early morning to reduce evaporation and improve root-zone absorption.",
-        "Adjust irrigation frequency based on current moisture and the next rainfall forecast.",
-        "Avoid over-irrigation when the soil is near the target moisture range for the crop.",
-    ]
+    water_source_name = (water_source or "").strip().lower()
+    if "rain" in water_source_name:
+        irrigation_guidance = [
+            "Rely on stored soil moisture during dry periods and avoid unnecessary pumping.",
+            "Monitor monsoon timing and adjust the crop schedule before rainfall gaps.",
+            "Use mulch and field bunds to retain rainwater in the root zone.",
+        ]
+    elif "bore" in water_source_name or "well" in water_source_name:
+        irrigation_guidance = [
+            "Schedule borewell irrigation when root-zone moisture falls below the crop target.",
+            "Maintain sustainable extraction rates and check pump output before each cycle.",
+            "Irrigate at early morning to reduce evaporation and improve root-zone absorption.",
+        ]
+    else:
+        irrigation_guidance = [
+            "Irrigate at early morning to reduce evaporation and improve root-zone absorption.",
+            "Adjust irrigation frequency based on current moisture and the next rainfall forecast.",
+            "Avoid over-irrigation when the soil is near the target moisture range for the crop.",
+        ]
 
     if "rice" in crop_name or "paddy" in crop_name:
         irrigation_guidance.extend(
@@ -111,6 +132,7 @@ def assess_soil_health(crop: str, ph: float, nitrogen: float, phosphorus: float,
         "nitrogen": nitrogen,
         "phosphorus": phosphorus,
         "potassium": potassium,
+        "water_source": water_source,
         "soil_status": base_status,
         "ph_status": ph_status,
         "nitrogen_status": nitrogen_status,

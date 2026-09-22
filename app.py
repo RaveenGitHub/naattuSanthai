@@ -2795,6 +2795,7 @@ def soil_health_page(
         nitrogen=nitrogen,
         phosphorus=phosphorus,
         potassium=potassium,
+        water_source=profile_defaults.get("water_source", ""),
     )
 
     crop_label = escape(str(effective_crop or "பயிர்").strip() or "பயிர்")
