@@ -223,6 +223,18 @@ def test_tamil_crop_advisory_page_renders_for_users():
     assert "நீர் மேலாண்மை" in advisory.text
 
 
+def test_advisory_page_uses_crop_specific_guidance():
+    rice = client.get("/advisory?crop=rice")
+    groundnut = client.get("/advisory?crop=groundnut")
+
+    assert rice.status_code == 200
+    assert groundnut.status_code == 200
+    assert "Rice fields are stable" in rice.text
+    assert "Groundnut blocks show drying stress" in groundnut.text
+    assert "Monitor drainage channels" in rice.text
+    assert "Inspect lower leaves" in groundnut.text
+
+
 def test_disease_detection_page_renders_for_users():
     response = client.get("/disease-detection")
     assert response.status_code == 200

@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from database import get_connection, get_migration_status
 from digital_farming_mvp import generate_backend_mvp_plan
+from digital_farming.services.advisory import get_field_advisory
 from diagnostics import diagnose_crop_issue, list_diagnosis_history
 from routes import router
 from schemas_auth import (
@@ -2423,22 +2424,19 @@ ADVISORY_PAGE = """
       <div class="panel">
         <h2>தற்போதைய பரிந்துரை</h2>
         <p style="color: var(--muted); line-height: 1.8; margin: 0;">
-          தற்போதைய பருவத்தில் நெல் மற்றும் கரும்புக்கு நீர் மேலாண்மை, உர பயன்பாடு மற்றும் பூச்சி கண்காணிப்பு முக்கியம். மழை முன்னறிவிப்பைக் கொண்டு பாசன அட்டவணையை மாற்றியமைக்கவும்.
+          __ADVISORY_SUMMARY__
         </p>
         <div class="stats">
-          <div class="stat"><span>மண் ஈரப்பதம்</span><strong>68%</strong></div>
-          <div class="stat"><span>வானிலை</span><strong>சீரானது</strong></div>
-          <div class="stat"><span>அறுவடை தேதி</span><strong>18 நாட்கள்</strong></div>
+          <div class="stat"><span>மண் ஈரப்பதம்</span><strong>__ADVISORY_MOISTURE__%</strong></div>
+          <div class="stat"><span>ஆபத்து நிலை</span><strong>__ADVISORY_RISK__</strong></div>
+          <div class="stat"><span>பயிர்</span><strong>__ADVISORY_CROP__</strong></div>
         </div>
       </div>
 
       <div class="panel">
         <h2>முக்கிய பரிந்துரைகள்</h2>
         <ul style="color: var(--muted); line-height: 1.9; padding-left: 18px; margin: 0;">
-          <li>மழை இல்லாத நாட்களில் பாசன நேரத்தை சரிசெய்யவும்</li>
-          <li>மண் சோதனை முடிவுகளின் அடிப்படையில் உரத்தை பயன்படுத்தவும்</li>
-          <li>பூச்சி தாக்குதல் இருந்தால் உடனடியாக ஆலோசனை பெறவும்</li>
-          <li>பயிர் பாதுகாப்புக்கு இரசாயன மற்றும் இயற்கை முறைகளை இணைக்கவும்</li>
+          __ADVISORY_RECOMMENDATIONS__
         </ul>
       </div>
     </section>
@@ -2491,9 +2489,20 @@ def advisory_page(request: Request, crop: str = "rice", land_size: str = ""):
     profile_defaults = resolve_profile_defaults(request, default_crop=crop)
     effective_crop = crop if crop and crop.lower() not in {"", "rice"} else profile_defaults["crop"]
     effective_land_size = (land_size or "").strip() or profile_defaults["land_size"] or "பொது நில அளவு"
+    advisory = get_field_advisory(
+        crop=effective_crop,
+        village=profile_defaults["village"] or "general",
+    )
     crop_label = escape(str(effective_crop).strip() or "பயிர்")
     land_size_label = escape(str(effective_land_size))
     water_source_label = escape(str(profile_defaults["water_source"] or "பொது நீர் ஆதாரம்"))
+    advisory_summary = escape(str(advisory.get("summary", "பொதுவான பயிர் கண்காணிப்பை தொடரவும்.")))
+    advisory_moisture = escape(str(advisory.get("soil_moisture_percent", "-")))
+    advisory_risk = escape(str(advisory.get("risk_level", "Low")))
+    advisory_recommendations = "".join(
+        f"<li>{escape(str(item))}</li>"
+        for item in advisory.get("recommendations", [])
+    )
     context_panel = f"""
     <section class="panel" style="margin-top: 20px;">
       <h2>உங்கள் பண்ணை சூழல் / Your farm context</h2>
@@ -2504,7 +2513,14 @@ def advisory_page(request: Request, crop: str = "rice", land_size: str = ""):
       </div>
     </section>
     """
-    return ADVISORY_PAGE.replace("    <p class=\"intro\">", context_panel + "\n    <p class=\"intro\">")
+    return (
+        ADVISORY_PAGE.replace("__ADVISORY_SUMMARY__", advisory_summary)
+        .replace("__ADVISORY_MOISTURE__", advisory_moisture)
+        .replace("__ADVISORY_RISK__", advisory_risk)
+        .replace("__ADVISORY_CROP__", crop_label)
+        .replace("__ADVISORY_RECOMMENDATIONS__", advisory_recommendations)
+        .replace("    <p class=\"intro\">", context_panel + "\n    <p class=\"intro\">")
+    )
 
 
 @app.get("/disease-detection", response_class=HTMLResponse)
