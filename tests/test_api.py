@@ -1088,6 +1088,30 @@ def test_form_submission_registers_user_and_persists_data():
     assert row[4] == "pending_verification"
 
 
+def test_browser_registration_redirects_to_login_after_success():
+    username = f"browser_register_{__import__('uuid').uuid4().hex[:8]}"
+    response = TestClient(app).post(
+        "/api/v1/auth/register",
+        headers={"Accept": "text/html"},
+        data={
+            "username": username,
+            "password": "SecurePass123",
+            "role": "farmer",
+            "full_name": "Browser Farmer",
+            "phone": "9876543210",
+            "village": "Kallakurichi",
+            "region": "Villupuram",
+            "area": "1.5",
+            "primary_crop": "rice",
+            "land_size": "1.5",
+            "water_source": "rainfed",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login?registered=1"
+
+
 def test_registration_rejects_incomplete_agronomy_profile():
     username = f"incomplete_profile_{__import__('uuid').uuid4().hex[:8]}"
     response = TestClient(app).post(

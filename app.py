@@ -1067,6 +1067,8 @@ async def api_v1_register(request: Request):
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if "text/html" in request.headers.get("accept", "").lower():
+      return RedirectResponse(url="/login?registered=1", status_code=303)
     return {
         "success": True,
         "data": {
