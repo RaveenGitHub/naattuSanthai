@@ -4295,12 +4295,22 @@ def weather_market_page(request: Request, region: str = "Kallakurichi"):
 
 @app.get("/sustainability", response_class=HTMLResponse)
 def sustainability_page(
+    request: Request,
     farm_size_ha: float = 5.0,
     soil_carbon_tons: float = 2.4,
     water_use_liters: float = 4200.0,
     energy_use_kwh: float = 320.0,
 ):
     from digital_farming.services.sustainability import assess_carbon_and_sustainability
+
+    profile_defaults = resolve_profile_defaults(request)
+    if farm_size_ha == 5.0 and profile_defaults.get("land_size"):
+        try:
+            profile_farm_size = float(profile_defaults["land_size"])
+            if profile_farm_size > 0:
+                farm_size_ha = profile_farm_size
+        except (TypeError, ValueError):
+            pass
 
     report = assess_carbon_and_sustainability(
         farm_size_ha=farm_size_ha,

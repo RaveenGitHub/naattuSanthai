@@ -234,6 +234,18 @@ def test_soil_health_uses_rain_fed_profile_for_irrigation_guidance():
     assert "monsoon timing" in response.text.lower()
 
 
+def test_sustainability_uses_profile_land_size_when_default_is_used():
+    username = f"sustainability_{uuid.uuid4().hex[:8]}"
+    create_user(username, "SecurePass123", "farmer", land_size="2.5")
+    isolated_client = TestClient(app)
+    login = isolated_client.post("/auth/login", json={"username": username, "password": "SecurePass123"})
+    assert login.status_code == 200
+
+    response = isolated_client.get("/sustainability")
+    assert response.status_code == 200
+    assert "2.5 ஹெக்டேர்ஸ்" in response.text
+
+
 def test_tamil_crop_advisory_page_renders_for_users():
     advisory = client.get("/advisory")
     assert advisory.status_code == 200
