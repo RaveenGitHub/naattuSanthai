@@ -129,6 +129,39 @@ def test_guest_journey_reaches_public_pages_and_redirects_from_protected_pages()
         assert response.headers.get("location", "").startswith("/login")
 
 
+def test_logged_in_farmer_sees_personalized_content_across_core_pages():
+    username = f"profile_e2e_{__import__('uuid').uuid4().hex[:8]}"
+    create_user(
+        username,
+        "SecurePass123",
+        "farmer",
+        primary_crop="groundnut",
+        region="Villupuram",
+        water_source="borewell",
+        land_size="2.5",
+    )
+    farmer_client = TestClient(app)
+    login = farmer_client.post("/auth/login", json={"username": username, "password": "SecurePass123"})
+    assert login.status_code == 200
+
+    dashboard = farmer_client.get("/dashboard")
+    advisory = farmer_client.get("/advisory")
+    soil = farmer_client.get("/soil-health")
+    weather = farmer_client.get("/weather")
+
+    assert dashboard.status_code == 200
+    assert "groundnut" in dashboard.text.lower()
+    assert "Villupuram" in dashboard.text
+    assert advisory.status_code == 200
+    assert "Groundnut blocks show drying stress" in advisory.text
+    assert "2.5" in advisory.text
+    assert soil.status_code == 200
+    assert "borewell" in soil.text.lower()
+    assert "sustainable extraction" in soil.text.lower()
+    assert weather.status_code == 200
+    assert "Villupuram" in weather.text
+
+
 def test_health_and_readiness_endpoints_expose_runtime_and_deployment_metadata():
     health = client.get("/health")
     assert health.status_code == 200
