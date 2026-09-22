@@ -17,17 +17,11 @@ def test_root_endpoint():
     assert response.json()["status"] == "ok"
 
 
-def test_mvp_plan_renders_html_for_browser_and_json_for_api_clients():
-    browser = client.get("/mvp-plan")
-    assert browser.status_code == 200
-    assert "text/html" in browser.headers["content-type"]
-    assert "MVP implementation plan" in browser.text
-    assert "Digital Farming Support Center MVP Backend Blueprint" in browser.text
-    assert "<pre>" in browser.text
-
-    api = client.get("/mvp-plan", headers={"Accept": "application/json"})
-    assert api.status_code == 200
-    assert "plan" in api.json()
+def test_mvp_plan_page_and_home_link_are_removed():
+    home = client.get("/home")
+    assert home.status_code == 200
+    assert "/mvp-plan" not in home.text
+    assert client.get("/mvp-plan").status_code == 404
 
 
 def test_health_endpoint():

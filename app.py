@@ -10,7 +10,6 @@ from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadF
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from database import get_connection, get_migration_status
-from digital_farming_mvp import generate_backend_mvp_plan
 from digital_farming.services.advisory import get_field_advisory
 from diagnostics import diagnose_crop_issue, list_diagnosis_history
 from routes import router
@@ -252,7 +251,6 @@ ROOT_PAGE = """
         </p>
         <div class="cta-row">
           <a class="button primary" href="/dashboard">டாஷ்போர்டை திற</a>
-          <a class="button secondary" href="/mvp-plan">திட்டத்தை பார்க்க</a>
         </div>
       </section>
 
@@ -5630,53 +5628,3 @@ def readiness_check():
     }
 
 
-@app.get("/mvp-plan", response_class=HTMLResponse)
-def get_mvp_plan(request: Request):
-    plan = generate_backend_mvp_plan("Digital Farming Support Center")
-    if "application/json" in request.headers.get("accept", "").lower():
-      return JSONResponse({"plan": plan})
-
-    return f"""
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MVP Plan | Digital Farming</title>
-  <style>
-    :root {{ --bg: #f4f8f2; --panel: #ffffff; --primary: #2d7d46; --secondary: #4aa6d6; --text: #17301d; --muted: #567163; --line: #dfe9df; }}
-    * {{ box-sizing: border-box; }}
-    body {{ margin: 0; font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif; color: var(--text); background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%); }}
-    .container {{ max-width: 1100px; margin: 0 auto; padding: 28px 18px 56px; }}
-    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 14px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }}
-    .brand {{ font-weight: 800; }}
-    nav {{ display: flex; flex-wrap: wrap; gap: 10px; }}
-    nav a {{ color: var(--text); text-decoration: none; background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 9px 14px; font-weight: 700; }}
-    .hero, .panel {{ background: rgba(255,255,255,0.86); border: 1px solid var(--line); border-radius: 20px; box-shadow: 0 14px 32px rgba(23,48,29,0.08); }}
-    .hero {{ padding: 28px; margin-top: 24px; }}
-    h1 {{ margin: 0 0 12px; font-size: clamp(2rem, 4vw, 3.2rem); line-height: 1.15; }}
-    .lede {{ margin: 0; max-width: 72ch; color: var(--muted); line-height: 1.85; }}
-    .panel {{ margin-top: 20px; padding: 22px; }}
-    h2 {{ margin-top: 0; color: var(--primary); }}
-    pre {{ margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); font: 0.98rem/1.8 'Segoe UI', sans-serif; }}
-    @media (max-width: 700px) {{ .topbar {{ flex-direction: column; align-items: flex-start; }} .hero, .panel {{ padding: 18px; }} }}
-  </style>
-</head>
-<body>
-  <main class="container">
-    <header class="topbar">
-      <div class="brand">Digital Farming Support Center</div>
-      <nav aria-label="MVP plan navigation"><a href="/home">Home</a><a href="/services">Services</a><a href="/dashboard">Dashboard</a></nav>
-    </header>
-    <section class="hero">
-      <h1>MVP implementation plan</h1>
-      <p class="lede">A readable overview of the platform modules, technology stack, service endpoints, and delivery sequence.</p>
-    </section>
-    <section class="panel">
-      <h2>Backend blueprint</h2>
-      <pre>{escape(plan)}</pre>
-    </section>
-  </main>
-</body>
-</html>
-"""
