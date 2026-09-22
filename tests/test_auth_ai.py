@@ -234,6 +234,26 @@ def test_soil_health_uses_rain_fed_profile_for_irrigation_guidance():
     assert "monsoon timing" in response.text.lower()
 
 
+def test_soil_health_uses_profile_land_size_for_irrigation_guidance():
+    small_username = f"small_soil_{uuid.uuid4().hex[:8]}"
+    large_username = f"large_soil_{uuid.uuid4().hex[:8]}"
+    create_user(small_username, "SecurePass123", "farmer", land_size="0.5")
+    create_user(large_username, "SecurePass123", "farmer", land_size="8.0")
+
+    small_client = TestClient(app)
+    small_login = small_client.post("/auth/login", json={"username": small_username, "password": "SecurePass123"})
+    assert small_login.status_code == 200
+    small_response = small_client.get("/soil-health")
+
+    large_client = TestClient(app)
+    large_login = large_client.post("/auth/login", json={"username": large_username, "password": "SecurePass123"})
+    assert large_login.status_code == 200
+    large_response = large_client.get("/soil-health")
+
+    assert "micro-irrigation" in small_response.text.lower()
+    assert "irrigation in blocks" in large_response.text.lower()
+
+
 def test_sustainability_uses_profile_land_size_when_default_is_used():
     username = f"sustainability_{uuid.uuid4().hex[:8]}"
     create_user(username, "SecurePass123", "farmer", land_size="2.5")

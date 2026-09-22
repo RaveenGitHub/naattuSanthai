@@ -10,6 +10,7 @@ def assess_soil_health(
     phosphorus: float,
     potassium: float,
     water_source: str = "",
+    land_size: str = "",
 ) -> Dict[str, Any]:
     crop_name = (crop or "crop").strip().lower()
 
@@ -122,6 +123,15 @@ def assess_soil_health(
                 "Reduce irrigation near maturity so the field can dry gradually before harvest.",
             ]
         )
+
+    try:
+        land_size_value = float((land_size or "").strip())
+    except (TypeError, ValueError):
+        land_size_value = None
+    if land_size_value is not None and 0 < land_size_value < 1.0:
+        irrigation_guidance.insert(0, "Small-plot farm: use drip or micro-irrigation for water efficiency and cost control.")
+    elif land_size_value is not None and land_size_value >= 5.0:
+        irrigation_guidance.insert(0, "Large-scale farm: schedule irrigation in blocks to manage labor and water uniformity.")
 
     if ph_status != "Balanced":
         irrigation_guidance.append("Correct the pH first, then calibrate irrigation to avoid nutrient locking in the root zone.")
