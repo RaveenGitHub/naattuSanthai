@@ -1027,6 +1027,18 @@ async def api_v1_register(request: Request):
         raise HTTPException(status_code=400, detail="Username and password are required")
     if not payload.email and not payload.phone:
         raise HTTPException(status_code=400, detail="Email or phone is required")
+    mandatory_profile_fields = {
+      "full_name": "Full name is required",
+      "village": "Village is required",
+      "region": "Region is required",
+      "area": "Area is required",
+      "primary_crop": "Primary crop is required",
+      "land_size": "Land size is required",
+      "water_source": "Water source is required",
+    }
+    for field_name, message in mandatory_profile_fields.items():
+      if not str(getattr(payload, field_name, "") or "").strip():
+        raise HTTPException(status_code=400, detail=message)
 
     if payload.email and "@" not in payload.email:
         raise HTTPException(status_code=400, detail="Please provide a valid email address")
@@ -5251,7 +5263,7 @@ def register_page():
         <div class="row">
           <label>
             Full name / விவசாயி பெயர்
-            <input type="text" name="full_name" placeholder="உதாரணம்: குமரன்" />
+            <input type="text" name="full_name" placeholder="உதாரணம்: குமரன்" required />
           </label>
           <label>
             Email / மின்னஞ்சல்
@@ -5262,7 +5274,7 @@ def register_page():
         <div class="row">
           <label>
             Phone / கைபேசி எண்
-            <input type="tel" name="phone" value="" placeholder="9876543210" />
+            <input type="tel" name="phone" value="" placeholder="9876543210" required />
           </label>
           <label>
             Role / பங்கு
@@ -5276,8 +5288,18 @@ def register_page():
 
         <label>
           Village / கிராமம்
-          <input type="text" name="village" placeholder="கல்லக்குறிச்சி" />
+          <input type="text" name="village" placeholder="கல்லக்குறிச்சி" required />
         </label>
+
+        <div class="row">
+          <label>Region / பகுதி<input type="text" name="region" required /></label>
+          <label>Area / பரப்பளவு<input type="number" name="area" min="0.01" step="0.01" required /></label>
+        </div>
+        <div class="row">
+          <label>Primary crop / முக்கிய பயிர்<input type="text" name="primary_crop" required /></label>
+          <label>Land size / நில அளவு<input type="number" name="land_size" min="0.01" step="0.01" required /></label>
+        </div>
+        <label>Water source / நீர் ஆதாரம்<input type="text" name="water_source" required /></label>
 
         <button type="submit">Create account / பதிவு செய்யவும்</button>
       </form>

@@ -1004,6 +1004,11 @@ def test_form_submission_registers_user_and_persists_data():
             "email": "formfarmer@example.com",
             "phone": "9876543211",
             "village": "Kallakurichi",
+            "region": "Villupuram",
+            "area": "3.5",
+            "primary_crop": "rice",
+            "land_size": "2.5",
+            "water_source": "borewell",
         },
     )
     assert response.status_code == 200
@@ -1024,6 +1029,23 @@ def test_form_submission_registers_user_and_persists_data():
     assert row[4] == "pending_verification"
 
 
+def test_registration_rejects_incomplete_agronomy_profile():
+    username = f"incomplete_profile_{__import__('uuid').uuid4().hex[:8]}"
+    response = TestClient(app).post(
+        "/api/v1/auth/register",
+        json={
+            "username": username,
+            "password": "SecurePass123",
+            "role": "farmer",
+            "phone": "9876543210",
+            "full_name": "Incomplete Farmer",
+            "village": "Kallakurichi",
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Region is required"
+
+
 def test_registration_is_rate_limited_per_ip():
     client_with_ip = TestClient(app)
     responses = []
@@ -1037,6 +1059,13 @@ def test_registration_is_rate_limited_per_ip():
                 "password": "SecurePass123",
                 "role": "farmer",
                 "phone": "9876543210",
+                "full_name": "Rate Limit Farmer",
+                "village": "Kallakurichi",
+                "region": "Villupuram",
+                "area": "1.0",
+                "primary_crop": "rice",
+                "land_size": "1.0",
+                "water_source": "rainfed",
             },
         )
         responses.append(response)
@@ -1055,6 +1084,13 @@ def test_registration_creates_pending_user_and_requires_otp_verification_before_
             "password": "SecurePass123",
             "role": "farmer",
             "phone": "9876543210",
+            "full_name": "OTP Farmer",
+            "village": "Kallakurichi",
+            "region": "Villupuram",
+            "area": "1.0",
+            "primary_crop": "rice",
+            "land_size": "1.0",
+            "water_source": "rainfed",
         },
     )
     assert response.status_code == 200
