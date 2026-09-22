@@ -521,6 +521,59 @@ As a product owner, I want weather KPIs and dashboard metrics so that forecast q
 
 ---
 
+## Epic E - Admin user management and account lifecycle
+
+Product requirements: [admin-user-management-prd.md](admin-user-management-prd.md)
+
+Implementation plan: [admin-user-management-implementation-plan.md](admin-user-management-implementation-plan.md)
+
+### Story ADM-01
+
+Title: View and search registered users
+As an admin, I want a paginated, filterable user list so that I can understand enrollment and account status without database access.
+
+- Acceptance criteria:
+  - admin-only list API and page are available
+  - list includes identity, contact, role, status, registration, and last-login fields
+  - search, role/status filters, date filters, and page size are bounded and tested
+- Status: Planned
+
+### Story ADM-02
+
+Title: Inspect a user profile safely
+As an admin, I want to inspect a user's profile and account history so that support decisions are based on complete context without exposing secrets.
+
+- Acceptance criteria:
+  - admin can open a detail view for a selected user
+  - profile, registration, login, status, and linked-module summaries are shown
+  - passwords, tokens, and credentials never appear
+- Status: Planned
+
+### Story ADM-03
+
+Title: Activate and deactivate accounts
+As an admin, I want confirmed lifecycle controls so that account access can be corrected quickly and safely.
+
+- Acceptance criteria:
+  - pending/inactive accounts can be activated or reactivated
+  - active accounts can be deactivated
+  - status changes immediately affect login and protected-page access
+  - invalid transitions and unsafe final-admin lockout are rejected
+- Status: Planned
+
+### Story ADM-04
+
+Title: Audit administrator actions
+As a security owner, I want every user-management action audited so that account changes are traceable.
+
+- Acceptance criteria:
+  - view and lifecycle actions record admin, affected user, action, timestamp, and outcome
+  - denied and failed actions are visible to authorized reviewers
+  - audit records are append-only from the user-management workflow
+- Status: Planned
+
+---
+
 ## 4. Sprint plan
 
 ### Sprint 1 — Foundation and fetch flow
