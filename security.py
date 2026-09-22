@@ -164,6 +164,32 @@ def get_profile(username: str) -> Dict[str, str]:
     }
 
 
+def update_profile(username: str, updates: Dict[str, Optional[str]]) -> Dict[str, str]:
+    allowed_fields = {
+        "full_name", "village", "region", "area", "primary_crop", "land_size",
+        "water_source", "farming_method", "secondary_crops", "tools", "irrigation_type",
+    }
+    changes = {field: value for field, value in updates.items() if field in allowed_fields and value is not None}
+    if not changes:
+        raise ValueError("At least one profile field is required")
+    if any(not isinstance(value, str) for value in changes.values()):
+        raise ValueError("Profile fields must be strings")
+    if _get_user(username) is None:
+        raise ValueError("User not found")
+
+    assignments = ", ".join(f"{field} = ?" for field in changes)
+    values = [value.strip() for value in changes.values()]
+    now = datetime.now(timezone.utc).isoformat()
+    with get_connection() as conn:
+        conn.execute(
+            f"UPDATE users SET {assignments}, updated_at = ? WHERE username = ?",
+            (*values, now, username),
+        )
+
+    record_audit_log(username, "profile_updated", "users", "success", f"Updated fields: {', '.join(changes)}")
+    return get_profile(username)
+
+
 def reset_password(username: str, current_password: str, new_password: str) -> Dict[str, str]:
     if not new_password:
         raise ValueError("New password is required")

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -23,6 +25,20 @@ class UserCreateRequest(BaseModel):
 class PasswordResetRequest(BaseModel):
     current_password: str
     new_password: str
+
+
+class ProfileUpdateRequest(BaseModel):
+    full_name: Optional[str] = None
+    village: Optional[str] = None
+    region: Optional[str] = None
+    area: Optional[str] = None
+    primary_crop: Optional[str] = None
+    land_size: Optional[str] = None
+    water_source: Optional[str] = None
+    farming_method: Optional[str] = None
+    secondary_crops: Optional[str] = None
+    tools: Optional[str] = None
+    irrigation_type: Optional[str] = None
 
 
 class RegisterRequest(BaseModel):

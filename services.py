@@ -651,23 +651,7 @@ def get_scheme_fetch_status() -> dict:
     invalid_records = []
     valid_scores = []
     for row in scheme_rows:
-        title = (row["title_ta"] or "").strip()
-        summary = (row["summary_ta"] or "").strip()
-        eligibility = (row["eligibility_ta"] or "").strip()
-        benefits = (row["benefits_ta"] or "").strip()
-        steps = (row["apply_steps_ta"] or "").strip()
-        summary_lower = summary.lower()
-        issues = []
-        if not title or len(title) < 8:
-            issues.append("title")
-        if not summary or len(summary) < 20 or any(token in summary_lower for token in generic_tokens):
-            issues.append("summary")
-        if not eligibility:
-            issues.append("eligibility")
-        if not benefits:
-            issues.append("benefits")
-        if not steps:
-            issues.append("steps")
+        issues = _scheme_quality_issues(row, generic_tokens)
         score = max(0, 100 - (len(issues) * 20))
         valid_scores.append(score)
         if issues:
@@ -779,6 +763,37 @@ def get_scheme_fetch_status() -> dict:
         "scheduler": scheduler.to_dict(),
         "fetch_monitoring": fetch_monitoring,
     }
+
+
+def _scheme_quality_issues(scheme: dict, generic_tokens: Optional[set[str]] = None) -> list[str]:
+    tokens = generic_tokens or {"n/a", "na", "not available", "general support", "general scheme", "tbd", "to be updated", "placeholder"}
+    def value(field: str) -> str:
+        try:
+            return str(scheme[field] or "").strip()
+        except (KeyError, IndexError):
+            return ""
+
+    title = value("title_ta")
+    summary = value("summary_ta")
+    issues = []
+    if not title or len(title) < 8:
+        issues.append("title")
+    if not summary or len(summary) < 20 or any(token in summary.lower() for token in tokens):
+        issues.append("summary")
+    field_names = {
+        "eligibility_ta": "eligibility",
+        "benefits_ta": "benefits",
+        "apply_steps_ta": "steps",
+    }
+    for field, issue_name in field_names.items():
+        if not value(field):
+            issues.append(issue_name)
+    return issues
+
+
+def validate_scheme_quality(scheme: dict) -> bool:
+    """Return whether a scheme has enough content to enter the published feed."""
+    return not _scheme_quality_issues(scheme)
 
 
 def seed_government_scheme_data() -> None:

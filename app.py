@@ -19,6 +19,7 @@ from schemas_auth import (
     ForgotPasswordRequest,
     LoginRequest,
     PasswordResetRequest,
+    ProfileUpdateRequest,
     RegisterRequest,
     UserCreateRequest,
 )
@@ -32,6 +33,7 @@ from security import (
     record_audit_log,
     refresh_access_token,
     reset_password,
+    update_profile,
     unlock_user,
     verify_otp,
     verify_password,
@@ -1276,6 +1278,20 @@ def get_user_profile(authorization: Optional[str] = Header(default=None)):
         profile = get_profile(payload["sub"])
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"success": True, "data": profile, "error": None}
+
+
+@app.patch("/api/profile")
+def update_user_profile(payload: ProfileUpdateRequest, authorization: Optional[str] = Header(default=None)):
+    token = get_bearer_token(authorization)
+    try:
+        payload_token = verify_token(token)
+    except Exception as exc:  # pragma: no cover - security exception path
+        raise HTTPException(status_code=401, detail="Invalid token") from exc
+    try:
+        profile = update_profile(payload_token["sub"], payload.model_dump(exclude_unset=True))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"success": True, "data": profile, "error": None}
 
 
