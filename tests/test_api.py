@@ -362,6 +362,13 @@ def test_market_intelligence_page_renders_price_trend_and_action():
     assert "பரிந்துரை" in response.text or "Recommendation" in response.text
 
 
+def test_market_intelligence_displays_source_trust_status():
+    response = client.get("/market-intelligence?crop=rice&market=Kallakurichi")
+    assert response.status_code == 200
+    assert "Tamil Nadu State Agri Market Dashboard" in response.text
+    assert "Verified" in response.text
+
+
 def test_scheme_ai_validation_flags_incomplete_or_generic_records():
     with __import__("sqlite3").connect("digital_farming.db") as conn:
         conn.execute(

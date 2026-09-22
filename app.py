@@ -4085,6 +4085,8 @@ def market_intelligence_page(request: Request, crop: str = "rice", market: str =
     base_price = float(intelligence.get("base_price_per_kg", 0.0))
     recommendation = escape(str(intelligence.get("recommended_action", "Monitor local buyer demand and negotiate before the next supply surge.")))
     buyer_insights = "".join(f"<li>{escape(str(item))}</li>" for item in intelligence.get("buyer_insights", []))
+    source_name = escape(str(intelligence.get("source_name", "Mandi data")))
+    source_status = escape(str(intelligence.get("source_status", "verified")).replace("_", " ").title())
 
     return f"""
 <!DOCTYPE html>
@@ -4153,6 +4155,14 @@ def market_intelligence_page(request: Request, crop: str = "rice", market: str =
       <h2>கையகப்படுத்துபவர் குறிப்புகள் / Buyer insights</h2>
       <ul>
         {buyer_insights}
+      </ul>
+    </section>
+
+    <section class="panel" style="margin-top: 20px;">
+      <h2>தரவு மூலம் / Data source</h2>
+      <ul>
+        <li><strong>மூலம் / Source:</strong> {source_name}</li>
+        <li><strong>நிலை / Trust status:</strong> {source_status}</li>
       </ul>
     </section>
   </div>
