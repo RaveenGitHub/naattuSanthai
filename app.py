@@ -1164,6 +1164,17 @@ def get_bearer_token(authorization: Optional[str]) -> str:
     return token.strip()
 
 
+def require_admin_access(authorization: Optional[str]) -> dict:
+    token = get_bearer_token(authorization)
+    try:
+        payload = verify_token(token)
+    except Exception as exc:  # pragma: no cover - security exception path
+        raise HTTPException(status_code=401, detail="Invalid token") from exc
+    if payload.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return payload
+
+
 @app.post("/api/diagnose")
 def diagnose(request: DiagnoseRequest, authorization: Optional[str] = Header(default=None)):
     token = get_bearer_token(authorization)
@@ -1824,7 +1835,8 @@ def admin_pilot_readiness_page(authorization: Optional[str] = Header(default=Non
 
 
 @app.get("/admin/review-queue", response_class=HTMLResponse)
-def admin_review_queue_page():
+def admin_review_queue_page(authorization: Optional[str] = Header(default=None)):
+    require_admin_access(authorization)
     review_queue = get_scheme_fetch_status().get("review_queue", {"status": "pass", "flagged_count": 0, "pending_count": 0, "items": []})
     items = review_queue.get("items", [])
     if not items:
@@ -1939,7 +1951,8 @@ def admin_review_queue_page():
 
 
 @app.get("/admin/audit-logs", response_class=HTMLResponse)
-def admin_audit_logs_page():
+def admin_audit_logs_page(authorization: Optional[str] = Header(default=None)):
+    require_admin_access(authorization)
     logs = list_audit_logs()
     rows = "".join(
         """
@@ -2029,7 +2042,8 @@ def admin_audit_logs_page():
 
 
 @app.get("/admin/source-registry", response_class=HTMLResponse)
-def admin_source_registry_page():
+def admin_source_registry_page(authorization: Optional[str] = Header(default=None)):
+    require_admin_access(authorization)
     status = get_scheme_fetch_status()
     sources = status.get("source_registry", {}).get("sources", [])
     scheduler = status.get("scheduler", {
@@ -2192,7 +2206,8 @@ def admin_scheduler_run_api(authorization: Optional[str] = Header(default=None))
 
 
 @app.get("/admin/scheduler", response_class=HTMLResponse)
-def admin_scheduler_page():
+def admin_scheduler_page(authorization: Optional[str] = Header(default=None)):
+    require_admin_access(authorization)
     scheduler = get_scheme_scheduler().to_dict()
 
     return f"""
@@ -2262,7 +2277,8 @@ def admin_scheduler_page():
 
 
 @app.get("/admin/overview", response_class=HTMLResponse)
-def admin_overview_page():
+def admin_overview_page(authorization: Optional[str] = Header(default=None)):
+    require_admin_access(authorization)
     weather_status = get_weather_fetch_status()
     scheme_status = get_scheme_fetch_status()
     weather_total = weather_status.get("total_records", 0)
@@ -4488,7 +4504,8 @@ def traceability_page(
 
 
 @app.get("/admin/content-config", response_class=HTMLResponse)
-def admin_content_config_page():
+def admin_content_config_page(authorization: Optional[str] = Header(default=None)):
+    require_admin_access(authorization)
     return """
 <!DOCTYPE html>
 <html lang="ta">
@@ -4559,7 +4576,8 @@ def admin_content_config_page():
 
 
 @app.get("/admin/release-runbook", response_class=HTMLResponse)
-def admin_release_runbook_page():
+def admin_release_runbook_page(authorization: Optional[str] = Header(default=None)):
+    require_admin_access(authorization)
     return """
 <!DOCTYPE html>
 <html lang="ta">
@@ -4637,7 +4655,8 @@ def admin_release_runbook_page():
 
 
 @app.get("/admin/operations-checklist", response_class=HTMLResponse)
-def admin_operations_checklist_page():
+def admin_operations_checklist_page(authorization: Optional[str] = Header(default=None)):
+    require_admin_access(authorization)
     return """
 <!DOCTYPE html>
 <html lang="ta">
@@ -4714,7 +4733,8 @@ def admin_operations_checklist_page():
 
 
 @app.get("/admin/quality-gate", response_class=HTMLResponse)
-def admin_quality_gate_page():
+def admin_quality_gate_page(authorization: Optional[str] = Header(default=None)):
+    require_admin_access(authorization)
     weather_status = get_weather_fetch_status()
     scheme_status = get_scheme_fetch_status()
     quality_gate = {

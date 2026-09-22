@@ -52,6 +52,29 @@ def test_admin_route_denial_is_audited():
     )
 
 
+def test_admin_html_pages_require_admin_role():
+    farmer_login = client.post("/auth/login", json={"username": "farmer1", "password": "farmer123"})
+    assert farmer_login.status_code == 200
+    headers = {"Authorization": f"Bearer {farmer_login.json()['token']}"}
+    admin_pages = [
+        "/admin/review-queue",
+        "/admin/audit-logs",
+        "/admin/source-registry",
+        "/admin/scheduler",
+        "/admin/overview",
+        "/admin/content-config",
+        "/admin/release-runbook",
+        "/admin/operations-checklist",
+        "/admin/quality-gate",
+    ]
+
+    for page in admin_pages:
+        response = client.get(page, headers=headers, follow_redirects=False)
+        assert response.status_code in {302, 403}, f"{page} should reject farmer access"
+        if response.status_code == 302:
+            assert response.headers.get("location", "").startswith(("/login", "/home", "/dashboard"))
+
+
 def test_health_and_readiness_endpoints_expose_runtime_and_deployment_metadata():
     health = client.get("/health")
     assert health.status_code == 200
