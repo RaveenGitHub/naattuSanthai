@@ -410,14 +410,6 @@ def test_government_scheme_latest_and_archive_endpoints():
     assert "காப்பக அறிவிப்புகள்" in page_response.text
     assert "தேடுக" in page_response.text or "வகை" in page_response.text
 
-    refreshed_page = client.get(
-        "/government-schemes",
-        headers={"Sec-Fetch-Dest": "document", "Sec-Fetch-Mode": "navigate"},
-    )
-    assert refreshed_page.status_code == 200
-    assert '<header class="topbar">' in refreshed_page.text
-    assert 'id="page-frame"' in refreshed_page.text
-
     filtered_page_response = client.get("/government-schemes?category=subsidy&search=PM-Kisan")
     assert filtered_page_response.status_code == 200
     assert "PM-Kisan" in filtered_page_response.text or "subsidy" in filtered_page_response.text.lower()

@@ -384,6 +384,8 @@ def test_disease_history_page_lists_previous_scans():
 
 
 def test_admin_overview_page_renders_monitoring_metrics():
+    login = client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    assert login.status_code == 200
     response = client.get("/admin/overview")
     assert response.status_code == 200
     assert "அட்மின்" in response.text or "Admin" in response.text
