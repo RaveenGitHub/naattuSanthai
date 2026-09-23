@@ -61,6 +61,14 @@ def test_soil_health_route_returns_nutrient_plan():
     assert payload["soil_improvement_actions"]
     assert isinstance(payload.get("irrigation_guidance"), list)
     assert payload["irrigation_guidance"]
+    assert payload["labels_ta"]["soil_status"] == "மண் நிலை"
+
+
+def test_soil_health_route_rejects_invalid_measurements():
+    response = client.get(
+        "/api/v1/soil/health?crop=rice&ph=15&nitrogen=-1&phosphorus=16&potassium=140"
+    )
+    assert response.status_code == 422
 
 
 def test_soil_health_route_uses_rice_specific_recommendations():

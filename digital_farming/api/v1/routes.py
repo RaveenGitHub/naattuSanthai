@@ -58,15 +58,24 @@ def irrigation_plan(
 
 @router.get("/soil/health")
 def soil_health(
-    crop: str = Query(..., description="Crop type under evaluation"),
-    ph: float = Query(..., description="Soil pH value"),
-    nitrogen: float = Query(..., description="Nitrogen level (ppm or kg/ha equivalent)"),
-    phosphorus: float = Query(..., description="Phosphorus level"),
-    potassium: float = Query(..., description="Potassium level"),
+    crop: str = Query(..., min_length=2, description="Crop type under evaluation"),
+    ph: float = Query(..., ge=0, le=14, description="Soil pH value"),
+    nitrogen: float = Query(..., ge=0, description="Nitrogen level (ppm or kg/ha equivalent)"),
+    phosphorus: float = Query(..., ge=0, description="Phosphorus level"),
+    potassium: float = Query(..., ge=0, description="Potassium level"),
 ) -> Dict[str, Any]:
     result = assess_soil_health(crop=crop, ph=ph, nitrogen=nitrogen, phosphorus=phosphorus, potassium=potassium)
     return {
         "crop": result["crop"],
+        "labels_ta": {
+            "crop": "பயிர்",
+            "soil_status": "மண் நிலை",
+            "ph_status": "pH நிலை",
+            "nitrogen_status": "நைட்ரஜன் நிலை",
+            "phosphorus_status": "பாஸ்பரஸ் நிலை",
+            "potassium_status": "பொட்டாசியம் நிலை",
+            "irrigation_guidance": "நீர்ப்பாசன வழிகாட்டுதல்",
+        },
         "soil_status": result["soil_status"],
         "ph_status": result["ph_status"],
         "nitrogen_status": result["nitrogen_status"],
