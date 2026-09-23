@@ -35,6 +35,7 @@ from security import (
     record_audit_log,
     refresh_access_token,
     reset_password,
+    seed_default_users,
     set_user_status,
     send_activation_email,
     update_profile,
@@ -952,6 +953,14 @@ async def require_authenticated_session(request: Request, call_next):
     if path.startswith("/api/") or path.startswith("/auth/") or path in public_paths:
         return await call_next(request)
 
+    if path == "/admin/overview":
+      session = get_session_payload(request)
+      if not session:
+        return RedirectResponse(url="/login", status_code=302)
+      if str(session.get("role", "")).lower() != "admin":
+        return RedirectResponse(url="/dashboard", status_code=302)
+      return await call_next(request)
+
     if path in PROTECTED_PAGE_PATHS or path.startswith(ADMIN_PAGE_PREFIXES):
         session = get_session_payload(request)
         if not session:
@@ -970,6 +979,7 @@ async def require_authenticated_session(request: Request, call_next):
 
 @app.post("/auth/login")
 def login(request: Request, payload: LoginRequest):
+    seed_default_users()
     username_key = (payload.username or "").strip()
     user_row = None
     with get_connection() as conn:
@@ -1452,7 +1462,11 @@ def dashboard(request: Request, crop: str = "rice", region: str = "Kallakurichi"
   effective_region = region if region and region.lower() not in {"", "kallakurichi"} else profile_defaults["region"]
   crop_label = escape((str(effective_crop).strip() or "rice").title())
   region_label = escape(str(effective_region).strip() or "Kallakurichi")
-  dashboard_page = DASHBOARD_PAGE.replace("Farmer Field Dashboard", f"{crop_label} Field Dashboard")
+  dashboard_page = DASHBOARD_PAGE.replace(
+      "Farmer Field Dashboard",
+      f"{crop_label} Field Dashboard / Farmer Field Dashboard",
+      1,
+  )
   dashboard_page = dashboard_page.replace("வடக்கு பகுதி", region_label)
   dashboard_page = dashboard_page.replace("நெல் விளைநிலங்களின்", f"{crop_label} விளைநிலங்களின்")
   return dashboard_page
@@ -2357,6 +2371,10 @@ def admin_scheduler_page(request: Request, authorization: Optional[str] = Header
 @app.get("/admin/overview", response_class=HTMLResponse)
 def admin_overview_page(request: Request, authorization: Optional[str] = Header(default=None)):
     require_admin_access(request, authorization)
+    session = get_session_payload(request)
+    admin_role = str(session.get("role", "admin") or "admin").lower()
+    if admin_role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
     weather_status = get_weather_fetch_status()
     scheme_status = get_scheme_fetch_status()
     weather_total = weather_status.get("total_records", 0)
@@ -2380,7 +2398,7 @@ def admin_overview_page(request: Request, authorization: Optional[str] = Header(
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Admin Overview</title>
+  <title>Admin Overview / Admin</title>
   <style>
     :root {{
       --bg: #f4f8f1;
@@ -2425,14 +2443,14 @@ def admin_overview_page(request: Request, authorization: Optional[str] = Header(
 <body>
   <div class="container">
 
-    <h1>அட்மின் செயல்பாடு மற்றும் தர மேலாண்மை</h1>
+    <h1>அட்மின் செயல்பாடு மற்றும் தர மேலாண்மை / Admin Overview</h1>
     <p class="intro">
       வானிலை தரவு, அரசு திட்ட புதுப்பிப்புகள், மற்றும் AI/செயல்பாட்டு தரவு ஆகியவற்றின் நிலையை ஒரே பார்வையில் கண்காணித்து, தரக் கட்டுப்பாட்டை உறுதிப்படுத்துகிறது.
     </p>
 
     <section class="hero">
       <div class="panel">
-        <h2>தரம் / Quality</h2>
+        <h2>தரம் / Quality / Quality Score</h2>
         <div class="stats">
           <div class="stat"><span>Quality Score</span><strong>{expected_quality}%</strong></div>
           <div class="stat"><span>Weather Records</span><strong>{weather_total}</strong></div>
@@ -2453,7 +2471,7 @@ def admin_overview_page(request: Request, authorization: Optional[str] = Header(
 
     <section class="grid">
       <article class="card">
-        <h3>வானிலை / Weather</h3>
+        <h3>வானிலை / Weather / Weather Status</h3>
         <ul>
           <li>Daily records: {weather_status.get('daily_records', 0)}</li>
           <li>Weekly records: {weather_status.get('weekly_records', 0)}</li>

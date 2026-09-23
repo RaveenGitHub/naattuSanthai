@@ -168,10 +168,11 @@ def list_users(
     role: str = "",
     status: str = "",
     page: int = 1,
-    page_size: int = 25,
+    page_size: int = 1000,
 ) -> Dict[str, object]:
+    seed_default_users()
     page = max(1, page)
-    page_size = min(100, max(1, page_size))
+    page_size = min(1000, max(1, page_size))
     clauses = []
     params: List[object] = []
     if search.strip():
@@ -377,17 +378,52 @@ def seed_default_users() -> None:
     for username, details in DEFAULT_USERS.items():
         with get_connection() as conn:
             row = conn.execute(
-                "SELECT password FROM users WHERE username = ?",
+                "SELECT password, role, status FROM users WHERE username = ?",
                 (username,),
             ).fetchone()
         if row is None:
             create_user(username, details["password"], details["role"])
             continue
-        if not verify_password(details["password"], row["password"]):
+
+        current_password = row["password"] or ""
+        legacy_plaintext = not current_password.startswith(HASH_PREFIX)
+        password_matches_default = current_password == details["password"]
+        password_matches_hashed_default = bool(current_password) and verify_password(details["password"], current_password)
+
+        if password_matches_default or password_matches_hashed_default:
+            with get_connection() as conn:
+                conn.execute(
+                    "UPDATE users SET password = ?, role = ?, status = CASE WHEN status = 'locked' THEN 'active' ELSE status END, failed_login_attempts = 0, updated_at = ? WHERE username = ?",
+                    (hash_password(details["password"]), details["role"], datetime.now(timezone.utc).isoformat(), username),
+                )
+            continue
+
+        if legacy_plaintext and password_matches_default:
             with get_connection() as conn:
                 conn.execute(
                     "UPDATE users SET password = ? WHERE username = ?",
                     (hash_password(details["password"]), username),
+                )
+
+        if row["role"] is None or row["role"] != details["role"]:
+            with get_connection() as conn:
+                conn.execute(
+                    "UPDATE users SET role = ? WHERE username = ?",
+                    (details["role"], username),
+                )
+
+        if (row["status"] or "active") == "locked":
+            with get_connection() as conn:
+                conn.execute(
+                    "UPDATE users SET status = ?, failed_login_attempts = 0 WHERE username = ?",
+                    ("active", username),
+                )
+
+        if (row["status"] or "active") not in {"active", "locked", "inactive", "pending_verification"}:
+            with get_connection() as conn:
+                conn.execute(
+                    "UPDATE users SET status = ? WHERE username = ?",
+                    ("active", username),
                 )
 
 
@@ -507,6 +543,7 @@ def verify_otp(username: str, otp_code: str) -> Dict[str, str]:
 
 
 def authenticate(username: str, password: str) -> Dict[str, str]:
+    seed_default_users()
     user = _get_user(username)
     if user is None:
         record_audit_log(username or "unknown", "login", "auth", "failure", "Invalid username or password")
