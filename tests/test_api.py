@@ -410,6 +410,14 @@ def test_government_scheme_latest_and_archive_endpoints():
     assert "காப்பக அறிவிப்புகள்" in page_response.text
     assert "தேடுக" in page_response.text or "வகை" in page_response.text
 
+    refreshed_page = client.get(
+        "/government-schemes",
+        headers={"Sec-Fetch-Dest": "document", "Sec-Fetch-Mode": "navigate"},
+    )
+    assert refreshed_page.status_code == 200
+    assert '<header class="topbar">' in refreshed_page.text
+    assert 'id="page-frame"' in refreshed_page.text
+
     filtered_page_response = client.get("/government-schemes?category=subsidy&search=PM-Kisan")
     assert filtered_page_response.status_code == 200
     assert "PM-Kisan" in filtered_page_response.text or "subsidy" in filtered_page_response.text.lower()
@@ -1185,6 +1193,8 @@ def test_shell_home_navigation_does_not_reload_the_shell():
     assert 'data-page="/home"' in response.text
     assert 'data-page="/"' not in response.text
     assert 'src="/dashboard"' in response.text
+    assert "sessionStorage.setItem('shell-page', target)" in response.text
+    assert "history.pushState({ page: target }, '', window.location.pathname || '/')" in response.text
 
 
 def test_form_submission_registers_user_and_persists_data():

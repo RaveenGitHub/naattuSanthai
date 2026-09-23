@@ -803,14 +803,12 @@ APP_SHELL_PAGE = """
       const target = normalizePage(page);
       const currentSrc = normalizePage(frame.getAttribute('src') || '/dashboard');
       setActiveLink(target);
+      sessionStorage.setItem('shell-page', target);
       if (currentSrc !== target) {
         frame.setAttribute('src', target);
       }
       if (history && history.pushState && mode === 'push') {
-        const currentPath = normalizePage(window.location.pathname || '/');
-        if (currentPath !== target) {
-          history.pushState({ page: target }, '', target);
-        }
+        history.pushState({ page: target }, '', window.location.pathname || '/');
       }
       if (history && history.replaceState && mode === 'replace') {
         history.replaceState({ page: target }, '', target);
@@ -826,7 +824,8 @@ APP_SHELL_PAGE = """
       const page = event.state && event.state.page ? event.state.page : normalizePage(window.location.pathname || '/home');
       navigateTo(page, 'replace');
     });
-    const initialPage = normalizePage(new URL(window.location.href).pathname || '/');
+    const pathPage = normalizePage(new URL(window.location.href).pathname || '/');
+    const initialPage = pathPage === '/home' ? (sessionStorage.getItem('shell-page') || '/home') : pathPage;
     if (initialPage && initialPage !== '/home') {
       frame.setAttribute('src', initialPage);
     }
