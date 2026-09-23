@@ -1624,7 +1624,8 @@ def admin_fetch_history_api(authorization: Optional[str] = Header(default=None))
 
 
 @app.get("/api/admin/review-queue")
-def admin_review_queue_api():
+def admin_review_queue_api(request: Request, authorization: Optional[str] = Header(default=None)):
+    require_admin_access(request, authorization)
     status = get_scheme_fetch_status()
     payload = status.get("review_queue", {"status": "pass", "flagged_count": 0, "pending_count": 0, "items": []})
     return {"success": True, "data": payload, "error": None}

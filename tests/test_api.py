@@ -937,6 +937,14 @@ def test_scheme_review_resolution_records_admin_decision_and_audit_entry():
     assert audit_row is not None
     assert audit_row[0] == "scheme_review_resolved"
 
+    queue = get_scheme_fetch_status()["review_queue"]
+    assert not any(item["id"] == "SCHEME-REVIEW-RESOLVE-001" for item in queue["items"])
+
+
+def test_scheme_review_queue_api_requires_admin_access():
+    response = TestClient(app).get("/api/admin/review-queue")
+    assert response.status_code == 401
+
 
 def test_admin_release_runbook_page_renders_release_steps_and_rollback_plan():
     response = client.get("/admin/release-runbook")

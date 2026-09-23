@@ -976,9 +976,16 @@ def get_scheme_fetch_status() -> dict:
     average_score = round(sum(valid_scores) / (len(valid_scores) or 1), 2) if valid_scores else 0
     has_warning = bool(invalid_records) or total_count == 0
     review_queue_items = []
+    with get_connection() as conn:
+        review_rows = conn.execute(
+            "SELECT scheme_id, decision FROM scheme_review_actions WHERE id IN (SELECT id FROM scheme_review_actions AS latest WHERE latest.scheme_id = scheme_review_actions.scheme_id ORDER BY created_at DESC LIMIT 1)"
+        ).fetchall()
+    latest_review_decisions = {row["scheme_id"]: str(row["decision"] or "").lower() for row in review_rows}
     for item in invalid_records:
         row = next((entry for entry in scheme_rows if entry["id"] == item["id"]), None)
         if row is None:
+            continue
+        if latest_review_decisions.get(row["id"]) in {"approved", "rejected"}:
             continue
         category_name = (row["category"] if "category" in row.keys() else "general") or "general"
         review_queue_items.append(
