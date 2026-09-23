@@ -3538,13 +3538,6 @@ def government_schemes_page(category: Optional[str] = None, search: Optional[str
 </head>
 <body>
   <div class="container">
-    <nav class="nav" aria-label="Government scheme navigation" style="margin-bottom: 18px; justify-content: flex-start;">
-      <a href="/home" class="nav-link" data-page="/home">முகப்பு</a>
-      <a href="/dashboard" class="nav-link" data-page="/dashboard">டாஷ்போர்டு</a>
-      <a href="/services" class="nav-link" data-page="/services">சேவைகள்</a>
-      <a href="/government-schemes" class="nav-link active" data-page="/government-schemes">அரசுத் திட்டங்கள்</a>
-    </nav>
-
     <section class="hero">
       <div class="hero-copy">
         <div class="eyebrow">Farmer support</div>
@@ -3611,15 +3604,6 @@ def government_schemes_page(category: Optional[str] = None, search: Optional[str
       __ARCHIVE_HTML__
     </section>
   </div>
-  <script>
-    const activePath = window.location.pathname || '/';
-    const normalizePath = (path) => path === '/' ? '/home' : path;
-    const navLinks = document.querySelectorAll('.nav-link');
-    navLinks.forEach((link) => {{
-      const page = normalizePath(link.dataset.page || '/home');
-      link.classList.toggle('active', page === normalizePath(activePath));
-    }});
-  </script>
 </body>
 </html>
 """

@@ -413,8 +413,7 @@ def test_government_scheme_latest_and_archive_endpoints():
     filtered_page_response = client.get("/government-schemes?category=subsidy&search=PM-Kisan")
     assert filtered_page_response.status_code == 200
     assert "PM-Kisan" in filtered_page_response.text or "subsidy" in filtered_page_response.text.lower()
-    assert 'data-page="/government-schemes"' in filtered_page_response.text
-    assert 'class="nav-link active"' in filtered_page_response.text
+    assert '<body>\n  <div class="container">\n    <nav' not in filtered_page_response.text
     assert "__LATEST_HTML__" not in filtered_page_response.text
     assert "{latest_count}" not in filtered_page_response.text
     assert "--bg: #f4f9f1;" in filtered_page_response.text
