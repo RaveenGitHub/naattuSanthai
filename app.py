@@ -907,6 +907,17 @@ def get_client_ip(request: Request) -> str:
     return "unknown"
 
 
+def validate_uploaded_image(file: UploadFile) -> str:
+    filename = (file.filename or "").strip()
+    content_type = (file.content_type or "").lower().strip()
+    allowed_extensions = (".jpg", ".jpeg", ".png", ".webp", ".gif")
+    has_image_type = content_type.startswith("image/")
+    has_image_extension = filename.lower().endswith(allowed_extensions)
+    if not has_image_type and not has_image_extension:
+        raise HTTPException(status_code=400, detail="Please upload a valid crop image file.")
+    return filename or "uploaded-crop-image"
+
+
 def clear_auth_rate_limit(request: Request, endpoint_name: str, *, key_suffix: str = "") -> None:
     client_ip = get_client_ip(request)
     bucket_key = f"{endpoint_name}:{client_ip}:{key_suffix}" if key_suffix else f"{endpoint_name}:{client_ip}"
@@ -1249,7 +1260,7 @@ def diagnose_upload(
     if payload.get("role") not in {"operator", "admin"}:
         raise HTTPException(status_code=403, detail="Operator/Admin access required")
 
-    image_url = file.filename or "uploaded-crop-image"
+    image_url = validate_uploaded_image(file)
     if file.content_type:
         image_url = f"{image_url}::{file.content_type}"
 
@@ -2805,7 +2816,7 @@ def disease_detection_upload(
   notes: str = Form(""),
   file: UploadFile = File(...),
 ):
-  image_url = file.filename or "uploaded-crop-image"
+  image_url = validate_uploaded_image(file)
   if file.content_type:
     image_url = f"{image_url}::{file.content_type}"
   return disease_detection_page(request, crop_type, image_url, notes)

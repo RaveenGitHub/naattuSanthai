@@ -51,6 +51,7 @@ def test_ai_diagnosis_returns_recommendation():
     assert body["success"] is True
     assert "diagnosis" in body["data"]
     assert "recommendation" in body["data"]
+    assert "recommendation" in body["data"]
     assert "treatment_steps" in body["data"]
     assert "prevention_steps" in body["data"]
     assert isinstance(body["data"]["treatment_steps"], list)
@@ -351,7 +352,19 @@ def test_disease_upload_route_accepts_image_file_for_ai_diagnosis():
     body = response.json()
     assert body["success"] is True
     assert "diagnosis" in body["data"]
-    assert "recommendation" in body["data"]
+
+
+def test_disease_upload_route_rejects_non_image_files():
+    login = client.post("/auth/login", json={"username": "operator1", "password": "password123"})
+    token = login.json()["token"]
+    response = client.post(
+        "/api/diagnose/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"crop_type": "Rice", "notes": "leaf spots"},
+        files={"file": ("notes.txt", b"not an image", "text/plain")},
+    )
+    assert response.status_code == 400
+    assert "image" in response.json()["detail"].lower()
 
 
 def test_disease_detection_flags_low_confidence_results_for_manual_review():
