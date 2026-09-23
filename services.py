@@ -739,6 +739,45 @@ def fetch_authorized_market_updates(timeout_seconds: int = 15) -> dict:
     return {"status": "success" if records else "warning", "records": records, "sources": sources, "errors": errors}
 
 
+@dataclass
+class MarketPriceFetchScheduler:
+    job_name: str = "authorized_market_price_fetch"
+    frequency: str = "daily"
+    cron_expression: str = "0 6 * * *"
+    status: str = "active"
+    last_run: Optional[str] = None
+    next_run: Optional[str] = None
+
+    def to_dict(self) -> dict:
+        now = datetime.now(timezone.utc)
+        return {
+            "job_name": self.job_name,
+            "frequency": self.frequency,
+            "cron_expression": self.cron_expression,
+            "status": self.status,
+            "last_run": self.last_run,
+            "next_run": self.next_run or (now.replace(hour=6, minute=0, second=0, microsecond=0) + timedelta(days=1)).isoformat(),
+        }
+
+    def run(self) -> dict:
+        self.status = "running"
+        result = fetch_authorized_market_updates()
+        if result["status"] == "not_configured":
+            seed_market_data()
+        now = datetime.now(timezone.utc)
+        self.last_run = now.isoformat()
+        self.next_run = (now + timedelta(days=1)).isoformat()
+        self.status = "active" if result["status"] in {"success", "not_configured"} else "warning"
+        return result
+
+
+_market_price_scheduler = MarketPriceFetchScheduler()
+
+
+def get_market_price_scheduler() -> MarketPriceFetchScheduler:
+    return _market_price_scheduler
+
+
 def seed_market_data() -> None:
     with get_connection() as conn:
         count = conn.execute("SELECT COUNT(*) FROM market_prices").fetchone()[0]

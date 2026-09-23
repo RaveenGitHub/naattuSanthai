@@ -25,6 +25,8 @@ from services import (
     list_latest_market_prices,
     list_archived_market_prices,
     fetch_authorized_market_updates,
+    get_market_price_scheduler,
+    AUTHORIZED_MARKET_SOURCES,
     list_soil_tests,
     list_weather_alerts,
     list_weather_forecast,
@@ -170,10 +172,26 @@ def get_archived_market_prices(limit: int = Query(default=200, ge=1, le=1000)):
 @router.post("/market-prices/fetch")
 def refresh_market_prices(request: Request):
     require_route_role(request, "admin")
-    result = fetch_authorized_market_updates()
-    if result["status"] == "not_configured":
-        seed_market_data()
-    return {"success": True, "data": result, "error": None}
+    scheduler = get_market_price_scheduler()
+    result = scheduler.run()
+    return {"success": True, "data": {**result, "scheduler": scheduler.to_dict()}, "error": None}
+
+
+@router.get("/market-prices/fetch/status")
+def market_price_fetch_status(request: Request):
+    require_route_role(request, "admin")
+    scheduler = get_market_price_scheduler()
+    return {
+        "success": True,
+        "data": {
+            "scheduler": scheduler.to_dict(),
+            "latest_records": len(list_latest_market_prices(50)),
+            "authorized_sources": AUTHORIZED_MARKET_SOURCES,
+            "latest_window_days": 7,
+            "top_limit": 50,
+        },
+        "error": None,
+    }
 
 
 @router.get("/schemes")

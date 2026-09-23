@@ -337,6 +337,19 @@ def test_market_latest_and_archive_endpoints_use_one_week_window():
     assert all("updated_at" in item and "source" in item for item in latest.json()["data"])
 
 
+def test_market_fetch_scheduler_reports_daily_refresh_contract():
+    status = client.get("/api/market-prices/fetch/status", headers={"X-User-Role": "admin"})
+    assert status.status_code == 200
+    scheduler = status.json()["data"]["scheduler"]
+    assert scheduler["frequency"] == "daily"
+    assert scheduler["cron_expression"] == "0 6 * * *"
+    assert status.json()["data"]["top_limit"] == 50
+
+    refresh = client.post("/api/market-prices/fetch", headers={"X-User-Role": "admin"})
+    assert refresh.status_code == 200
+    assert refresh.json()["data"]["scheduler"]["last_run"]
+
+
 def test_market_panel_displays_tamil_product_names_and_rates():
     response = client.get("/weather-market?region=Kallakurichi")
     assert response.status_code == 200
