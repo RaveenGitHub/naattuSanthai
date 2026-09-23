@@ -335,6 +335,8 @@ def test_market_latest_and_archive_endpoints_use_one_week_window():
     assert archive.status_code == 200
     assert len(latest.json()["data"]) <= 50
     assert all("updated_at" in item and "source" in item for item in latest.json()["data"])
+    keys = [(item["crop_name"].lower(), item["market_name"].lower()) for item in latest.json()["data"]]
+    assert len(keys) == len(set(keys))
 
 
 def test_market_fetch_scheduler_reports_daily_refresh_contract():

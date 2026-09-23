@@ -669,10 +669,15 @@ def list_latest_market_prices(limit: int = 50) -> list[dict]:
     cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     with get_connection() as conn:
         rows = conn.execute(
-            "SELECT * FROM market_prices WHERE updated_at >= ? ORDER BY updated_at DESC, price_per_kg DESC LIMIT ?",
-            (cutoff, max(1, min(50, limit))),
+            "SELECT * FROM market_prices WHERE updated_at >= ? ORDER BY updated_at DESC, price_per_kg DESC",
+            (cutoff,),
         ).fetchall()
-    return [dict(row) for row in rows]
+    latest_by_market = {}
+    for row in rows:
+        item = dict(row)
+        key = (str(item.get("crop_name", "")).casefold(), str(item.get("market_name", "")).casefold())
+        latest_by_market.setdefault(key, item)
+    return list(latest_by_market.values())[: max(1, min(50, limit))]
 
 
 def list_archived_market_prices(limit: int = 200) -> list[dict]:
