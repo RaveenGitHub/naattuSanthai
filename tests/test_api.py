@@ -678,6 +678,9 @@ def test_archived_scheme_updates_include_year_grouping_metadata():
     archived = list_archived_scheme_updates()
     assert any(item.get("year_group") == "2024" for item in archived)
     assert any(item.get("year_group") == "2026" for item in archived)
+    archived_item = next(item for item in archived if item.get("id") == "SCHEME-ARCHIVE-YEAR-2024")
+    assert archived_item["archived_at"]
+    assert archived_item["archive_reason"]
 
 
 def test_government_schemes_archive_page_groups_entries_by_year():

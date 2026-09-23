@@ -823,7 +823,19 @@ def _year_group_for_timestamp(value: Optional[str]) -> Optional[str]:
         return None
 
 
+def mark_expired_scheme_updates_archived() -> int:
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    archived_at = datetime.now(timezone.utc).isoformat()
+    with get_connection() as conn:
+        cursor = conn.execute(
+            "UPDATE government_scheme_updates SET is_archived = 1, archived_at = ?, archive_reason = ? WHERE created_at < ? AND is_archived = 0",
+            (archived_at, "freshness_window_expired", cutoff),
+        )
+    return cursor.rowcount
+
+
 def list_latest_scheme_updates(category: Optional[str] = None, search: Optional[str] = None) -> List[dict]:
+    mark_expired_scheme_updates_archived()
     cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     query = """
         SELECT id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
@@ -849,10 +861,12 @@ def list_latest_scheme_updates(category: Optional[str] = None, search: Optional[
 
 
 def list_archived_scheme_updates(category: Optional[str] = None, search: Optional[str] = None) -> List[dict]:
+    mark_expired_scheme_updates_archived()
     cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     query = """
         SELECT id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
-               category, scheme_type, source_name, source_url, created_at, is_archived
+               category, scheme_type, source_name, source_url, created_at, is_archived,
+               archived_at, archive_reason
         FROM government_scheme_updates
         WHERE (created_at < ? OR is_archived = 1)
     """
@@ -870,6 +884,8 @@ def list_archived_scheme_updates(category: Optional[str] = None, search: Optiona
     items = [dict(row) for row in rows]
     for item in items:
         item["year_group"] = _year_group_for_timestamp(item.get("created_at"))
+        item["archived_at"] = item.get("archived_at") or item.get("created_at")
+        item["archive_reason"] = item.get("archive_reason") or ("manual_archive" if item.get("is_archived") else "freshness_window_expired")
     return items
 
 

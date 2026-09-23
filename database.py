@@ -237,6 +237,11 @@ def init_db() -> None:
             )
             """
         )
+        scheme_columns = {row[1] for row in conn.execute("PRAGMA table_info(government_scheme_updates)").fetchall()}
+        if "archived_at" not in scheme_columns:
+            conn.execute("ALTER TABLE government_scheme_updates ADD COLUMN archived_at TEXT")
+        if "archive_reason" not in scheme_columns:
+            conn.execute("ALTER TABLE government_scheme_updates ADD COLUMN archive_reason TEXT")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS migration_status (
