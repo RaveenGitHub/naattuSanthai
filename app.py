@@ -4297,7 +4297,11 @@ def weather_market_page(request: Request, region: str = "Kallakurichi"):
         "temperature_c": 29.0,
         "rainfall_mm": 18.0,
         "wind_kmh": 18.0,
+        "humidity_pct": 68.0,
+        "moisture_percent": 60.0,
     }
+    forecast_moisture = float(forecast.get("moisture_percent", 60.0))
+    forecast_humidity = float(forecast.get("humidity_pct", 68.0))
     filtered_crop = profile_defaults.get("crop") or "rice"
     market_rows = list_market_prices(filtered_crop)
     if not market_rows:
@@ -4383,6 +4387,8 @@ def weather_market_page(request: Request, region: str = "Kallakurichi"):
           <div class="metric"><span>வெப்பநிலை</span><strong>{float(forecast.get('temperature_c', 29.0)):.0f}°C</strong></div>
           <div class="metric"><span>மழை</span><strong>{float(forecast.get('rainfall_mm', 18.0)):.0f} mm</strong></div>
           <div class="metric"><span>காற்று</span><strong>{float(forecast.get('wind_kmh', 18.0)):.0f} km/h</strong></div>
+          <div class="metric"><span>ஈரப்பதம்</span><strong>{forecast_humidity:.0f}%</strong></div>
+          <div class="metric"><span>மண் ஈரப்பதம்</span><strong>{forecast_moisture:.0f}%</strong></div>
         </div>
       </div>
 

@@ -490,6 +490,37 @@ def test_weather_page_renders_region_forecast_and_guidance():
     assert "மழை" in response.text or "Rain" in response.text
 
 
+def test_weather_city_catalog_covers_all_tamil_nadu_tiers():
+    response = client.get("/api/weather/cities")
+    assert response.status_code == 200
+    cities = response.json()["data"]
+    assert {item["tier"] for item in cities} == {"Tier 1", "Tier 2", "Tier 3"}
+    assert any(item["city"] == "Chennai" for item in cities)
+    assert any(item["city"] == "Kallakurichi" for item in cities)
+
+
+def test_weather_market_panel_displays_all_tamil_weather_metrics():
+    response = client.get("/weather-market?region=Kallakurichi")
+    assert response.status_code == 200
+    assert "வெப்பநிலை" in response.text
+    assert "மழை" in response.text
+    assert "காற்று" in response.text
+    assert "ஈரப்பதம்" in response.text
+    assert "மண் ஈரப்பதம்" in response.text
+
+
+def test_weather_latest_and_archive_endpoints_expose_seven_day_policy():
+    latest = client.get("/api/weather/latest")
+    archive = client.get("/api/weather/archive")
+    status = client.get("/api/weather/fetch/status", headers={"X-User-Role": "admin"})
+    assert latest.status_code == 200
+    assert archive.status_code == 200
+    assert status.status_code == 200
+    payload = status.json()["data"]
+    assert payload["archive_policy"]["latest_window_days"] == 7
+    assert "authorized_sources" in payload
+
+
 def test_weather_page_reports_rainfall_in_mm_not_percent():
     response = client.get("/weather-market?region=Kallakurichi")
     assert response.status_code == 200

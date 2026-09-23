@@ -11,6 +11,38 @@ from schemas import Farmer, Farm, MarketPrice, SoilTestRecord, WeatherAlert
 init_db()
 
 
+TAMIL_NADU_CITY_TIERS = {
+    "Tier 1": ["Chennai", "Coimbatore", "Madurai", "Tiruchirappalli", "Salem", "Tirunelveli"],
+    "Tier 2": ["Erode", "Vellore", "Thoothukudi", "Dindigul", "Thanjavur", "Ranipet", "Tiruppur", "Hosur"],
+    "Tier 3": ["Kallakurichi", "Villupuram", "Cuddalore", "Namakkal", "Karur", "Nagapattinam", "Ramanathapuram", "Sivaganga", "Virudhunagar", "Tenkasi", "Krishnagiri", "Dharmapuri", "Ariyalur", "Perambalur", "Mayiladuthurai", "Tiruvannamalai", "Kanchipuram", "Chengalpattu", "The Nilgiris", "Pudukkottai", "Tiruvallur"],
+}
+
+AUTHORIZED_WEATHER_SOURCES = [
+    {
+        "name": "India Meteorological Department",
+        "short_name": "IMD",
+        "authority": "Government of India",
+        "url": "https://mausam.imd.gov.in/",
+        "status": "authorized",
+    },
+    {
+        "name": "Tamil Nadu State Disaster Management Authority",
+        "short_name": "TNSDMA",
+        "authority": "Government of Tamil Nadu",
+        "url": "https://tnsdma.tn.gov.in/",
+        "status": "authorized",
+    },
+]
+
+
+def list_tamil_nadu_weather_cities() -> list[dict]:
+    return [
+        {"city": city, "tier": tier, "state": "Tamil Nadu"}
+        for tier, cities in TAMIL_NADU_CITY_TIERS.items()
+        for city in cities
+    ]
+
+
 @dataclass
 class SchemeFetchScheduler:
     job_name: str = "government_scheme_fetch"
@@ -324,16 +356,49 @@ def list_weather_alerts(village: Optional[str] = None) -> List[WeatherAlert]:
     return [alert for alert in alerts if alert.village.lower() == village.lower()]
 
 
-def list_weather_forecast(period: str, region: Optional[str] = None) -> List[dict]:
+def list_weather_forecast(period: str, region: Optional[str] = None, city_tier: Optional[str] = None) -> List[dict]:
     query = "SELECT * FROM weather_forecasts WHERE period = ?"
     params: list = [period]
     if region is not None and region != "":
         query += " AND LOWER(region) = LOWER(?)"
         params.append(region)
+    if city_tier:
+        query += " AND city_tier = ?"
+        params.append(city_tier)
     query += " ORDER BY forecast_date ASC"
     with get_connection() as conn:
         rows = conn.execute(query, params).fetchall()
     return [dict(row) for row in rows]
+
+
+def list_latest_weather(region: Optional[str] = None, city_tier: Optional[str] = None) -> List[dict]:
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    query = "SELECT * FROM weather_forecasts WHERE created_at >= ? AND period = 'daily'"
+    params: list = [cutoff]
+    if region:
+        query += " AND LOWER(region) = LOWER(?)"
+        params.append(region)
+    if city_tier:
+        query += " AND city_tier = ?"
+        params.append(city_tier)
+    query += " ORDER BY created_at DESC, forecast_date DESC"
+    with get_connection() as conn:
+        return [dict(row) for row in conn.execute(query, params).fetchall()]
+
+
+def list_archived_weather(region: Optional[str] = None, city_tier: Optional[str] = None) -> List[dict]:
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    query = "SELECT * FROM weather_forecasts WHERE created_at < ?"
+    params: list = [cutoff]
+    if region:
+        query += " AND LOWER(region) = LOWER(?)"
+        params.append(region)
+    if city_tier:
+        query += " AND city_tier = ?"
+        params.append(city_tier)
+    query += " ORDER BY created_at DESC, forecast_date DESC"
+    with get_connection() as conn:
+        return [dict(row) for row in conn.execute(query, params).fetchall()]
 
 
 def get_weather_fetch_status() -> dict:
@@ -348,12 +413,20 @@ def get_weather_fetch_status() -> dict:
         region_rows = conn.execute(
             "SELECT region, COUNT(*) AS count FROM weather_forecasts GROUP BY region ORDER BY count DESC"
         ).fetchall()
+        latest_count = conn.execute(
+            "SELECT COUNT(*) FROM weather_forecasts WHERE created_at >= ?",
+            ((datetime.now(timezone.utc) - timedelta(days=7)).isoformat(),),
+        ).fetchone()[0]
+        city_rows = conn.execute(
+            "SELECT city_tier, COUNT(DISTINCT region) AS count FROM weather_forecasts GROUP BY city_tier"
+        ).fetchall()
 
     last_source_name = last_row["source_name"] if last_row else None
-    source_whitelist = ["IMD", "India Meteorological Department", "Tamil Nadu Weather Office"]
-    fallback_sources = ["Regional field station", "Local agro-weather sensor"]
+    source_whitelist = [source["name"] for source in AUTHORIZED_WEATHER_SOURCES]
+    fallback_sources = []
+    authorized_source_names = set(source_whitelist) | {source["short_name"] for source in AUTHORIZED_WEATHER_SOURCES}
     source_compliance = {
-        "status": "pass" if last_source_name in set(source_whitelist) else "warning",
+        "status": "pass" if last_source_name in authorized_source_names else "warning",
         "trusted_sources": sorted(source_whitelist),
         "current_source": last_source_name,
         "fallback_sources": fallback_sources,
@@ -385,6 +458,11 @@ def get_weather_fetch_status() -> dict:
         "source_compliance": source_compliance,
         "retention_days": retention_days,
         "archive_policy": archive_policy,
+        "latest_window_records": latest_count,
+        "archived_records": max(0, total_count - latest_count),
+        "city_tiers": {row["city_tier"]: row["count"] for row in city_rows},
+        "city_catalog_count": len(list_tamil_nadu_weather_cities()),
+        "authorized_sources": AUTHORIZED_WEATHER_SOURCES,
         "quality_gate": quality_gate,
     }
 

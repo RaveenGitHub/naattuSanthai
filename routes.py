@@ -13,6 +13,9 @@ from services import (
     get_scheme_fetch_status,
     get_scheme_update_by_id,
     get_weather_fetch_status,
+    list_archived_weather,
+    list_latest_weather,
+    list_tamil_nadu_weather_cities,
     list_archived_scheme_updates,
     list_farms,
     list_farmers,
@@ -85,8 +88,8 @@ def get_weather_alerts(village: Optional[str] = Query(default=None)):
 
 
 @router.get("/weather/daily")
-def get_daily_weather(region: Optional[str] = Query(default="Kallakurichi")):
-    return {"success": True, "data": list_weather_forecast("daily", region), "error": None}
+def get_daily_weather(region: Optional[str] = Query(default="Kallakurichi"), city_tier: Optional[str] = Query(default=None)):
+    return {"success": True, "data": list_weather_forecast("daily", region, city_tier), "error": None}
 
 
 @router.get("/weather/weekly")
@@ -97,6 +100,21 @@ def get_weekly_weather(region: Optional[str] = Query(default="Kallakurichi")):
 @router.get("/weather/monthly")
 def get_monthly_weather(region: Optional[str] = Query(default="Kallakurichi")):
     return {"success": True, "data": list_weather_forecast("monthly", region), "error": None}
+
+
+@router.get("/weather/cities")
+def get_tamil_nadu_weather_cities():
+    return {"success": True, "data": list_tamil_nadu_weather_cities(), "error": None}
+
+
+@router.get("/weather/latest")
+def get_latest_weather(region: Optional[str] = Query(default=None), city_tier: Optional[str] = Query(default=None)):
+    return {"success": True, "data": list_latest_weather(region, city_tier), "error": None}
+
+
+@router.get("/weather/archive")
+def get_archived_weather(region: Optional[str] = Query(default=None), city_tier: Optional[str] = Query(default=None)):
+    return {"success": True, "data": list_archived_weather(region, city_tier), "error": None}
 
 
 @router.get("/weather/fetch/status")
@@ -110,7 +128,19 @@ def trigger_weather_fetch(request: Request):
     require_route_role(request, "admin")
     seed_weather_alerts()
     seed_weather_forecast_data()
-    return {"success": True, "data": {"message": "Weather forecast refresh completed"}, "error": None}
+    status = get_weather_fetch_status()
+    return {
+        "success": True,
+        "data": {
+            "message": "Weather forecast refresh completed",
+            "authorized_sources": status["authorized_sources"],
+            "city_catalog_count": status["city_catalog_count"],
+            "latest_window_days": status["archive_policy"]["latest_window_days"],
+            "latest_window_records": status["latest_window_records"],
+            "archived_records": status["archived_records"],
+        },
+        "error": None,
+    }
 
 
 @router.get("/market-prices")

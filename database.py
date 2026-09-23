@@ -140,6 +140,11 @@ def init_db() -> None:
             )
             """
         )
+        weather_columns = {row[1] for row in conn.execute("PRAGMA table_info(weather_forecasts)").fetchall()}
+        if "city_tier" not in weather_columns:
+            conn.execute("ALTER TABLE weather_forecasts ADD COLUMN city_tier TEXT NOT NULL DEFAULT 'Tier 3'")
+        if "moisture_percent" not in weather_columns:
+            conn.execute("ALTER TABLE weather_forecasts ADD COLUMN moisture_percent REAL NOT NULL DEFAULT 60")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS market_prices (
