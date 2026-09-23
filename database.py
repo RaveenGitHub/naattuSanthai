@@ -157,6 +157,11 @@ def init_db() -> None:
             )
             """
         )
+        market_columns = {row[1] for row in conn.execute("PRAGMA table_info(market_prices)").fetchall()}
+        if "source_url" not in market_columns:
+            conn.execute("ALTER TABLE market_prices ADD COLUMN source_url TEXT NOT NULL DEFAULT ''")
+        if "source_authority" not in market_columns:
+            conn.execute("ALTER TABLE market_prices ADD COLUMN source_authority TEXT NOT NULL DEFAULT ''")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS diagnosis_records (

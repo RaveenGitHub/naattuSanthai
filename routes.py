@@ -22,6 +22,9 @@ from services import (
     list_farmers,
     list_latest_scheme_updates,
     list_market_prices,
+    list_latest_market_prices,
+    list_archived_market_prices,
+    fetch_authorized_market_updates,
     list_soil_tests,
     list_weather_alerts,
     list_weather_forecast,
@@ -151,6 +154,26 @@ def trigger_weather_fetch(request: Request):
 def get_market_prices(crop_name: Optional[str] = Query(default=None)):
     seed_market_data()
     return {"success": True, "data": list_market_prices(crop_name), "error": None}
+
+
+@router.get("/market-prices/latest")
+def get_latest_market_prices(limit: int = Query(default=50, ge=1, le=50)):
+    seed_market_data()
+    return {"success": True, "data": list_latest_market_prices(limit), "error": None}
+
+
+@router.get("/market-prices/archive")
+def get_archived_market_prices(limit: int = Query(default=200, ge=1, le=1000)):
+    return {"success": True, "data": list_archived_market_prices(limit), "error": None}
+
+
+@router.post("/market-prices/fetch")
+def refresh_market_prices(request: Request):
+    require_route_role(request, "admin")
+    result = fetch_authorized_market_updates()
+    if result["status"] == "not_configured":
+        seed_market_data()
+    return {"success": True, "data": result, "error": None}
 
 
 @router.get("/schemes")

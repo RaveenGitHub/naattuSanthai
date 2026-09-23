@@ -53,6 +53,8 @@ from services import (
     list_archived_scheme_updates,
     list_latest_scheme_updates,
     list_market_prices,
+    list_latest_market_prices,
+    TOP_AGRI_PRODUCTS_TA,
     list_weather_alerts,
     list_weather_forecast,
 )
@@ -4303,12 +4305,13 @@ def weather_market_page(request: Request, region: str = "Kallakurichi"):
     forecast_moisture = float(forecast.get("moisture_percent", 60.0))
     forecast_humidity = float(forecast.get("humidity_pct", 68.0))
     filtered_crop = profile_defaults.get("crop") or "rice"
-    market_rows = list_market_prices(filtered_crop)
-    if not market_rows:
-        market_rows = list_market_prices()
+    market_rows = list_latest_market_prices(50)
+    if filtered_crop and filtered_crop.lower() != "rice":
+      personalized = [item for item in market_rows if str(item.get("crop_name", "")).lower() == filtered_crop.lower()]
+      market_rows = personalized + [item for item in market_rows if item not in personalized]
     market_rows_html = "".join(
-        f"<tr><td>{escape(str(getattr(item, 'crop_name', 'மாற்று பயிர்')))}<br><small>{escape(str(getattr(item, 'market_name', 'மண்டி')).replace('Mandi', 'மண்டி').replace('Market', 'மார்க்கெட்'))}</small></td><td>₹{float(getattr(item, 'price_per_kg', 0.0)):.2f} / கிலோ</td></tr>"
-        for item in market_rows[:4]
+      f"<tr><td>{escape(TOP_AGRI_PRODUCTS_TA.get(str(item.get('crop_name', '')), str(item.get('crop_name', 'மாற்று பயிர்'))))}<br><small>{escape(str(item.get('market_name', 'மண்டி')).replace('Mandi', 'மண்டி').replace('Market', 'மார்க்கெட்'))}</small></td><td>₹{float(item.get('price_per_kg', 0.0)):.2f} / கிலோ</td></tr>"
+      for item in market_rows[:50]
     )
     if not market_rows_html:
         market_rows_html = """

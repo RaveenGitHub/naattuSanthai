@@ -328,6 +328,23 @@ def test_market_prices_endpoint():
     assert response.json()["success"] is True
 
 
+def test_market_latest_and_archive_endpoints_use_one_week_window():
+    latest = client.get("/api/market-prices/latest?limit=50")
+    archive = client.get("/api/market-prices/archive")
+    assert latest.status_code == 200
+    assert archive.status_code == 200
+    assert len(latest.json()["data"]) <= 50
+    assert all("updated_at" in item and "source" in item for item in latest.json()["data"])
+
+
+def test_market_panel_displays_tamil_product_names_and_rates():
+    response = client.get("/weather-market?region=Kallakurichi")
+    assert response.status_code == 200
+    assert "சந்தை விலை" in response.text
+    assert "நெல்" in response.text or "கோதுமை" in response.text
+    assert "கிலோ" in response.text
+
+
 def test_government_scheme_latest_and_archive_endpoints():
     latest_response = client.get("/api/schemes/latest")
     assert latest_response.status_code == 200

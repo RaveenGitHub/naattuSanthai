@@ -39,6 +39,25 @@ AUTHORIZED_WEATHER_SOURCES = [
     },
 ]
 
+AUTHORIZED_MARKET_SOURCES = [
+    {"name": "AGMARKNET", "authority": "Government of India", "url": "https://agmarknet.gov.in/", "short_name": "AGMARKNET"},
+    {"name": "Tamil Nadu Agricultural University", "authority": "Government of Tamil Nadu", "url": "https://agritech.tnau.ac.in/", "short_name": "TNAU"},
+    {"name": "Tamil Nadu Marketing Board", "authority": "Government of Tamil Nadu", "url": "https://www.tnagmark.tn.gov.in/", "short_name": "TN_MARKETING_BOARD"},
+]
+
+TOP_AGRI_PRODUCTS_TA = {
+    "Rice": "நெல்", "Wheat": "கோதுமை", "Maize": "மக்காச்சோளம்", "Sorghum": "சோளம்", "Pearl Millet": "கம்பு",
+    "Finger Millet": "கேழ்வரகு", "Little Millet": "சாமை", "Foxtail Millet": "தினை", "Kodo Millet": "வரகு", "Proso Millet": "பனிவரகு",
+    "Black Gram": "உளுந்து", "Green Gram": "பாசிப்பயறு", "Bengal Gram": "கொண்டைக்கடலை", "Red Gram": "துவரம் பருப்பு", "Horse Gram": "கொள்ளு",
+    "Groundnut": "நிலக்கடலை", "Sesame": "எள்", "Sunflower": "சூரியகாந்தி", "Castor": "ஆமணக்கு", "Soybean": "சோயாபீன்",
+    "Cotton": "பருத்தி", "Sugarcane": "கரும்பு", "Tobacco": "புகையிலை", "Turmeric": "மஞ்சள்", "Chilli": "மிளகாய்",
+    "Coconut": "தேங்காய்", "Banana": "வாழை", "Mango": "மாம்பழம்", "Guava": "கொய்யா", "Papaya": "பப்பாளி",
+    "Tomato": "தக்காளி", "Onion": "வெங்காயம்", "Potato": "உருளைக்கிழங்கு", "Brinjal": "கத்தரிக்காய்", "Okra": "வெண்டைக்காய்",
+    "Cabbage": "முட்டைக்கோஸ்", "Cauliflower": "காலிஃப்ளவர்", "Carrot": "கேரட்", "Beetroot": "பீட்ரூட்", "Tapioca": "மரவள்ளிக்கிழங்கு",
+    "Drumstick": "முருங்கைக்காய்", "Bitter Gourd": "பாகற்காய்", "Bottle Gourd": "சுரைக்காய்", "Ridge Gourd": "பீர்க்கங்காய்", "Beans": "பீன்ஸ்",
+    "Brinjal Hybrid": "கலப்பின கத்தரிக்காய்", "Green Peas": "பச்சைப் பட்டாணி", "Coriander": "கொத்தமல்லி", "Cumin": "சீரகம்", "Cardamom": "ஏலக்காய்",
+}
+
 
 def list_tamil_nadu_weather_cities() -> list[dict]:
     return [
@@ -644,6 +663,80 @@ def list_market_prices(crop_name: Optional[str] = None) -> List[MarketPrice]:
     if crop_name is None:
         return market_data
     return [item for item in market_data if item.crop_name.lower() == crop_name.lower()]
+
+
+def list_latest_market_prices(limit: int = 50) -> list[dict]:
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM market_prices WHERE updated_at >= ? ORDER BY updated_at DESC, price_per_kg DESC LIMIT ?",
+            (cutoff, max(1, min(50, limit))),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def list_archived_market_prices(limit: int = 200) -> list[dict]:
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM market_prices WHERE updated_at < ? ORDER BY updated_at DESC LIMIT ?",
+            (cutoff, max(1, min(1000, limit))),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _configured_market_feeds() -> list[dict]:
+    allowed_hosts = {"agmarknet.gov.in", "www.agmarknet.gov.in", "agritech.tnau.ac.in", "www.tnagmark.tn.gov.in", "tnagmark.tn.gov.in"}
+    feeds = []
+    for source in AUTHORIZED_MARKET_SOURCES:
+        url = os.getenv(f"{source['short_name']}_MARKET_FEED_URL", "").strip()
+        hostname = (urlparse(url).hostname or "").lower()
+        if url and hostname in allowed_hosts:
+            feeds.append({**source, "url": url})
+    return feeds
+
+
+def fetch_authorized_market_updates(timeout_seconds: int = 15) -> dict:
+    feeds = _configured_market_feeds()
+    if not feeds:
+        return {"status": "not_configured", "records": [], "sources": [], "errors": ["No authorized AGMARKNET/TNAU/TN Marketing Board feed URL is configured."]}
+
+    records = []
+    errors = []
+    sources = []
+    for source in feeds:
+        request = Request(source["url"], headers={"Accept": "application/json", "User-Agent": "Digital-Farming-Support-Center/1.0"})
+        try:
+            with urlopen(request, timeout=timeout_seconds) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            values = payload.get("data", payload) if isinstance(payload, dict) else payload
+            if isinstance(values, dict):
+                values = values.get("prices", values.get("records", []))
+            source_records = []
+            for item in values if isinstance(values, list) else []:
+                if not isinstance(item, dict):
+                    continue
+                crop = str(item.get("crop_name") or item.get("commodity") or item.get("product") or "").strip()
+                market = str(item.get("market_name") or item.get("market") or "").strip()
+                try:
+                    price = float(item.get("price_per_kg") or item.get("modal_price") or item.get("price"))
+                except (TypeError, ValueError):
+                    continue
+                if not crop or not market or price < 0:
+                    continue
+                source_records.append((crop, market, price))
+            now = datetime.now(timezone.utc).isoformat()
+            with get_connection() as conn:
+                conn.executemany(
+                    "INSERT INTO market_prices (id, crop_name, market_name, price_per_kg, source, updated_at, source_url, source_authority) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    [(f"MKT-LIVE-{uuid4().hex}", crop, market, price, source["name"], now, source["url"], source["authority"]) for crop, market, price in source_records],
+                )
+            records.extend(source_records)
+            sources.append({"name": source["name"], "url": source["url"], "records": len(source_records), "status": "success"})
+        except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
+            errors.append(f"{source['name']}: {str(exc)[:180]}")
+            sources.append({"name": source["name"], "url": source["url"], "records": 0, "status": "failed"})
+    return {"status": "success" if records else "warning", "records": records, "sources": sources, "errors": errors}
 
 
 def seed_market_data() -> None:
