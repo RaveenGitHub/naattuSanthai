@@ -13,6 +13,7 @@ from services import (
     get_scheme_fetch_status,
     get_scheme_update_by_id,
     get_weather_fetch_status,
+    fetch_authorized_weather_updates,
     list_archived_weather,
     list_latest_weather,
     list_tamil_nadu_weather_cities,
@@ -127,7 +128,9 @@ def get_weather_fetch_status_endpoint(request: Request):
 def trigger_weather_fetch(request: Request):
     require_route_role(request, "admin")
     seed_weather_alerts()
-    seed_weather_forecast_data()
+    live_fetch = fetch_authorized_weather_updates()
+    if live_fetch["status"] == "not_configured":
+        seed_weather_forecast_data()
     status = get_weather_fetch_status()
     return {
         "success": True,
@@ -138,6 +141,7 @@ def trigger_weather_fetch(request: Request):
             "latest_window_days": status["archive_policy"]["latest_window_days"],
             "latest_window_records": status["latest_window_records"],
             "archived_records": status["archived_records"],
+            "live_fetch": live_fetch,
         },
         "error": None,
     }

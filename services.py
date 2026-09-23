@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import json
+import os
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
@@ -41,6 +46,102 @@ def list_tamil_nadu_weather_cities() -> list[dict]:
         for tier, cities in TAMIL_NADU_CITY_TIERS.items()
         for city in cities
     ]
+
+
+def _city_tier(city: str) -> str:
+    for tier, cities in TAMIL_NADU_CITY_TIERS.items():
+        if city.casefold() in {item.casefold() for item in cities}:
+            return tier
+    return "Tier 3"
+
+
+def _configured_weather_feeds() -> list[dict]:
+    feeds = []
+    for source in AUTHORIZED_WEATHER_SOURCES:
+        env_name = f"{source['short_name']}_WEATHER_FEED_URL"
+        url = os.getenv(env_name, "").strip()
+        if not url:
+            continue
+        hostname = (urlparse(url).hostname or "").lower()
+        if hostname not in {"mausam.imd.gov.in", "imd.gov.in", "tnsdma.tn.gov.in", "tn.gov.in", "agri.tn.gov.in"}:
+            continue
+        feeds.append({**source, "url": url, "env_name": env_name})
+    return feeds
+
+
+def _normalize_weather_payload(payload: object, source_name: str) -> list[dict]:
+    records = payload.get("data", payload) if isinstance(payload, dict) else payload
+    if isinstance(records, dict):
+        records = records.get("observations", records.get("forecast", []))
+    if not isinstance(records, list):
+        return []
+
+    normalized = []
+    catalog = {item["city"].casefold(): item for item in list_tamil_nadu_weather_cities()}
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        city = str(record.get("city") or record.get("region") or record.get("district") or "").strip()
+        city_meta = catalog.get(city.casefold())
+        if not city_meta:
+            continue
+        def number(*names: str, default: float = 0.0) -> float:
+            for name in names:
+                value = record.get(name)
+                if value not in (None, ""):
+                    try:
+                        return float(value)
+                    except (TypeError, ValueError):
+                        return default
+            return default
+
+        normalized.append({
+            "region": city_meta["city"],
+            "city_tier": city_meta["tier"],
+            "forecast_date": str(record.get("forecast_date") or record.get("observed_at") or datetime.now(timezone.utc).isoformat()),
+            "temperature_c": number("temperature_c", "temperature", "temp"),
+            "rainfall_mm": number("rainfall_mm", "rainfall", "rain"),
+            "humidity_pct": number("humidity_pct", "humidity"),
+            "wind_kmh": number("wind_kmh", "wind_speed_kmh", "wind_speed"),
+            "moisture_percent": number("moisture_percent", "soil_moisture", "soil_moisture_percent"),
+            "summary_ta": str(record.get("summary_ta") or "அதிகாரப்பூர்வ வானிலை புதுப்பிப்பு கிடைத்துள்ளது."),
+            "advisory_ta": str(record.get("advisory_ta") or "மண் ஈரப்பதம் மற்றும் மழை நிலையை கண்காணிக்கவும்."),
+            "source_name": source_name,
+        })
+    return normalized
+
+
+def fetch_authorized_weather_updates(timeout_seconds: int = 15) -> dict:
+    feeds = _configured_weather_feeds()
+    if not feeds:
+        return {"status": "not_configured", "records": [], "sources": [], "errors": ["No authorized IMD/TNSDMA feed URL is configured."]}
+
+    records = []
+    errors = []
+    sources = []
+    for source in feeds:
+        request = Request(source["url"], headers={"Accept": "application/json", "User-Agent": "Digital-Farming-Support-Center/1.0"})
+        try:
+            with urlopen(request, timeout=timeout_seconds) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            source_records = _normalize_weather_payload(payload, source["name"])
+            records.extend(source_records)
+            sources.append({"name": source["name"], "url": source["url"], "records": len(source_records), "status": "success"})
+        except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
+            errors.append(f"{source['name']}: {str(exc)[:180]}")
+            sources.append({"name": source["name"], "url": source["url"], "records": 0, "status": "failed"})
+
+    if records:
+        now = datetime.now(timezone.utc).isoformat()
+        with get_connection() as conn:
+            conn.executemany(
+                "INSERT INTO weather_forecasts (id, region, period, forecast_date, temperature_c, rainfall_mm, humidity_pct, wind_kmh, summary_ta, advisory_ta, source_name, created_at, city_tier, moisture_percent) VALUES (?, ?, 'daily', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [
+                    (f"WX-LIVE-{uuid4().hex}", item["region"], item["forecast_date"], item["temperature_c"], item["rainfall_mm"], item["humidity_pct"], item["wind_kmh"], item["summary_ta"], item["advisory_ta"], item["source_name"], now, item["city_tier"], item["moisture_percent"])
+                    for item in records
+                ],
+            )
+    return {"status": "success" if records else "warning", "records": records, "sources": sources, "errors": errors}
 
 
 @dataclass
