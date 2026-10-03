@@ -37,3 +37,11 @@ def test_readme_mentions_project_setup():
     content = Path("README.md").read_text(encoding="utf-8")
     assert "FastAPI" in content or "uvicorn" in content or "Docker" in content
     assert "--env-file .env" in content
+
+
+def test_weather_refresh_has_standalone_worker_and_windows_task_registration():
+    assert Path("digital_farming/weather_refresh.py").exists()
+    assert Path("scripts/Register-WeatherRefreshTask.ps1").exists()
+    readme = Path("README.md").read_text(encoding="utf-8")
+    assert "weather_refresh" in readme
+    assert "Register-WeatherRefreshTask.ps1" in readme

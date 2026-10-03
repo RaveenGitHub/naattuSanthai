@@ -92,6 +92,22 @@ To fetch official IMD city forecasts, request API access and a key/token from th
 
 Without valid IMD credentials, forecast refresh returns an explicit not-configured/failure result and the page shows cities with no current data. Credentials and access tokens must remain in `.env` or a secret store; never commit them.
 
+### Schedule automatic IMD refreshes on Windows
+
+The refresh worker runs outside Uvicorn so app restarts or multiple web workers cannot create duplicate timers. To run it once:
+
+```powershell
+.\.venv\Scripts\python.exe -m digital_farming.weather_refresh
+```
+
+It reads `.env`, writes rotating output to `logs/weather-refresh.log`, and exits with a failure code unless the entire configured city catalog was refreshed. After creating `.env` with valid IMD credentials and installing dependencies, register a daily 6:00 AM Task Scheduler job:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\Register-WeatherRefreshTask.ps1
+```
+
+The task runs as the current Windows user and requires that user to be signed in. Adjust the schedule with `-Hour` and `-Minute`. For unattended deployments, configure an OS scheduler/service with a dedicated account that can read `.env` and access the network; do not put API credentials in task arguments. The app does not install or register a task automatically.
+
 ## Run with Docker
 
 ```bash

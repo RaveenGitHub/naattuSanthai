@@ -9,4 +9,5 @@ digital_farming.db
 coverage.xml
 .coverage
 *.log
+logs/
 .DS_Store
