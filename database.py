@@ -268,6 +268,20 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS weather_fetch_runs (
+                id TEXT PRIMARY KEY,
+                status TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                finished_at TEXT NOT NULL,
+                record_count INTEGER NOT NULL,
+                error_count INTEGER NOT NULL,
+                city_coverage TEXT NOT NULL,
+                sources TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS fetch_history (
                 id TEXT PRIMARY KEY,
                 source_name TEXT NOT NULL,

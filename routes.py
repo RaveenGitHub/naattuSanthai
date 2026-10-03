@@ -13,6 +13,7 @@ from services import (
     get_scheme_fetch_status,
     get_scheme_update_by_id,
     get_weather_fetch_status,
+    list_weather_fetch_history,
     fetch_authorized_weather_updates,
     list_archived_weather,
     list_latest_weather,
@@ -164,6 +165,12 @@ def trigger_weather_fetch(request: Request):
             "details": live_fetch["errors"],
         },
     }
+
+
+@router.get("/weather/fetch/history")
+def get_weather_fetch_history_endpoint(request: Request, limit: int = Query(default=20, ge=1, le=100)):
+    require_route_role(request, "admin")
+    return {"success": True, "data": list_weather_fetch_history(limit), "error": None}
 
 
 @router.get("/market-prices")

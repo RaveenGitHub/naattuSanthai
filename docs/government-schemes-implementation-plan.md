@@ -4,6 +4,27 @@
 
 Build and ship a reliable agritech information stack that covers government schemes, soil testing, weather intelligence, and disease support. Each module must fetch trustworthy data, translate and summarize it in Tamil, expose a clear latest/archive experience for farmers, and remain monitorable by admins.
 
+## Weather implementation update — 2026-10-03
+
+- Restored the committed official IMD connector, 35-city Tier 1/2/3 directory,
+  missing/stale-data labeling, standalone refresh worker, and Windows task registration.
+- Added persistent completed-refresh history for both manual and scheduled runs.
+  The admin history endpoint reports run timestamps, source outcomes, error counts,
+  and received/missing cities without storing credentials or raw exception text.
+- Weather fetch status and the quality page now distinguish stored forecast freshness
+  from refresh outcomes, including complete/partial/failed counts and the success rate
+  over the latest 20 completed runs. No runs means `never_run`, not a fabricated success.
+- Verification: 136 targeted weather, scheduler, API, deployment, environment, and
+  layered-app tests passed. The local app responds with healthy database status,
+  renders 35 city cards, and exposes refresh monitoring.
+- Live-data rollout remains blocked until valid IMD API credentials/access are configured;
+  task registration is explicit and is not evidence that a job has run successfully.
+- The 35-city catalog is the configured coverage target, not an exhaustive list of
+  every Tamil Nadu town or an official A/B/C classification.
+- Next rollout work: verify real IMD payload coverage with authorized access, then
+  close missing-city mapping gaps and validate weekly/monthly source contracts.
+  Do not synthesize forecasts for uncovered cities.
+
 ## Status update — 2026-09-10
 
 ### What has improved in the current implementation

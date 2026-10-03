@@ -108,6 +108,18 @@ powershell -ExecutionPolicy Bypass -File scripts\Register-WeatherRefreshTask.ps1
 
 The task runs as the current Windows user and requires that user to be signed in. Adjust the schedule with `-Hour` and `-Minute`. For unattended deployments, configure an OS scheduler/service with a dedicated account that can read `.env` and access the network; do not put API credentials in task arguments. The app does not install or register a task automatically.
 
+### Monitor weather refresh reliability
+
+Manual and scheduled refreshes store completed-run metadata in SQLite. Admins can use
+`GET /api/weather/fetch/history?limit=20` (1–100 runs) and the `fetch_monitoring`
+section of `GET /api/weather/fetch/status` to inspect timestamps, source outcomes,
+received/missing cities, and the complete-refresh success rate over the latest 20 runs.
+Partial coverage and unconfigured sources do not count as successful runs.
+Before the first refresh, monitoring reports `never_run` and a null success rate.
+The weather quality page shows this summary separately from stored forecast freshness.
+History stores counts and source outcomes, not API credentials, feed URLs, or raw exception text;
+the refresh response and worker logs provide immediate diagnostic details.
+
 ## Run with Docker
 
 ```bash

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
@@ -290,7 +291,7 @@ def _add_weather_city_coverage(result: dict) -> dict:
     return result
 
 
-def fetch_authorized_weather_updates(timeout_seconds: int = 15) -> dict:
+def _fetch_authorized_weather_updates(timeout_seconds: int = 15) -> dict:
     feeds = _configured_weather_feeds()
     if not feeds:
         live_result = _fetch_imd_city_forecasts(timeout_seconds)
@@ -363,6 +364,53 @@ def fetch_authorized_weather_updates(timeout_seconds: int = 15) -> dict:
         "sources": sources,
         "errors": errors,
     })
+
+
+def fetch_authorized_weather_updates(timeout_seconds: int = 15) -> dict:
+    started_at = datetime.now(timezone.utc).isoformat()
+    result = _add_weather_city_coverage(_fetch_authorized_weather_updates(timeout_seconds))
+    if result["errors"] and result["status"] == "success":
+        result["status"] = "partial"
+    sources = [
+        {"name": source["name"], "status": source["status"], "records": source["records"]}
+        for source in result["sources"]
+    ]
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO weather_fetch_runs "
+            "(id, status, started_at, finished_at, record_count, error_count, city_coverage, sources) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                f"WX-RUN-{uuid4().hex}", result["status"], started_at,
+                datetime.now(timezone.utc).isoformat(), len(result["records"]),
+                len(result["errors"]), json.dumps(result["city_coverage"]), json.dumps(sources),
+            ),
+        )
+    logger = logging.getLogger(__name__)
+    log = logger.info if result["status"] == "success" else logger.warning
+    log(
+        "Weather refresh status=%s received=%s total=%s errors=%s",
+        result["status"], result["city_coverage"]["received"],
+        result["city_coverage"]["total"], len(result["errors"]),
+    )
+    return result
+
+
+def list_weather_fetch_history(limit: int = 20) -> list[dict]:
+    if not 1 <= limit <= 100:
+        raise ValueError("Weather fetch history limit must be between 1 and 100")
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM weather_fetch_runs ORDER BY finished_at DESC, rowid DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    history = []
+    for row in rows:
+        run = dict(row)
+        run["city_coverage"] = json.loads(run["city_coverage"])
+        run["sources"] = json.loads(run["sources"])
+        history.append(run)
+    return history
 
 
 @dataclass
@@ -802,6 +850,19 @@ def get_weather_fetch_status() -> dict:
         "actual_records": current_city_count,
         "missing_city_count": len(city_coverage) - current_city_count,
     }
+    history = list_weather_fetch_history()
+    successful_runs = sum(run["status"] == "success" for run in history)
+    partial_runs = sum(run["status"] == "partial" for run in history)
+    fetch_monitoring = {
+        "status": history[0]["status"] if history else "never_run",
+        "window": "latest 20 completed runs",
+        "runs": len(history),
+        "successful_runs": successful_runs,
+        "partial_runs": partial_runs,
+        "failed_runs": len(history) - successful_runs - partial_runs,
+        "success_rate_pct": round(100 * successful_runs / len(history), 2) if history else None,
+        "last_run": history[0] if history else None,
+    }
 
     return {
         "total_records": total_count,
@@ -829,6 +890,7 @@ def get_weather_fetch_status() -> dict:
         },
         "authorized_sources": AUTHORIZED_WEATHER_SOURCES,
         "quality_gate": quality_gate,
+        "fetch_monitoring": fetch_monitoring,
     }
 
 

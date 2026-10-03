@@ -4151,6 +4151,10 @@ def weather_quality_page():
     source_list = " | ".join(status.get("source_whitelist", [])) or "IMD"
     fallback_list = " | ".join(status.get("fallback_sources", [])) or "None configured"
     retention = status.get("archive_policy", {})
+    monitoring = status["fetch_monitoring"]
+    last_run = monitoring["last_run"]
+    success_rate = monitoring["success_rate_pct"]
+    success_rate_label = f"{success_rate:.2f}%" if success_rate is not None else "No completed runs"
     return f"""
 <!DOCTYPE html>
 <html lang="ta">
@@ -4201,6 +4205,17 @@ def weather_quality_page():
         <div class="meta-item"><strong>Last stored update:</strong> {escape(str(status.get('last_updated_at') or 'Never'))}</div>
         <div class="meta-item"><strong>Fresh city coverage:</strong> {status.get('city_coverage', {}).get('current', 0)} / {status.get('city_catalog_count', 0)}</div>
       </div>
+    </section>
+
+    <section class="panel" style="margin-top: 20px;">
+      <h2>Refresh monitoring / புதுப்பிப்பு கண்காணிப்பு</h2>
+      <div class="meta">
+        <div class="meta-item"><strong>Last refresh result:</strong> {escape(monitoring['status'])}</div>
+        <div class="meta-item"><strong>Last completed refresh:</strong> {escape(last_run['finished_at'] if last_run else 'Never')}</div>
+        <div class="meta-item"><strong>Complete refresh success rate:</strong> {success_rate_label} ({monitoring['window']})</div>
+        <div class="meta-item"><strong>Partial / failed runs:</strong> {monitoring['partial_runs']} / {monitoring['failed_runs']}</div>
+      </div>
+      <p>Stored city freshness and the last refresh result are separate checks. A failed refresh does not erase existing forecasts.</p>
     </section>
 
     <section class="panel" style="margin-top: 20px;">
