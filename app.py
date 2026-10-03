@@ -51,6 +51,7 @@ from services import (
     get_scheme_scheduler,
     get_scheme_update_by_id,
     get_weather_fetch_status,
+    get_weather_rollout_readiness,
     list_archived_scheme_updates,
     list_latest_scheme_updates,
     list_market_prices,
@@ -2488,6 +2489,7 @@ def admin_overview_page(request: Request, authorization: Optional[str] = Header(
     <section class="grid">
       <article class="card">
         <h3>வானிலை / Weather / Weather Status</h3>
+        <p><a href="/admin/weather-readiness">வானிலை வெளியீட்டு தயார்நிலை / Weather rollout readiness</a></p>
         <ul>
           <li>Daily records: {weather_status.get('daily_records', 0)}</li>
           <li>Weekly records: {weather_status.get('weekly_records', 0)}</li>
@@ -2506,6 +2508,111 @@ def admin_overview_page(request: Request, authorization: Optional[str] = Header(
       </article>
     </section>
   </div>
+</body>
+</html>
+"""
+
+
+@app.get("/admin/weather-readiness", response_class=HTMLResponse)
+def admin_weather_readiness_page(request: Request, authorization: Optional[str] = Header(default=None)):
+    require_admin_access(request, authorization)
+    readiness = get_weather_rollout_readiness()
+    configuration = readiness["configuration"]
+    coverage = readiness["city_coverage"]
+
+    def render_list(items, empty_label):
+        return "".join(f"<li>{escape(str(item))}</li>" for item in items) or f"<li>{escape(empty_label)}</li>"
+
+    tier_rows = "".join(
+        f"<tr><th scope='row'>{escape(tier)}</th><td>{counts['current']}</td><td>{counts['total']}</td></tr>"
+        for tier, counts in coverage["tiers"].items()
+    )
+    feed_rows = "".join(
+        f"<tr><th scope='row'>{escape(check['setting'])}</th>"
+        f"<td>{'Present' if check['configured'] else 'Absent'}</td>"
+        f"<td>{'Accepted' if check['accepted'] else 'Not accepted'}</td></tr>"
+        for check in configuration["feed_checks"]
+    )
+    return f"""
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Weather rollout readiness / அட்மின் வானிலை தயார்நிலை</title>
+  <style>
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif; background: #f4f8f2; color: #17301d; }}
+    main {{ max-width: 1100px; margin: auto; padding: 24px 18px; }}
+    nav {{ display: flex; gap: 18px; flex-wrap: wrap; }}
+    a {{ color: #236039; }}
+    .grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }}
+    section {{ background: white; border: 1px solid #dfe9df; border-radius: 18px; padding: 20px; margin-top: 18px; min-width: 0; }}
+    li, p {{ line-height: 1.7; overflow-wrap: anywhere; }}
+    .badge {{ display: inline-block; padding: 8px 14px; border: 2px solid #567163; border-radius: 12px; font-weight: 700; }}
+    table {{ width: 100%; border-collapse: collapse; }}
+    th, td {{ text-align: left; border-bottom: 1px solid #dfe9df; padding: 10px 6px; overflow-wrap: anywhere; }}
+    caption {{ text-align: left; font-weight: bold; padding: 10px 0; }}
+    @media (max-width: 760px) {{ .grid {{ grid-template-columns: 1fr; }} }}
+  </style>
+</head>
+<body>
+<main>
+  <nav aria-label="Admin navigation">
+    <a href="/admin/overview">Admin overview</a>
+    <a href="/weather-quality">Weather quality</a>
+    <a href="/admin/weather-readiness">Reload diagnostics</a>
+  </nav>
+  <h1>வானிலை வெளியீட்டு தயார்நிலை / Weather rollout readiness</h1>
+  <p class="badge">Daily rollout: {escape(readiness['status'])}</p>
+  <p>Scope: {escape(readiness['scope'])}. Read-only checks; no weather fetch is triggered.</p>
+  <p>Configuration is not proof of live source access. Daily readiness does not certify weekly/monthly forecasts or scheduler execution.</p>
+  <div class="grid">
+    <section aria-labelledby="blockers">
+      <h2 id="blockers">தடைகள் / Blockers</h2>
+      <ul>{render_list(readiness['blockers'], 'No daily rollout blockers')}</ul>
+      <h3>Configuration warnings</h3>
+      <ul>{render_list(configuration['warnings'], 'No configuration warnings')}</ul>
+    </section>
+    <section aria-labelledby="configuration">
+      <h2 id="configuration">Configuration checks</h2>
+      <p>Status: {escape(configuration['status'])}<br />Connector: {escape(configuration['mode'])}</p>
+      <ul>
+        <li>IMD API key: {'Present' if configuration['credential_presence']['api_key'] else 'Absent'}</li>
+        <li>IMD API token: {'Present' if configuration['credential_presence']['api_token'] else 'Absent'}</li>
+        <li>IMD endpoint: {'Valid' if configuration['imd_endpoint_valid'] else 'Invalid'}</li>
+        <li>Network access: not verified by configuration checks</li>
+      </ul>
+      <table>
+        <caption>Authorized feed settings (values hidden)</caption>
+        <thead><tr><th scope="col">Setting</th><th scope="col">Presence</th><th scope="col">Acceptance</th></tr></thead>
+        <tbody>{feed_rows}</tbody>
+      </table>
+    </section>
+    <section aria-labelledby="coverage">
+      <h2 id="coverage">புதிய நகரத் தரவு / Fresh city coverage</h2>
+      <p>{coverage['current']} / {coverage['total']} cities current</p>
+      <table>
+        <caption>Configured tier coverage</caption>
+        <thead><tr><th scope="col">Tier</th><th scope="col">Current</th><th scope="col">Target</th></tr></thead>
+        <tbody>{tier_rows}</tbody>
+      </table>
+      <h3>Missing current forecasts</h3>
+      <ul>{render_list(coverage['missing'], 'No missing cities')}</ul>
+    </section>
+    <section aria-labelledby="verification">
+      <h2 id="verification">Verification and next actions</h2>
+      <ul>
+        <li>Last completed refresh: {escape(readiness['last_refresh_status'])}</li>
+        <li>Weekly/monthly live verification: {escape(readiness['long_range_live_verification'])}</li>
+        <li>OS scheduler registration: {escape(readiness['scheduler_registration'])}</li>
+      </ul>
+      <h3>Next actions</h3>
+      <ul>{render_list(readiness['next_actions'], 'No next actions')}</ul>
+      <p>Credentials and configured URLs are intentionally not displayed.</p>
+    </section>
+  </div>
+</main>
 </body>
 </html>
 """

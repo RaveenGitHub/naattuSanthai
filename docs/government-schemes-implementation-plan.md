@@ -72,6 +72,16 @@ Build and ship a reliable agritech information stack that covers government sche
   non-disclosure, malformed configuration handling, and complete-refresh/fresh-city
   gating. Next implementation remains authorized live source verification;
   credential-free diagnostics do not remove that prerequisite.
+- Added `/admin/weather-readiness`, linked from admin overview, for read-only
+  rollout blockers, safe configuration checks, tier coverage, missing cities,
+  last-refresh outcome and next actions. Uses the same readiness service as the
+  admin API; refresh navigation reloads diagnostics without fetching weather.
+  Guest/farmer/operator access is rejected and credentials/feed URLs remain hidden.
+- Verification: 131 dashboard/readiness, API, and layered-app tests passed,
+  including role redirects, secret non-disclosure, escaped source-derived text,
+  overview navigation, and no refresh-history mutation; editor diagnostics are clean.
+  Next implementation remains live source verification after authorized access
+  is configured; the dashboard exposes this blocker rather than fabricating data.
 
 ## Status update — 2026-09-10
 

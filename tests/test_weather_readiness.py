@@ -118,3 +118,45 @@ def test_readiness_api_is_admin_only_and_does_not_mutate_history(readiness_envir
     assert response.json()["success"] is True
     assert response.json()["data"]["status"] == "blocked"
     assert services.list_weather_fetch_history() == []
+
+
+@pytest.mark.parametrize("role", [None, "farmer", "operator"])
+def test_readiness_dashboard_rejects_non_admin_sessions(readiness_environment, role):
+    client = TestClient(app)
+    if role:
+        password = "password123" if role == "operator" else "farmer123"
+        assert client.post("/auth/login", json={"username": f"{role}1", "password": password}).status_code == 200
+    response = client.get("/admin/weather-readiness", follow_redirects=False)
+    assert response.status_code == 302
+    assert response.headers["location"] == ("/dashboard" if role else "/login")
+
+
+def test_readiness_dashboard_displays_safe_diagnostics_and_overview_link(readiness_environment, monkeypatch):
+    monkeypatch.setenv("IMD_API_KEY", "private-ui-key")
+    monkeypatch.setenv("IMD_API_TOKEN", "private-ui-token")
+    monkeypatch.setenv("TNSDMA_WEATHER_FEED_URL", "https://example.com/?secret=private-ui-url")
+    client = TestClient(app)
+    assert client.post("/auth/login", json={"username": "admin1", "password": "admin123"}).status_code == 200
+    response = client.get("/admin/weather-readiness")
+    assert response.status_code == 200
+    for label in (
+        "Daily rollout: blocked", "0 / 35 cities current", "Tier 1", "Tier 2", "Tier 3",
+        "Chennai", "no_completed_refresh", "ignored_tnsdma_weather_feed_url",
+        "not_verified", "not_checked", "Reload diagnostics", "IMD API key: Present",
+    ):
+        assert label in response.text
+    for secret in ("private-ui-key", "private-ui-token", "private-ui-url", "https://example.com"):
+        assert secret not in response.text
+    assert 'href="/admin/weather-readiness"' in client.get("/admin/overview").text
+    assert services.list_weather_fetch_history() == []
+
+
+def test_readiness_dashboard_escapes_source_derived_text(readiness_environment, monkeypatch):
+    original = services.get_weather_rollout_readiness()
+    original["city_coverage"]["missing"] = ["<script>alert(1)</script>"]
+    monkeypatch.setattr("app.get_weather_rollout_readiness", lambda: original)
+    client = TestClient(app)
+    client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    page = client.get("/admin/weather-readiness").text
+    assert "<script>alert(1)</script>" not in page
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in page

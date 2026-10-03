@@ -156,6 +156,10 @@ The task runs as the current Windows user and requires that user to be signed in
 ### Monitor weather refresh reliability
 
 Admins can inspect `GET /api/weather/rollout/readiness` before a live rollout.
+After signing in as an admin, open `/admin/weather-readiness` (linked from the
+admin overview) for the same read-only diagnostics, tier coverage, missing cities,
+configuration warnings, and next actions. Reload diagnostics re-renders current
+checks without triggering a weather refresh. Guests and non-admins cannot view it.
 This read-only diagnostic makes no network requests and does not create refresh
 history. It reports configuration presence/acceptance, the selected connector
 (configured feeds take precedence over the official city API), static blocker
