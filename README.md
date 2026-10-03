@@ -77,18 +77,26 @@ python -m pip install -r requirements.txt
 3. Start the app:
 
 ```bash
-python -m uvicorn app:app --host 0.0.0.0 --port 8000
+python -m uvicorn app:app --host 0.0.0.0 --port 8000 --env-file .env
 ```
 
 The app reads configuration values from the environment, including `APP_NAME`, `APP_VERSION`, `APP_ENV`, `APP_DEBUG`, `PORT`, `DATABASE_PATH`, `SECRET_KEY`, `JWT_ALGORITHM`, and `JWT_EXPIRY_HOURS`.
 
 The Docker runtime and Docker Compose configuration both pass these values through so local development and container deployment remain consistent.
 
+### Official city weather data
+
+The weather page lists the configured Tier 1, Tier 2, and Tier 3 Tamil Nadu city catalog and only displays measured forecast values when a matching forecast has been received within the last seven days. Missing or stale city data is identified rather than replaced with sample weather.
+
+To fetch official IMD city forecasts, request API access and a key/token from the [IMD API portal](https://api.imd.gov.in/public/index.php), then set `IMD_API_KEY` and `IMD_API_TOKEN` in your local `.env`. IMD binds API access to the registering client/IP; follow the portal's current access requirements. The default endpoint is `https://api.imd.gov.in/api/v1/cityforecast`. Restart the app after changing `.env`, sign in as an admin, then trigger a refresh with `POST /api/weather/fetch` (or use the admin UI/API client). The response and `GET /api/weather/fetch/status` report per-city freshness and missing-city coverage.
+
+Without valid IMD credentials, forecast refresh returns an explicit not-configured/failure result and the page shows cities with no current data. Credentials and access tokens must remain in `.env` or a secret store; never commit them.
+
 ## Run with Docker
 
 ```bash
 docker build -t digital-farming-support-center .
-docker run -p 8000:8000 digital-farming-support-center
+docker run --env-file .env -p 8000:8000 digital-farming-support-center
 ```
 
 Or with Docker Compose:

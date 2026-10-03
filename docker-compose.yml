@@ -15,3 +15,6 @@ services:
       SECRET_KEY: "change-me-in-production"
       JWT_ALGORITHM: "HS256"
       JWT_EXPIRY_HOURS: "12"
+      IMD_API_KEY: "${IMD_API_KEY:-}"
+      IMD_API_TOKEN: "${IMD_API_TOKEN:-}"
+      IMD_CITY_FORECAST_URL: "${IMD_CITY_FORECAST_URL:-https://api.imd.gov.in/api/v1/cityforecast}"

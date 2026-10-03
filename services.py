@@ -88,6 +88,25 @@ def _configured_weather_feeds() -> list[dict]:
     return feeds
 
 
+def _weather_city_key(value: object) -> str:
+    return "".join(character for character in str(value).casefold() if character.isalnum())
+
+
+def _weather_city_catalog() -> dict[str, dict]:
+    catalog = {}
+    aliases = {
+        "tiruchirappalli": ("trichy", "tiruchirapalli"),
+        "thoothukudi": ("tuticorin",),
+        "the nilgiris": ("nilgiris", "ooty", "udhagamandalam", "ootacamund"),
+        "tirunelveli": ("tinnevelly",),
+    }
+    for city in list_tamil_nadu_weather_cities():
+        catalog[_weather_city_key(city["city"])] = city
+        for alias in aliases.get(city["city"].casefold(), ()):
+            catalog[_weather_city_key(alias)] = city
+    return catalog
+
+
 def _normalize_weather_payload(payload: object, source_name: str) -> list[dict]:
     records = payload.get("data", payload) if isinstance(payload, dict) else payload
     if isinstance(records, dict):
@@ -96,12 +115,20 @@ def _normalize_weather_payload(payload: object, source_name: str) -> list[dict]:
         return []
 
     normalized = []
-    catalog = {item["city"].casefold(): item for item in list_tamil_nadu_weather_cities()}
+    catalog = _weather_city_catalog()
     for record in records:
         if not isinstance(record, dict):
             continue
-        city = str(record.get("city") or record.get("region") or record.get("district") or "").strip()
-        city_meta = catalog.get(city.casefold())
+        city = str(
+            record.get("city")
+            or record.get("region")
+            or record.get("district")
+            or record.get("Station_Name")
+            or record.get("CITY_NAME")
+            or record.get("City_Name")
+            or ""
+        ).strip()
+        city_meta = catalog.get(_weather_city_key(city))
         if not city_meta:
             continue
         def number(*names: str, default: float = 0.0) -> float:
@@ -130,10 +157,180 @@ def _normalize_weather_payload(payload: object, source_name: str) -> list[dict]:
     return normalized
 
 
+def _normalize_imd_city_forecast(payload: object) -> list[dict]:
+    records = payload.get("data", payload) if isinstance(payload, dict) else payload
+    if isinstance(records, dict):
+        records = records.get("forecast", records.get("cityforecast", [records]))
+    if not isinstance(records, list):
+        return []
+
+    normalized = []
+    catalog = _weather_city_catalog()
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        city = (
+            record.get("Station_Name")
+            or record.get("station_name")
+            or record.get("City_Name")
+            or record.get("city_name")
+            or record.get("city")
+            or record.get("region")
+            or ""
+        )
+        city_meta = catalog.get(_weather_city_key(city))
+        if not city_meta:
+            continue
+
+        def number(*names: str) -> Optional[float]:
+            for name in names:
+                value = record.get(name)
+                if value not in (None, ""):
+                    try:
+                        return float(value)
+                    except (TypeError, ValueError):
+                        return None
+            return None
+
+        maximum = number("Todays_Forecast_Max_Temp", "Today_Max_temp", "MAX_TEMP")
+        minimum = number("Todays_Forecast_Min_temp", "Today_Min_temp", "MIN_TEMP")
+        temperature = (
+            (maximum + minimum) / 2
+            if maximum is not None and minimum is not None
+            else maximum if maximum is not None else minimum
+        )
+        if temperature is None:
+            continue
+
+        description = str(record.get("Todays_Forecast") or record.get("forecast") or "").strip()
+        normalized.append({
+            "region": city_meta["city"],
+            "city_tier": city_meta["tier"],
+            "forecast_date": str(record.get("Date") or record.get("date") or datetime.now(timezone.utc).date().isoformat()),
+            "temperature_c": temperature,
+            "rainfall_mm": number("Past_24_hrs_Rainfall", "rainfall_mm", "rainfall") or 0.0,
+            "humidity_pct": number("Relative_Humidity_at_0830", "RH", "humidity_pct", "humidity") or 0.0,
+            "wind_kmh": number("WIND_SPEED", "wind_kmh", "wind_speed") or 0.0,
+            "moisture_percent": 0.0,
+            "summary_ta": f"IMD முன்னறிவிப்பு: {description}" if description else "இந்த நகரத்திற்கான IMD முன்னறிவிப்பு கிடைத்துள்ளது.",
+            "advisory_ta": "உள்ளூர் வானிலை எச்சரிக்கைகளை கவனித்து, பாசன முடிவுகளை அதற்கேற்ப திட்டமிடவும்.",
+            "source_name": "India Meteorological Department",
+        })
+    return normalized
+
+
+def _fetch_imd_city_forecasts(timeout_seconds: int) -> dict:
+    api_key = os.getenv("IMD_API_KEY", "").strip()
+    api_token = os.getenv("IMD_API_TOKEN", "").strip()
+    if not api_key or not api_token:
+        return {
+            "status": "not_configured",
+            "records": [],
+            "sources": [],
+            "errors": ["Set IMD_API_KEY and IMD_API_TOKEN to enable the official IMD city forecast API."],
+        }
+
+    endpoint = os.getenv(
+        "IMD_CITY_FORECAST_URL",
+        "https://api.imd.gov.in/api/v1/cityforecast",
+    ).strip()
+    parsed_endpoint = urlparse(endpoint)
+    if parsed_endpoint.scheme != "https" or (parsed_endpoint.hostname or "").lower() != "api.imd.gov.in":
+        return {
+            "status": "failed",
+            "records": [],
+            "sources": [],
+            "errors": ["IMD_CITY_FORECAST_URL must use HTTPS on the official api.imd.gov.in host."],
+        }
+
+    request = Request(
+        endpoint,
+        headers={
+            "Accept": "application/json",
+            "Authorization": f"Bearer {api_token}",
+            "User-Agent": "Digital-Farming-Support-Center/1.0",
+            "x-api-key": api_key,
+        },
+    )
+    try:
+        with urlopen(request, timeout=timeout_seconds) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        records = _normalize_imd_city_forecast(payload)
+    except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
+        return {
+            "status": "failed",
+            "records": [],
+            "sources": [{"name": "India Meteorological Department", "records": 0, "status": "failed"}],
+            "errors": [f"India Meteorological Department: {str(exc)[:180]}"],
+        }
+
+    return {
+        "status": "success" if records else "warning",
+        "records": records,
+        "sources": [{
+            "name": "India Meteorological Department",
+            "records": len(records),
+            "status": "success" if records else "warning",
+        }],
+        "errors": [],
+    }
+
+
+def _add_weather_city_coverage(result: dict) -> dict:
+    covered = {_weather_city_key(item["region"]) for item in result["records"]}
+    catalog = list_tamil_nadu_weather_cities()
+    missing = [item["city"] for item in catalog if _weather_city_key(item["city"]) not in covered]
+    result["city_coverage"] = {
+        "received": len(catalog) - len(missing),
+        "total": len(catalog),
+        "missing": missing,
+    }
+    if result["records"] and missing:
+        result["status"] = "partial"
+    return result
+
+
 def fetch_authorized_weather_updates(timeout_seconds: int = 15) -> dict:
     feeds = _configured_weather_feeds()
     if not feeds:
-        return {"status": "not_configured", "records": [], "sources": [], "errors": ["No authorized IMD/TNSDMA feed URL is configured."]}
+        live_result = _fetch_imd_city_forecasts(timeout_seconds)
+        if live_result["status"] != "not_configured":
+            live_result = _add_weather_city_coverage(live_result)
+            records = live_result["records"]
+            if records:
+                now = datetime.now(timezone.utc).isoformat()
+                with get_connection() as conn:
+                    for item in records:
+                        existing = conn.execute(
+                            "SELECT id FROM weather_forecasts WHERE LOWER(region) = LOWER(?) AND period = 'daily' AND forecast_date = ? AND source_name = ? LIMIT 1",
+                            (item["region"], item["forecast_date"], item["source_name"]),
+                        ).fetchone()
+                        if existing:
+                            conn.execute(
+                                "UPDATE weather_forecasts SET temperature_c = ?, rainfall_mm = ?, humidity_pct = ?, wind_kmh = ?, summary_ta = ?, advisory_ta = ?, created_at = ?, city_tier = ?, moisture_percent = ? WHERE id = ?",
+                                (
+                                    item["temperature_c"], item["rainfall_mm"], item["humidity_pct"], item["wind_kmh"],
+                                    item["summary_ta"], item["advisory_ta"], now, item["city_tier"],
+                                    item["moisture_percent"], existing["id"],
+                                ),
+                            )
+                        else:
+                            conn.execute(
+                                "INSERT INTO weather_forecasts (id, region, period, forecast_date, temperature_c, rainfall_mm, humidity_pct, wind_kmh, summary_ta, advisory_ta, source_name, created_at, city_tier, moisture_percent) VALUES (?, ?, 'daily', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                (
+                                    f"WX-LIVE-{uuid4().hex}", item["region"], item["forecast_date"],
+                                    item["temperature_c"], item["rainfall_mm"], item["humidity_pct"], item["wind_kmh"],
+                                    item["summary_ta"], item["advisory_ta"], item["source_name"], now,
+                                    item["city_tier"], item["moisture_percent"],
+                                ),
+                            )
+            return live_result
+        return {
+            "status": "not_configured",
+            "records": [],
+            "sources": [],
+            "errors": ["No authorized IMD API credentials or IMD/TNSDMA feed URL is configured."],
+        }
 
     records = []
     errors = []
@@ -160,7 +357,12 @@ def fetch_authorized_weather_updates(timeout_seconds: int = 15) -> dict:
                     for item in records
                 ],
             )
-    return {"status": "success" if records else "warning", "records": records, "sources": sources, "errors": errors}
+    return _add_weather_city_coverage({
+        "status": "success" if records else "warning",
+        "records": records,
+        "sources": sources,
+        "errors": errors,
+    })
 
 
 @dataclass
@@ -506,6 +708,32 @@ def list_latest_weather(region: Optional[str] = None, city_tier: Optional[str] =
         return [dict(row) for row in conn.execute(query, params).fetchall()]
 
 
+def list_tamil_nadu_city_weather(city_tier: Optional[str] = None) -> list[dict]:
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM weather_forecasts WHERE period = 'daily' ORDER BY created_at DESC, forecast_date DESC"
+        ).fetchall()
+
+    latest_by_city = {}
+    for row in rows:
+        latest_by_city.setdefault(_weather_city_key(row["region"]), dict(row))
+
+    cities = []
+    for city in list_tamil_nadu_weather_cities():
+        if city_tier and city["tier"] != city_tier:
+            continue
+        forecast = latest_by_city.get(_weather_city_key(city["city"]))
+        current = forecast is not None and forecast["created_at"] >= cutoff
+        cities.append({
+            **city,
+            "forecast_status": "current" if current else "stale" if forecast else "unavailable",
+            "forecast": forecast if current else None,
+            "last_updated_at": forecast["created_at"] if forecast else None,
+        })
+    return cities
+
+
 def list_archived_weather(region: Optional[str] = None, city_tier: Optional[str] = None) -> List[dict]:
     cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     query = "SELECT * FROM weather_forecasts WHERE created_at < ?"
@@ -541,6 +769,16 @@ def get_weather_fetch_status() -> dict:
             "SELECT city_tier, COUNT(DISTINCT region) AS count FROM weather_forecasts GROUP BY city_tier"
         ).fetchall()
 
+    city_coverage = list_tamil_nadu_city_weather()
+    current_city_count = sum(item["forecast_status"] == "current" for item in city_coverage)
+    tier_coverage = {
+        tier: {
+            "current": sum(item["tier"] == tier and item["forecast_status"] == "current" for item in city_coverage),
+            "total": sum(item["tier"] == tier for item in city_coverage),
+        }
+        for tier in TAMIL_NADU_CITY_TIERS
+    }
+
     last_source_name = last_row["source_name"] if last_row else None
     source_whitelist = [source["name"] for source in AUTHORIZED_WEATHER_SOURCES]
     fallback_sources = []
@@ -559,9 +797,10 @@ def get_weather_fetch_status() -> dict:
     }
     archive_policy["status"] = "pass" if retention_days >= 7 and archive_policy["monthly_retention_months"] >= 12 else "warning"
     quality_gate = {
-        "status": "pass" if total_count >= 3 and daily_count > 0 else "warning",
-        "required_records": 3,
-        "actual_records": total_count,
+        "status": "pass" if current_city_count == len(city_coverage) else "warning",
+        "required_records": len(city_coverage),
+        "actual_records": current_city_count,
+        "missing_city_count": len(city_coverage) - current_city_count,
     }
 
     return {
@@ -582,67 +821,15 @@ def get_weather_fetch_status() -> dict:
         "archived_records": max(0, total_count - latest_count),
         "city_tiers": {row["city_tier"]: row["count"] for row in city_rows},
         "city_catalog_count": len(list_tamil_nadu_weather_cities()),
+        "city_coverage": {
+            "current": current_city_count,
+            "total": len(city_coverage),
+            "missing": [item["city"] for item in city_coverage if item["forecast_status"] != "current"],
+            "tiers": tier_coverage,
+        },
         "authorized_sources": AUTHORIZED_WEATHER_SOURCES,
         "quality_gate": quality_gate,
     }
-
-
-def seed_weather_forecast_data() -> None:
-    with get_connection() as conn:
-        count = conn.execute("SELECT COUNT(*) FROM weather_forecasts").fetchone()[0]
-    if count > 0:
-        return
-
-    now = datetime.now(timezone.utc).isoformat()
-    entries = [
-        (
-            "WX-F-001",
-            "Kallakurichi",
-            "daily",
-            now,
-            29.2,
-            12.5,
-            68.0,
-            18.0,
-            "இன்று வானம் மேகமூட்டமாக இருக்கும். மழை சாத்தியம் உள்ளது.",
-            "காலையில் நீர்ப்பாசன நேரம் குறைந்தபட்சமாக பராமரிக்கவும்; மாலை மழை இருந்தால் பாசனம் தள்ளிப்போடவும்.",
-            "IMD",
-            now,
-        ),
-        (
-            "WX-F-002",
-            "Kallakurichi",
-            "weekly",
-            (datetime.now(timezone.utc) + timedelta(days=4)).isoformat(),
-            30.1,
-            18.0,
-            72.0,
-            17.0,
-            "இந்த வாரத்தில் மிதமான மழை மற்றும் சுட்டெரிக்கும் வெப்பநிலை நிலவக்கூடும்.",
-            "தோட்டத்தில் நீர் தேவை அதிகரிக்கும் என்பதால் மண்ணின் ஈரப்பதத்தை தொடர்ந்து கண்காணிக்கவும்.",
-            "IMD",
-            now,
-        ),
-        (
-            "WX-F-003",
-            "Kallakurichi",
-            "monthly",
-            (datetime.now(timezone.utc) + timedelta(days=20)).isoformat(),
-            31.5,
-            41.0,
-            74.0,
-            16.0,
-            "மாத இறுதியில் மழை வழங்கல் சற்று அதிகரிக்க வாய்ப்பு உள்ளது.",
-            "பயிர் வளர்ச்சி கட்டத்தை கருத்தில் கொண்டு உரமிடும் நேரத்தை திட்டமிடலாம்.",
-            "IMD",
-            now,
-        ),
-    ]
-    with get_connection() as conn:
-        conn.executemany(
-            "INSERT INTO weather_forecasts (id, region, period, forecast_date, temperature_c, rainfall_mm, humidity_pct, wind_kmh, summary_ta, advisory_ta, source_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            entries,
-        )
 
 
 def list_market_prices(crop_name: Optional[str] = None) -> List[MarketPrice]:
@@ -1198,6 +1385,5 @@ def seed_government_scheme_data() -> None:
 
 
 seed_weather_alerts()
-seed_weather_forecast_data()
 seed_market_data()
 seed_government_scheme_data()

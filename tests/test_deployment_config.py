@@ -16,7 +16,16 @@ def test_dockerfile_uses_environment_based_runtime_port():
 
 def test_compose_file_passes_runtime_environment_settings():
     content = Path("docker-compose.yml").read_text(encoding="utf-8")
-    for key in ["APP_ENV", "APP_DEBUG", "PORT", "DATABASE_PATH", "SECRET_KEY"]:
+    for key in [
+        "APP_ENV",
+        "APP_DEBUG",
+        "PORT",
+        "DATABASE_PATH",
+        "SECRET_KEY",
+        "IMD_API_KEY",
+        "IMD_API_TOKEN",
+        "IMD_CITY_FORECAST_URL",
+    ]:
         assert key in content
 
 
@@ -27,3 +36,4 @@ def test_env_example_exists():
 def test_readme_mentions_project_setup():
     content = Path("README.md").read_text(encoding="utf-8")
     assert "FastAPI" in content or "uvicorn" in content or "Docker" in content
+    assert "--env-file .env" in content

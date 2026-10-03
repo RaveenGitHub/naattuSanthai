@@ -7,6 +7,7 @@ from database import create_db_backup, get_migration_status, record_migration_st
 from security import create_user
 from services import get_scheme_fetch_status, list_archived_scheme_updates
 from services import get_scheme_fetch_status
+import services
 
 client = TestClient(app)
 
@@ -290,8 +291,11 @@ def test_weather_forecast_and_fetch_routes():
 
     fetch_response = client.post("/api/weather/fetch", headers={"X-User-Role": "admin"})
     assert fetch_response.status_code == 200
-    assert fetch_response.json()["success"] is True
     assert isinstance(fetch_response.json()["data"], dict)
+    assert fetch_response.json()["data"]["fetch_status"] in {"success", "partial", "warning", "failed", "not_configured"}
+    assert fetch_response.json()["success"] == bool(fetch_response.json()["data"]["live_fetch"]["records"])
+    if not fetch_response.json()["success"]:
+        assert fetch_response.json()["error"] is not None
 
     status_response = client.get("/api/weather/fetch/status", headers={"X-User-Role": "admin"})
     assert status_response.status_code == 200
@@ -530,6 +534,110 @@ def test_weather_city_catalog_covers_all_tamil_nadu_tiers():
     assert any(item["city"] == "Kallakurichi" for item in cities)
 
 
+def test_weather_city_forecasts_return_every_city_with_freshness_status():
+    response = client.get("/api/weather/cities/forecasts")
+    assert response.status_code == 200
+    cities = response.json()["data"]
+    assert len(cities) == 35
+    assert {item["tier"] for item in cities} == {"Tier 1", "Tier 2", "Tier 3"}
+    assert all(item["forecast_status"] in {"current", "stale", "unavailable"} for item in cities)
+    assert all(item["forecast"] is None or item["forecast"]["source_name"] for item in cities)
+
+
+def test_imd_city_forecast_payload_normalizes_official_fields_and_aliases():
+    records = services._normalize_imd_city_forecast([
+        {
+            "Station_Name": "Chennai",
+            "Date": "2026-10-03",
+            "Todays_Forecast_Max_Temp": "34",
+            "Todays_Forecast_Min_temp": "26",
+            "Past_24_hrs_Rainfall": "4.5",
+            "Relative_Humidity_at_0830": "72",
+            "Todays_Forecast": "Partly cloudy",
+        },
+        {
+            "Station_Name": "Tuticorin",
+            "Date": "2026-10-03",
+            "Todays_Forecast_Max_Temp": "33",
+            "Todays_Forecast_Min_temp": "25",
+            "Past_24_hrs_Rainfall": "0",
+        },
+        {"Station_Name": "Unknown station", "Todays_Forecast_Max_Temp": "32"},
+    ])
+
+    assert [item["region"] for item in records] == ["Chennai", "Thoothukudi"]
+    assert records[0]["temperature_c"] == 30
+    assert records[0]["rainfall_mm"] == 4.5
+    assert records[0]["city_tier"] == "Tier 1"
+    assert records[1]["city_tier"] == "Tier 2"
+
+
+def test_weather_fetch_coverage_marks_missing_cities_as_partial():
+    result = services._add_weather_city_coverage({
+        "status": "success",
+        "records": [{"region": "Chennai"}],
+        "sources": [],
+        "errors": [],
+    })
+
+    assert result["status"] == "partial"
+    assert result["city_coverage"]["received"] == 1
+    assert result["city_coverage"]["total"] == 35
+    assert len(result["city_coverage"]["missing"]) == 34
+
+
+def test_imd_city_forecast_request_uses_credentials_without_exposing_them(monkeypatch):
+    monkeypatch.setenv("IMD_API_KEY", "test-key")
+    monkeypatch.setenv("IMD_API_TOKEN", "test-token")
+    monkeypatch.setenv("IMD_CITY_FORECAST_URL", "https://api.imd.gov.in/api/v1/cityforecast")
+    captured = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b'[{"Station_Name":"Chennai","Todays_Forecast_Max_Temp":"34"}]'
+
+    def fake_urlopen(request, timeout):
+        captured["headers"] = {key.lower(): value for key, value in request.header_items()}
+        captured["timeout"] = timeout
+        return FakeResponse()
+
+    monkeypatch.setattr(services, "urlopen", fake_urlopen)
+    result = services._fetch_imd_city_forecasts(timeout_seconds=4)
+
+    assert result["status"] == "success"
+    assert result["records"][0]["region"] == "Chennai"
+    assert captured["headers"]["x-api-key"] == "test-key"
+    assert captured["headers"]["authorization"] == "Bearer test-token"
+    assert captured["timeout"] == 4
+    assert "test-token" not in str(result)
+
+
+def test_imd_city_forecast_without_credentials_reports_not_configured(monkeypatch):
+    monkeypatch.delenv("IMD_API_KEY", raising=False)
+    monkeypatch.delenv("IMD_API_TOKEN", raising=False)
+
+    result = services._fetch_imd_city_forecasts(timeout_seconds=1)
+
+    assert result["status"] == "not_configured"
+    assert "IMD_API_KEY" in result["errors"][0]
+    assert "IMD_API_TOKEN" in result["errors"][0]
+
+
+def test_weather_page_lists_all_catalog_cities_and_does_not_reuse_another_city():
+    page = client.get("/weather?region=Chennai")
+    assert page.status_code == 200
+    assert page.text.count("class='city-card ") == 35
+    assert "Chennai" in page.text
+    assert "Kallakurichi" in page.text
+    assert "தற்போதைய அதிகாரப்பூர்வ முன்னறிவிப்பு" in page.text
+
+
 def test_weather_market_panel_displays_all_tamil_weather_metrics():
     response = client.get("/weather-market?region=Kallakurichi")
     assert response.status_code == 200
@@ -555,8 +663,9 @@ def test_weather_latest_and_archive_endpoints_expose_seven_day_policy():
 def test_weather_page_reports_rainfall_in_mm_not_percent():
     response = client.get("/weather-market?region=Kallakurichi")
     assert response.status_code == 200
-    assert "மழை</span><strong>" in response.text
-    rainfall_value = response.text.split("மழை</span><strong>", 1)[1].split("</strong>", 1)[0]
+    label = "கடந்த 24 மணி மழை</span><strong>" if "கடந்த 24 மணி மழை</span><strong>" in response.text else "மழை</span><strong>"
+    assert label in response.text
+    rainfall_value = response.text.split(label, 1)[1].split("</strong>", 1)[0]
     assert "mm" in rainfall_value.lower()
     assert "%" not in rainfall_value
 

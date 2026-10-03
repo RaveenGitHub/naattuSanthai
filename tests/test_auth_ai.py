@@ -456,4 +456,4 @@ def test_tamil_weather_market_page_renders_for_users():
     assert "சந்தை விலை" in weather_market.text
     assert "மண்டி" in weather_market.text
     assert "Kallakurichi" in weather_market.text or "கல்லக்குறிச்சி" in weather_market.text
-    assert "இன்று வானம் மேகமூட்டமாக இருக்கும்" in weather_market.text or "மழை சாத்தியம்" in weather_market.text
+    assert "தற்போதைய அதிகாரப்பூர்வ முன்னறிவிப்பு" in weather_market.text

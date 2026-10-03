@@ -17,6 +17,7 @@ from services import (
     list_archived_weather,
     list_latest_weather,
     list_tamil_nadu_weather_cities,
+    list_tamil_nadu_city_weather,
     list_archived_scheme_updates,
     list_farms,
     list_farmers,
@@ -32,8 +33,6 @@ from services import (
     list_weather_forecast,
     seed_government_scheme_data,
     seed_market_data,
-    seed_weather_alerts,
-    seed_weather_forecast_data,
 )
 
 router = APIRouter(prefix="/api")
@@ -109,8 +108,16 @@ def get_monthly_weather(region: Optional[str] = Query(default="Kallakurichi")):
 
 
 @router.get("/weather/cities")
-def get_tamil_nadu_weather_cities():
-    return {"success": True, "data": list_tamil_nadu_weather_cities(), "error": None}
+def get_tamil_nadu_weather_cities(city_tier: Optional[str] = Query(default=None)):
+    cities = list_tamil_nadu_weather_cities()
+    if city_tier:
+        cities = [city for city in cities if city["tier"] == city_tier]
+    return {"success": True, "data": cities, "error": None}
+
+
+@router.get("/weather/cities/forecasts")
+def get_tamil_nadu_city_weather(city_tier: Optional[str] = Query(default=None)):
+    return {"success": True, "data": list_tamil_nadu_city_weather(city_tier), "error": None}
 
 
 @router.get("/weather/latest")
@@ -132,23 +139,30 @@ def get_weather_fetch_status_endpoint(request: Request):
 @router.post("/weather/fetch")
 def trigger_weather_fetch(request: Request):
     require_route_role(request, "admin")
-    seed_weather_alerts()
     live_fetch = fetch_authorized_weather_updates()
-    if live_fetch["status"] == "not_configured":
-        seed_weather_forecast_data()
     status = get_weather_fetch_status()
     return {
-        "success": True,
+        "success": bool(live_fetch["records"]),
         "data": {
-            "message": "Weather forecast refresh completed",
+            "message": (
+                f"Updated forecasts for {live_fetch['city_coverage']['received']} of "
+                f"{live_fetch['city_coverage']['total']} cities."
+                if live_fetch["records"]
+                else "No city forecasts were received; check the source configuration and fetch errors."
+            ),
+            "fetch_status": live_fetch["status"],
             "authorized_sources": status["authorized_sources"],
             "city_catalog_count": status["city_catalog_count"],
+            "city_coverage": status["city_coverage"],
             "latest_window_days": status["archive_policy"]["latest_window_days"],
             "latest_window_records": status["latest_window_records"],
             "archived_records": status["archived_records"],
             "live_fetch": live_fetch,
         },
-        "error": None,
+        "error": None if live_fetch["records"] else {
+            "message": "No authorized weather forecasts were received.",
+            "details": live_fetch["errors"],
+        },
     }
 
 

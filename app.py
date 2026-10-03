@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from html import escape
 from time import monotonic
 from typing import Optional
+from urllib.parse import quote
 from uuid import uuid4
 
 from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
@@ -57,6 +58,7 @@ from services import (
     TOP_AGRI_PRODUCTS_TA,
     list_weather_alerts,
     list_weather_forecast,
+    list_tamil_nadu_city_weather,
 )
 
 ROOT_PAGE = """
@@ -3908,64 +3910,53 @@ def weather_page(
     taluk_name = (taluk or "").strip() or "Kallakurichi"
     village_name = (village or "").strip() or profile_defaults["village"] or "Periyar Nagar"
     period_name = (period or "daily").strip().lower() or "daily"
+    freshness_cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     requested_forecasts = list_weather_forecast(period_name, region_name)
-    forecast_source_status = "Regional forecast"
-    forecasts = requested_forecasts
-    if not forecasts:
-        forecasts = list_weather_forecast(period_name, "Kallakurichi")
-        if forecasts:
-            forecast_source_status = "Fallback Kallakurichi forecast"
-    if not forecasts:
-        forecasts = [{
-            "region": region_name,
-            "period": period_name,
-            "summary_ta": "இன்று வானம் மேகமூட்டமாக இருக்கும். மழை சாத்தியம் உள்ளது.",
-            "temperature_c": 29.0,
-            "rainfall_mm": 18.0,
-            "humidity_pct": 68,
-            "wind_kmh": 18.0,
-            "advisory_ta": "மண்ணின் ஈரப்பதத்தை பரிசோதித்து, குறைந்தபட்ச பாசன அட்டவணையை பின்பற்றவும்.",
-        }]
-        forecast_source_status = "Fallback guidance only"
+    forecasts = [
+        item for item in requested_forecasts
+        if str(item.get("created_at", "")) >= freshness_cutoff
+    ]
+    forecast_source_status = "Regional forecast" if forecasts else "No current forecast data"
 
-    forecast = forecasts[0]
+    forecast = forecasts[0] if forecasts else {
+        "region": region_name,
+        "period": period_name,
+        "summary_ta": "இந்த நகரத்திற்கான தற்போதைய அதிகாரப்பூர்வ முன்னறிவிப்பு இன்னும் கிடைக்கவில்லை.",
+        "advisory_ta": "அதிகாரப்பூர்வ வானிலை அறிவிப்பு கிடைக்கும் வரை உள்ளூர் நிலையைச் சரிபார்க்கவும்.",
+    }
     forecast_source_status = str(forecast.get("source_name") or forecast_source_status)
-    summary = escape(str(forecast.get("summary_ta", "இன்று வானம் மேகமூட்டமாக இருக்கும். மழை சாத்தியம் உள்ளது.")))
-    advisory = escape(str(forecast.get("advisory_ta", "மண்ணின் ஈரப்பதத்தை பரிசோதித்து, குறைந்தபட்ச பாசன அட்டவணையை பின்பற்றவும்.")))
-    temp = float(forecast.get("temperature_c", 29.0))
-    rainfall = float(forecast.get("rainfall_mm", 18.0))
-    humidity = float(forecast.get("humidity_pct", 68.0))
-    wind = float(forecast.get("wind_kmh", 18.0))
+    summary = escape(str(forecast.get("summary_ta", "தற்போதைய முன்னறிவிப்பு இல்லை.")))
+    advisory = escape(str(forecast.get("advisory_ta", "உள்ளூர் நிலையைச் சரிபார்க்கவும்.")))
+    temp = forecast.get("temperature_c")
+    rainfall = forecast.get("rainfall_mm")
+    humidity = forecast.get("humidity_pct")
+    wind = forecast.get("wind_kmh")
+    rainfall_label = (
+        "கடந்த 24 மணி மழை"
+        if forecast.get("source_name") == "India Meteorological Department"
+        else "மழை"
+    )
+
+    def display_metric(value, unit):
+        if value is None or (value == 0 and unit in {"%", "km/h"}):
+            return f"— {unit} (தரவு இல்லை)"
+        return f"{float(value):.0f} {unit}"
     alerts = list_weather_alerts(village_name)
     if not alerts:
         alerts = list_weather_alerts(region_name)
     if not alerts:
         alerts = list_weather_alerts("Kallakurichi")
     alert = alerts[0] if alerts else None
-    alert_title = escape(str(getattr(alert, "alert_type", "Rainstorm") if alert else "Rainstorm"))
-    alert_severity = escape(str(getattr(alert, "severity", "High") if alert else "High"))
-    alert_message = escape(str(getattr(alert, "message", "Heavy rainfall expected. Protect standing crops and delay field work.") if alert else "Heavy rainfall expected. Protect standing crops and delay field work."))
+    alert_title = escape(str(getattr(alert, "alert_type", "தற்போதைய உறுதிப்படுத்தப்பட்ட எச்சரிக்கை இல்லை") if alert else "தற்போதைய உறுதிப்படுத்தப்பட்ட எச்சரிக்கை இல்லை"))
+    alert_severity = escape(str(getattr(alert, "severity", "—") if alert else "—"))
+    alert_message = escape(str(getattr(alert, "message", "புதிய அதிகாரப்பூர்வ எச்சரிக்கை தரவு கிடைக்கவில்லை.") if alert else "புதிய அதிகாரப்பூர்வ எச்சரிக்கை தரவு கிடைக்கவில்லை."))
 
     if period_name == "weekly":
-        weekly_cards = "".join(
-            [
-                f"<div class='metric'><span>{day}</span><strong>{temp_val}°C</strong><small>{rain_val} mm / மழை</small></div>"
-                for day, temp_val, rain_val in [
-                    ("திங்கள்", 30, 18),
-                    ("செவ்வாய்", 31, 22),
-                    ("புதன்", 29, 26),
-                    ("வியாழன்", 30, 15),
-                    ("வெள்ளி", 32, 12),
-                    ("சனி", 31, 14),
-                    ("ஞாயிறு", 29, 20),
-                ]
-            ]
-        )
         period_section = f"""
         <section class=\"hero\">
           <div class=\"panel\">
             <h2>7 நாள் முன்னறிவிப்பு / 7-day forecast</h2>
-            <div class=\"metrics\" style=\"grid-template-columns: repeat(auto-fit, minmax(116px, 1fr));\">{weekly_cards}</div>
+            <p>{summary}</p>
           </div>
           <div class=\"panel\">
             <h2>எச்சரிக்கை / Warning</h2>
@@ -3975,8 +3966,7 @@ def weather_page(
             </ul>
             <h2 style=\"margin-top:18px;\">பயிர் பரிந்துரை / Crop Advisory</h2>
             <ul>
-              <li>மழை மற்றும் வெப்பநிலை மாற்றத்தை கணக்கிட்டு, பாசன நேரத்தை மாற்றியமைக்கவும்.</li>
-              <li>நெல், கரும்பு, மற்றும் பருத்தி பயிர்களுக்கு 7 நாள் மழை மாறுபாட்டை கருத்தில் கொண்டு உரமிடுதல் திட்டமிடவும்.</li>
+              <li>{advisory}</li>
             </ul>
           </div>
         </section>
@@ -3987,11 +3977,7 @@ def weather_page(
         <section class=\"hero\">
           <div class=\"panel\">
             <h2>மாதாந்திர பருவ முன்னறிவிப்பு / Monthly seasonal forecast</h2>
-            <div class=\"metrics\">
-              <div class=\"metric\"><span>மழை எதிர்பார்ப்பு</span><strong>{rainfall + 20:.0f} mm</strong></div>
-              <div class=\"metric\"><span>சராசரி வெப்பநிலை</span><strong>{temp + 1:.0f}°C</strong></div>
-              <div class=\"metric\"><span>பருவ காலம்</span><strong>தெற்கு பருவம்</strong></div>
-            </div>
+            <p>{summary}</p>
           </div>
           <div class=\"panel\">
             <h2>எச்சரிக்கை / Warning</h2>
@@ -4001,8 +3987,7 @@ def weather_page(
             </ul>
             <h2 style=\"margin-top:18px;\">பயிர் பரிந்துரை / Crop plan</h2>
             <ul>
-              <li>மாத இறுதியில் மழை மற்றும் வெப்பநிலை மாறுபாடு காரணமாக, நீர் மேலாண்மை திட்டத்தை புதுப்பிக்கவும்.</li>
-              <li>நெல், கரும்பு, மற்றும் பயறு வகை பயிர்களுக்கு உர இடுதல் மற்றும் சாகுபடி நேரம் மறு ஆய்வு செய்யப்பட வேண்டும்.</li>
+              <li>{advisory}</li>
             </ul>
           </div>
         </section>
@@ -4013,12 +3998,12 @@ def weather_page(
           <div class=\"panel\">
             <h2>இன்றைய நிலை / Current Status</h2>
             <div class=\"metrics\">
-              <div class=\"metric\"><span>வெப்பநிலை</span><strong>{temp:.0f}°C</strong></div>
-              <div class=\"metric\"><span>மழை</span><strong>{rainfall:.0f} mm</strong></div>
-              <div class=\"metric\"><span>ஈரப்பதம்</span><strong>{humidity:.0f}%</strong></div>
+              <div class=\"metric\"><span>வெப்பநிலை</span><strong>{display_metric(temp, '°C')}</strong></div>
+              <div class=\"metric\"><span>{rainfall_label}</span><strong>{display_metric(rainfall, 'mm')}</strong></div>
+              <div class=\"metric\"><span>ஈரப்பதம்</span><strong>{display_metric(humidity, '%')}</strong></div>
             </div>
             <div class=\"metrics\" style=\"margin-top:14px;\">
-              <div class=\"metric\"><span>காற்று</span><strong>{wind:.0f} km/h</strong></div>
+              <div class=\"metric\"><span>காற்று</span><strong>{display_metric(wind, 'km/h')}</strong></div>
               <div class=\"metric\"><span>காலம்</span><strong>{period_name.upper()}</strong></div>
               <div class=\"metric\"><span>மண்டலம்</span><strong>{escape(region_name)}</strong></div>
             </div>
@@ -4038,6 +4023,45 @@ def weather_page(
           </div>
         </section>
         """
+
+    city_cards_by_tier = {}
+    city_weather_rows = list_tamil_nadu_city_weather()
+    fresh_city_count = sum(city["forecast_status"] == "current" for city in city_weather_rows)
+    for city in city_weather_rows:
+        forecast_data = city["forecast"]
+        if forecast_data:
+            details = (
+                f"<span>வெப்பநிலை {display_metric(forecast_data.get('temperature_c'), '°C')}</span>"
+                f"<span>{'கடந்த 24 மணி மழை' if forecast_data.get('source_name') == 'India Meteorological Department' else 'மழை'} {display_metric(forecast_data.get('rainfall_mm'), 'mm')}</span>"
+            )
+            freshness = escape(str(forecast_data.get("created_at", "")))
+            status_label = "புதிய தரவு"
+            status_class = "current"
+        else:
+            details = "<span>வெப்பநிலை: தரவு இல்லை</span><span>மழை: தரவு இல்லை</span>"
+            freshness = (
+                f"கடைசியாக புதுப்பிக்கப்பட்டது: {escape(str(city['last_updated_at']))}"
+                if city["last_updated_at"]
+                else "அதிகாரப்பூர்வ முன்னறிவிப்பு இன்னும் பெறப்படவில்லை"
+            )
+            status_label = "பழைய தரவு" if city["forecast_status"] == "stale" else "தரவு இல்லை"
+            status_class = "unavailable"
+        city_url = quote(str(city["city"]))
+        card = (
+            f"<article class='city-card {status_class}'>"
+            f"<a href='/weather?region={city_url}'><strong>{escape(str(city['city']))}</strong></a>"
+            f"<span class='tier'>{escape(str(city['tier']))}</span>"
+            f"<span class='city-status'>{status_label}</span>"
+            f"<div class='city-metrics'>{details}</div>"
+            f"<small>{freshness}</small>"
+            "</article>"
+        )
+        city_cards_by_tier.setdefault(city["tier"], []).append(card)
+    city_directory = "".join(
+        f"<section class='city-tier'><h3>{escape(tier)}</h3><div class='city-grid'>{''.join(cards)}</div></section>"
+        for tier, cards in city_cards_by_tier.items()
+    )
+    city_coverage_summary = f"Fresh forecast coverage: {fresh_city_count} / {len(city_weather_rows)} cities."
 
     return f"""
 <!DOCTYPE html>
@@ -4077,6 +4101,15 @@ def weather_page(
     .metric strong {{ display: block; margin-top: 8px; font-size: 1.8rem; }}
     .meta {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }}
     .meta-item {{ border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: #fbfdfb; font-size: 0.95rem; }}
+    .city-directory {{ margin-top: 22px; }}
+    .city-tier {{ margin-top: 18px; }}
+    .city-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }}
+    .city-card {{ display: grid; gap: 8px; border: 1px solid var(--line); border-radius: 14px; padding: 14px; background: #fff; }}
+    .city-card a {{ color: var(--text); text-decoration: none; }}
+    .city-card a:hover {{ text-decoration: underline; }}
+    .tier, .city-status {{ color: var(--muted); font-size: .9rem; }}
+    .city-metrics {{ display: flex; flex-wrap: wrap; gap: 10px; font-weight: 600; }}
+    .city-card.unavailable {{ background: #fbfcfa; }}
     ul {{ margin: 0; padding-left: 18px; color: var(--muted); line-height: 1.9; }}
     @media (max-width: 760px) {{ .hero, .metrics, .meta {{ grid-template-columns: 1fr; }} .topbar {{ flex-direction: column; align-items: flex-start; }} }}
   </style>
@@ -4095,6 +4128,13 @@ def weather_page(
 
     {period_section}
 
+    <section class="panel city-directory">
+      <h2>தமிழ்நாடு நகரங்களின் வானிலை / Tamil Nadu city weather</h2>
+      <p class="lede">தற்போதைய IMD தரவு இல்லாத நகரங்களுக்கு மதிப்பீடுகள் காட்டப்படாது. நகரத்தைத் தேர்ந்தெடுத்து விவரங்களைப் பார்க்கவும். No current forecast data is shown as a substitute for missing observations.</p>
+      <p><strong>{city_coverage_summary}</strong></p>
+      {city_directory}
+    </section>
+
     <section class="panel" style="margin-top: 20px;">
       <h2>தரவு நிலை / Forecast source status</h2>
       <p class="intro">{escape(forecast_source_status)}. Verify local conditions before changing irrigation or field work.</p>
@@ -4109,7 +4149,7 @@ def weather_page(
 def weather_quality_page():
     status = get_weather_fetch_status()
     source_list = " | ".join(status.get("source_whitelist", [])) or "IMD"
-    fallback_list = " | ".join(status.get("fallback_sources", [])) or "Regional field station"
+    fallback_list = " | ".join(status.get("fallback_sources", [])) or "None configured"
     retention = status.get("archive_policy", {})
     return f"""
 <!DOCTYPE html>
@@ -4157,7 +4197,9 @@ def weather_quality_page():
       <div class="meta">
         <div class="meta-item"><strong>Whitelist:</strong> {escape(source_list)}</div>
         <div class="meta-item"><strong>Fallback / Secondary:</strong> {escape(fallback_list)}</div>
-        <div class="meta-item"><strong>Current feed:</strong> {escape(str(status.get('last_source_name') or 'IMD'))}</div>
+        <div class="meta-item"><strong>Last stored source:</strong> {escape(str(status.get('last_source_name') or 'No weather source record yet'))}</div>
+        <div class="meta-item"><strong>Last stored update:</strong> {escape(str(status.get('last_updated_at') or 'Never'))}</div>
+        <div class="meta-item"><strong>Fresh city coverage:</strong> {status.get('city_coverage', {}).get('current', 0)} / {status.get('city_catalog_count', 0)}</div>
       </div>
     </section>
 
@@ -4284,21 +4326,28 @@ def weather_market_page(request: Request, region: str = "Kallakurichi"):
     if region_name == "Kallakurichi":
         region_name = profile_defaults["region"] or region_name
 
-    daily_forecast = list_weather_forecast("daily", region_name)
-    if not daily_forecast:
-        daily_forecast = list_weather_forecast("daily", "Kallakurichi")
+    freshness_cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    daily_forecast = [
+        item for item in list_weather_forecast("daily", region_name)
+        if str(item.get("created_at", "")) >= freshness_cutoff
+    ]
 
     forecast = daily_forecast[0] if daily_forecast else {
         "region": region_name,
-        "summary_ta": "இன்று வானம் மேகமூட்டமாக இருக்கும். மழை சாத்தியம் உள்ளது.",
-        "temperature_c": 29.0,
-        "rainfall_mm": 18.0,
-        "wind_kmh": 18.0,
-        "humidity_pct": 68.0,
-        "moisture_percent": 60.0,
+        "summary_ta": "இந்த நகரத்திற்கான தற்போதைய அதிகாரப்பூர்வ முன்னறிவிப்பு இன்னும் கிடைக்கவில்லை.",
     }
-    forecast_moisture = float(forecast.get("moisture_percent", 60.0))
-    forecast_humidity = float(forecast.get("humidity_pct", 68.0))
+    rainfall_label = (
+        "கடந்த 24 மணி மழை"
+        if forecast.get("source_name") == "India Meteorological Department"
+        else "மழை"
+    )
+
+    def display_weather_metric(value, unit):
+        if value is None or (value == 0 and unit in {"%", "km/h"}):
+            return f"— {unit} (தரவு இல்லை)"
+        return f"{float(value):.0f} {unit}"
+    forecast_moisture = forecast.get("moisture_percent")
+    forecast_humidity = forecast.get("humidity_pct")
     filtered_crop = profile_defaults.get("crop") or "rice"
     market_rows = list_latest_market_prices(50)
     if filtered_crop and filtered_crop.lower() != "rice":
@@ -4375,27 +4424,26 @@ def weather_market_page(request: Request, region: str = "Kallakurichi"):
 
     <h1>வானிலை முன்னறிவிப்பு மற்றும் சந்தை விலை மேலாண்மை</h1>
     <p class="intro">
-      {escape(str(forecast.get('summary_ta', 'இன்று வானம் மேகமூட்டமாக இருக்கும். மழை சாத்தியம் உள்ளது.')))}
+      {escape(str(forecast.get('summary_ta', 'தற்போதைய முன்னறிவிப்பு இல்லை.')))}
     </p>
 
     <section class="hero">
       <div class="panel">
         <h2>இன்றைய வானிலை</h2>
         <div class="metrics">
-          <div class="metric"><span>வெப்பநிலை</span><strong>{float(forecast.get('temperature_c', 29.0)):.0f}°C</strong></div>
-          <div class="metric"><span>மழை</span><strong>{float(forecast.get('rainfall_mm', 18.0)):.0f} mm</strong></div>
-          <div class="metric"><span>காற்று</span><strong>{float(forecast.get('wind_kmh', 18.0)):.0f} km/h</strong></div>
-          <div class="metric"><span>ஈரப்பதம்</span><strong>{forecast_humidity:.0f}%</strong></div>
-          <div class="metric"><span>மண் ஈரப்பதம்</span><strong>{forecast_moisture:.0f}%</strong></div>
+          <div class="metric"><span>வெப்பநிலை</span><strong>{display_weather_metric(forecast.get('temperature_c'), '°C')}</strong></div>
+          <div class="metric"><span>{rainfall_label}</span><strong>{display_weather_metric(forecast.get('rainfall_mm'), 'mm')}</strong></div>
+          <div class="metric"><span>காற்று</span><strong>{display_weather_metric(forecast.get('wind_kmh'), 'km/h')}</strong></div>
+          <div class="metric"><span>ஈரப்பதம்</span><strong>{display_weather_metric(forecast_humidity, '%')}</strong></div>
+          <div class="metric"><span>மண் ஈரப்பதம்</span><strong>{display_weather_metric(forecast_moisture, '%')}</strong></div>
         </div>
       </div>
 
       <div class="panel">
         <h2>எச்சரிக்கை</h2>
         <ul style="color: var(--muted); line-height: 1.9; padding-left: 18px; margin: 0;">
-          <li>{escape(str(forecast.get('summary_ta', 'மழை சாத்தியம் உள்ளது')))}</li>
-          <li>மண்ணின் ஈரப்பதம் பரிசோதிக்கப்பட வேண்டும்</li>
-          <li>பாசன அட்டவணையை வெப்பநிலை மற்றும் மழை முன்னறிவிப்புடன் இணைக்கவும்</li>
+          <li>{escape(str(forecast.get('summary_ta', 'தற்போதைய முன்னறிவிப்பு இல்லை.')))}</li>
+          <li>புதிய அதிகாரப்பூர்வ முன்னறிவிப்பு கிடைக்கும் வரை உள்ளூர் நிலையைச் சரிபார்க்கவும்.</li>
         </ul>
       </div>
     </section>
@@ -5768,5 +5816,3 @@ def readiness_check():
         "version": os.getenv("APP_VERSION", "0.2.0"),
         "checks": checks,
     }
-
-
