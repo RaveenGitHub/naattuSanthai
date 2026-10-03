@@ -13,6 +13,7 @@ from services import (
     get_scheme_fetch_status,
     get_scheme_update_by_id,
     get_weather_fetch_status,
+    get_weather_rollout_readiness,
     list_weather_fetch_history,
     fetch_authorized_weather_updates,
     list_archived_weather,
@@ -165,6 +166,12 @@ def trigger_weather_fetch(request: Request):
             "details": live_fetch["errors"],
         },
     }
+
+
+@router.get("/weather/rollout/readiness")
+def get_weather_rollout_readiness_endpoint(request: Request):
+    require_route_role(request, "admin")
+    return {"success": True, "data": get_weather_rollout_readiness(), "error": None}
 
 
 @router.get("/weather/fetch/history")

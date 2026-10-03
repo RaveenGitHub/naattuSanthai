@@ -155,6 +155,21 @@ The task runs as the current Windows user and requires that user to be signed in
 
 ### Monitor weather refresh reliability
 
+Admins can inspect `GET /api/weather/rollout/readiness` before a live rollout.
+This read-only diagnostic makes no network requests and does not create refresh
+history. It reports configuration presence/acceptance, the selected connector
+(configured feeds take precedence over the official city API), static blocker
+codes, current daily city coverage, and the last completed refresh result.
+Credential values and configured endpoint/feed URLs are never returned.
+Ignored feed configuration is reported as a warning rather than silently accepted.
+
+`configured` only means settings pass the connector's local checks; it does not
+prove credentials, source access, or payload compatibility. Daily rollout readiness
+also requires the last completed refresh to be successful and all 35 configured
+cities to have current forecasts. Weekly/monthly live verification and OS scheduler
+registration remain explicitly unverified/not checked, even when daily readiness
+passes. Do not treat this endpoint as certification of the entire platform.
+
 Manual and scheduled refreshes store completed-run metadata in SQLite. Admins can use
 `GET /api/weather/fetch/history?limit=20` (1–100 runs) and the `fetch_monitoring`
 section of `GET /api/weather/fetch/status` to inspect timestamps, source outcomes,

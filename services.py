@@ -76,6 +76,18 @@ def _city_tier(city: str) -> str:
     return "Tier 3"
 
 
+def _weather_url_allowed(url: str, hosts: set, require_https: bool = False) -> bool:
+    try:
+        parsed = urlparse(url)
+        return (
+            (parsed.hostname or "").lower() in hosts
+            and (not require_https or parsed.scheme == "https")
+        )
+    except ValueError:
+        logging.getLogger(__name__).warning("Invalid weather source URL configuration")
+        return False
+
+
 def _configured_weather_feeds() -> list[dict]:
     feeds = []
     for source in AUTHORIZED_WEATHER_SOURCES:
@@ -83,11 +95,81 @@ def _configured_weather_feeds() -> list[dict]:
         url = os.getenv(env_name, "").strip()
         if not url:
             continue
-        hostname = (urlparse(url).hostname or "").lower()
-        if hostname not in {"mausam.imd.gov.in", "imd.gov.in", "tnsdma.tn.gov.in", "tn.gov.in", "agri.tn.gov.in"}:
+        if not _weather_url_allowed(url, {"mausam.imd.gov.in", "imd.gov.in", "tnsdma.tn.gov.in", "tn.gov.in", "agri.tn.gov.in"}):
             continue
         feeds.append({**source, "url": url, "env_name": env_name})
     return feeds
+
+
+def get_weather_configuration_readiness() -> dict:
+    configured_feeds = _configured_weather_feeds()
+    feed_checks = [
+        {
+            "setting": f"{source['short_name']}_WEATHER_FEED_URL",
+            "configured": bool(os.getenv(f"{source['short_name']}_WEATHER_FEED_URL", "").strip()),
+            "accepted": any(feed["short_name"] == source["short_name"] for feed in configured_feeds),
+        }
+        for source in AUTHORIZED_WEATHER_SOURCES
+    ]
+    api_key_present = bool(os.getenv("IMD_API_KEY", "").strip())
+    api_token_present = bool(os.getenv("IMD_API_TOKEN", "").strip())
+    endpoint = os.getenv("IMD_CITY_FORECAST_URL", "https://api.imd.gov.in/api/v1/cityforecast").strip()
+    endpoint_valid = _weather_url_allowed(endpoint, {"api.imd.gov.in"}, require_https=True)
+    blockers = []
+    if configured_feeds:
+        mode = "authorized_json_feeds"
+    else:
+        mode = "official_imd_city_api"
+        if not api_key_present:
+            blockers.append("missing_imd_api_key")
+        if not api_token_present:
+            blockers.append("missing_imd_api_token")
+        if not endpoint_valid:
+            blockers.append("invalid_imd_city_endpoint")
+    warnings = [
+        f"ignored_{check['setting'].lower()}"
+        for check in feed_checks if check["configured"] and not check["accepted"]
+    ]
+    return {
+        "status": "configured" if not blockers else "blocked",
+        "mode": mode,
+        "credential_presence": {"api_key": api_key_present, "api_token": api_token_present},
+        "imd_endpoint_valid": endpoint_valid,
+        "feed_checks": feed_checks,
+        "blockers": blockers,
+        "warnings": warnings,
+        "network_verified": False,
+    }
+
+
+def get_weather_rollout_readiness() -> dict:
+    configuration = get_weather_configuration_readiness()
+    status = get_weather_fetch_status()
+    last_run = status["fetch_monitoring"]["last_run"]
+    blockers = list(configuration["blockers"])
+    if not last_run:
+        blockers.append("no_completed_refresh")
+    elif last_run["status"] != "success":
+        blockers.append("last_refresh_not_complete")
+    if status["city_coverage"]["current"] != status["city_coverage"]["total"]:
+        blockers.append("incomplete_fresh_city_coverage")
+    return {
+        "status": "ready" if not blockers else "blocked",
+        "scope": "configured 35-city daily weather catalog",
+        "configuration": configuration,
+        "blockers": blockers,
+        "city_coverage": status["city_coverage"],
+        "last_refresh_status": last_run["status"] if last_run else "never_run",
+        "long_range_live_verification": "not_verified",
+        "scheduler_registration": "not_checked",
+        "next_actions": [
+            "Configure authorized sources locally; never paste credentials into chat.",
+            "Run a refresh and inspect source outcomes and missing-city coverage.",
+            "Verify weekly/monthly payloads and OS scheduler execution separately.",
+        ] if blockers else [
+            "Verify weekly/monthly payloads and OS scheduler execution separately.",
+        ],
+    }
 
 
 def _weather_city_key(value: object) -> str:
@@ -289,8 +371,7 @@ def _fetch_imd_city_forecasts(timeout_seconds: int) -> dict:
         "IMD_CITY_FORECAST_URL",
         "https://api.imd.gov.in/api/v1/cityforecast",
     ).strip()
-    parsed_endpoint = urlparse(endpoint)
-    if parsed_endpoint.scheme != "https" or (parsed_endpoint.hostname or "").lower() != "api.imd.gov.in":
+    if not _weather_url_allowed(endpoint, {"api.imd.gov.in"}, require_https=True):
         return {
             "status": "failed",
             "records": [],

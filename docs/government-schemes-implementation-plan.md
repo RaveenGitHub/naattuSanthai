@@ -60,6 +60,18 @@ Build and ship a reliable agritech information stack that covers government sche
 - Next implementation: verify live city mapping and longer-range source payloads
   with authorized IMD/TNSDMA access. This remains blocked on locally configured
   credentials/authorized feeds; do not infer coverage from mocked payloads.
+- Added credential-free, admin-only weather rollout diagnostics at
+  `GET /api/weather/rollout/readiness`: configuration presence/acceptance and
+  connector precedence, static blockers/warnings, last refresh result, and fresh
+  daily city coverage. No network request, credential/URL disclosure, or history
+  mutation occurs. Configured settings alone never establish daily readiness.
+  Weekly/monthly live verification and OS scheduler checks remain separate blockers
+  to full operational rollout, not claims made by this daily diagnostic.
+- Verification: 219 targeted weather/API/deployment tests passed. Readiness tests
+  enforce no outbound calls, no history mutation, admin access, secret/URL
+  non-disclosure, malformed configuration handling, and complete-refresh/fresh-city
+  gating. Next implementation remains authorized live source verification;
+  credential-free diagnostics do not remove that prerequisite.
 
 ## Status update — 2026-09-10
 
