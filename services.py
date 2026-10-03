@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
@@ -108,6 +109,51 @@ def _weather_city_catalog() -> dict[str, dict]:
     return catalog
 
 
+def _weather_number(
+    record: dict,
+    *names: str,
+    minimum: Optional[float] = None,
+    maximum: Optional[float] = None,
+) -> Optional[float]:
+    for name in names:
+        value = record.get(name)
+        if value is None or (isinstance(value, str) and not value.strip()):
+            continue
+        if isinstance(value, bool) or not isinstance(value, (str, int, float)):
+            raise ValueError(f"{name} must be a finite number")
+        try:
+            number = float(value)
+        except (ValueError, OverflowError) as exc:
+            raise ValueError(f"{name} must be a finite number") from exc
+        if not math.isfinite(number):
+            raise ValueError(f"{name} must be a finite number")
+        if minimum is not None and number < minimum:
+            raise ValueError(f"{name} is below the allowed minimum")
+        if maximum is not None and number > maximum:
+            raise ValueError(f"{name} is above the allowed maximum")
+        return number
+    return None
+
+
+def _optional_weather_metrics(record: dict) -> dict:
+    return {
+        "rainfall_mm": _weather_number(
+            record, "Past_24_hrs_Rainfall", "rainfall_mm", "rainfall", "rain", minimum=0,
+        ),
+        "humidity_pct": _weather_number(
+            record, "Relative_Humidity_at_0830", "RH", "humidity_pct", "humidity",
+            minimum=0, maximum=100,
+        ),
+        "wind_kmh": _weather_number(
+            record, "WIND_SPEED", "wind_kmh", "wind_speed_kmh", "wind_speed", minimum=0,
+        ),
+        "moisture_percent": _weather_number(
+            record, "moisture_percent", "soil_moisture", "soil_moisture_percent",
+            minimum=0, maximum=100,
+        ),
+    }
+
+
 def _normalize_weather_payload(payload: object, source_name: str) -> list[dict]:
     records = payload.get("data", payload) if isinstance(payload, dict) else payload
     if isinstance(records, dict):
@@ -132,25 +178,23 @@ def _normalize_weather_payload(payload: object, source_name: str) -> list[dict]:
         city_meta = catalog.get(_weather_city_key(city))
         if not city_meta:
             continue
-        def number(*names: str, default: float = 0.0) -> float:
-            for name in names:
-                value = record.get(name)
-                if value not in (None, ""):
-                    try:
-                        return float(value)
-                    except (TypeError, ValueError):
-                        return default
-            return default
+        try:
+            temperature = _weather_number(record, "temperature_c", "temperature", "temp")
+            if temperature is None:
+                raise ValueError("Temperature is required")
+            metrics = _optional_weather_metrics(record)
+        except ValueError as exc:
+            logging.getLogger(__name__).warning(
+                "Rejected weather record for %s: %s", city_meta["city"], exc,
+            )
+            continue
 
         normalized.append({
             "region": city_meta["city"],
             "city_tier": city_meta["tier"],
             "forecast_date": str(record.get("forecast_date") or record.get("observed_at") or datetime.now(timezone.utc).isoformat()),
-            "temperature_c": number("temperature_c", "temperature", "temp"),
-            "rainfall_mm": number("rainfall_mm", "rainfall", "rain"),
-            "humidity_pct": number("humidity_pct", "humidity"),
-            "wind_kmh": number("wind_kmh", "wind_speed_kmh", "wind_speed"),
-            "moisture_percent": number("moisture_percent", "soil_moisture", "soil_moisture_percent"),
+            "temperature_c": temperature,
+            **metrics,
             "summary_ta": str(record.get("summary_ta") or "அதிகாரப்பூர்வ வானிலை புதுப்பிப்பு கிடைத்துள்ளது."),
             "advisory_ta": str(record.get("advisory_ta") or "மண் ஈரப்பதம் மற்றும் மழை நிலையை கண்காணிக்கவும்."),
             "source_name": source_name,
@@ -183,20 +227,21 @@ def _normalize_imd_city_forecast(payload: object) -> list[dict]:
         if not city_meta:
             continue
 
-        def number(*names: str) -> Optional[float]:
-            for name in names:
-                value = record.get(name)
-                if value not in (None, ""):
-                    try:
-                        return float(value)
-                    except (TypeError, ValueError):
-                        return None
-            return None
-
-        maximum = number("Todays_Forecast_Max_Temp", "Today_Max_temp", "MAX_TEMP")
-        minimum = number("Todays_Forecast_Min_temp", "Today_Min_temp", "MIN_TEMP")
+        try:
+            maximum = _weather_number(record, "Todays_Forecast_Max_Temp", "Today_Max_temp", "MAX_TEMP")
+            minimum = _weather_number(record, "Todays_Forecast_Min_temp", "Today_Min_temp", "MIN_TEMP")
+            if maximum is None and minimum is None:
+                raise ValueError("Temperature is required")
+            if maximum is not None and minimum is not None and minimum > maximum:
+                raise ValueError("Minimum temperature exceeds maximum temperature")
+            metrics = _optional_weather_metrics(record)
+        except ValueError as exc:
+            logging.getLogger(__name__).warning(
+                "Rejected IMD weather record for %s: %s", city_meta["city"], exc,
+            )
+            continue
         temperature = (
-            (maximum + minimum) / 2
+            maximum / 2 + minimum / 2
             if maximum is not None and minimum is not None
             else maximum if maximum is not None else minimum
         )
@@ -209,10 +254,7 @@ def _normalize_imd_city_forecast(payload: object) -> list[dict]:
             "city_tier": city_meta["tier"],
             "forecast_date": str(record.get("Date") or record.get("date") or datetime.now(timezone.utc).date().isoformat()),
             "temperature_c": temperature,
-            "rainfall_mm": number("Past_24_hrs_Rainfall", "rainfall_mm", "rainfall") or 0.0,
-            "humidity_pct": number("Relative_Humidity_at_0830", "RH", "humidity_pct", "humidity") or 0.0,
-            "wind_kmh": number("WIND_SPEED", "wind_kmh", "wind_speed") or 0.0,
-            "moisture_percent": 0.0,
+            **metrics,
             "summary_ta": f"IMD முன்னறிவிப்பு: {description}" if description else "இந்த நகரத்திற்கான IMD முன்னறிவிப்பு கிடைத்துள்ளது.",
             "advisory_ta": "உள்ளூர் வானிலை எச்சரிக்கைகளை கவனித்து, பாசன முடிவுகளை அதற்கேற்ப திட்டமிடவும்.",
             "source_name": "India Meteorological Department",
@@ -273,7 +315,7 @@ def _fetch_imd_city_forecasts(timeout_seconds: int) -> dict:
             "records": len(records),
             "status": "success" if records else "warning",
         }],
-        "errors": [],
+        "errors": [] if records else ["IMD returned no valid forecasts for the configured city catalog."],
     }
 
 
@@ -343,7 +385,12 @@ def _fetch_authorized_weather_updates(timeout_seconds: int = 15) -> dict:
                 payload = json.loads(response.read().decode("utf-8"))
             source_records = _normalize_weather_payload(payload, source["name"])
             records.extend(source_records)
-            sources.append({"name": source["name"], "url": source["url"], "records": len(source_records), "status": "success"})
+            sources.append({
+                "name": source["name"], "url": source["url"], "records": len(source_records),
+                "status": "success" if source_records else "warning",
+            })
+            if not source_records:
+                errors.append(f"{source['name']}: no valid forecasts for the configured city catalog.")
         except (HTTPError, URLError, TimeoutError, ValueError, OSError) as exc:
             errors.append(f"{source['name']}: {str(exc)[:180]}")
             sources.append({"name": source["name"], "url": source["url"], "records": 0, "status": "failed"})

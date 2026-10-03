@@ -21,6 +21,21 @@ Build and ship a reliable agritech information stack that covers government sche
   task registration is explicit and is not evidence that a job has run successfully.
 - The 35-city catalog is the configured coverage target, not an exhaustive list of
   every Tamil Nadu town or an official A/B/C classification.
+- Next implementation completed: numeric weather validation and missing-data handling.
+  Both official IMD and configured JSON feeds preserve absent optional measurements
+  as null, retain genuine zero readings, and reject malformed/nonfinite measurements,
+  negative rain/wind, invalid percentages, and inverted IMD temperature ranges.
+  Rejections are logged without raw payloads; empty/invalid feed results return
+  warning diagnostics rather than claiming a successful source refresh.
+- SQLite migration preserves existing forecast rows, indexes, and triggers while
+  allowing missing optional measurements. Existing stored numbers are not guessed
+  to be missing. Weather and weather-market pages now distinguish zero from no data.
+- Verification after validation changes: 179 targeted weather, monitoring, scheduler,
+  API, deployment, environment, and layered-app tests passed; editor diagnostics
+  report no errors in changed Python files. Restarted local app returns healthy
+  database status and HTTP 200 for the weather page. Live status still reports
+  `not_configured` and 0/35 current cities; tests use isolated sample responses
+  and are not evidence of live IMD access.
 - Next rollout work: verify real IMD payload coverage with authorized access, then
   close missing-city mapping gaps and validate weekly/monthly source contracts.
   Do not synthesize forecasts for uncovered cities.

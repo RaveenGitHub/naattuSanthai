@@ -27,6 +27,48 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 
+def _ensure_nullable_weather_metrics(conn: sqlite3.Connection) -> None:
+    columns = conn.execute("PRAGMA table_info(weather_forecasts)").fetchall()
+    metrics = {"rainfall_mm", "humidity_pct", "wind_kmh", "moisture_percent"}
+    if not any(row["name"] in metrics and row["notnull"] for row in columns):
+        return
+
+    # SQLite cannot remove NOT NULL in place; preserve rows and schema objects.
+    schema_objects = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE tbl_name = 'weather_forecasts' "
+        "AND type IN ('index', 'trigger') AND sql IS NOT NULL"
+    ).fetchall()
+    conn.execute(
+        """
+        CREATE TABLE weather_forecasts_nullable (
+            id TEXT PRIMARY KEY,
+            region TEXT NOT NULL,
+            period TEXT NOT NULL,
+            forecast_date TEXT NOT NULL,
+            temperature_c REAL NOT NULL,
+            rainfall_mm REAL,
+            humidity_pct REAL,
+            wind_kmh REAL,
+            summary_ta TEXT NOT NULL,
+            advisory_ta TEXT NOT NULL,
+            source_name TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            city_tier TEXT NOT NULL DEFAULT 'Tier 3',
+            moisture_percent REAL
+        )
+        """
+    )
+    column_names = ", ".join(row["name"] for row in columns)
+    conn.execute(
+        f"INSERT INTO weather_forecasts_nullable ({column_names}) "
+        f"SELECT {column_names} FROM weather_forecasts"
+    )
+    conn.execute("DROP TABLE weather_forecasts")
+    conn.execute("ALTER TABLE weather_forecasts_nullable RENAME TO weather_forecasts")
+    for row in schema_objects:
+        conn.execute(row["sql"])
+
+
 def _ensure_user_verification_columns() -> None:
     with get_connection() as conn:
         columns = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
@@ -72,6 +114,7 @@ def _ensure_user_verification_columns() -> None:
 
 def init_db() -> None:
     with get_connection() as conn:
+        conn.execute("BEGIN")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS farmers (
@@ -130,9 +173,9 @@ def init_db() -> None:
                 period TEXT NOT NULL,
                 forecast_date TEXT NOT NULL,
                 temperature_c REAL NOT NULL,
-                rainfall_mm REAL NOT NULL,
-                humidity_pct REAL NOT NULL,
-                wind_kmh REAL NOT NULL,
+                rainfall_mm REAL,
+                humidity_pct REAL,
+                wind_kmh REAL,
                 summary_ta TEXT NOT NULL,
                 advisory_ta TEXT NOT NULL,
                 source_name TEXT NOT NULL,
@@ -144,7 +187,8 @@ def init_db() -> None:
         if "city_tier" not in weather_columns:
             conn.execute("ALTER TABLE weather_forecasts ADD COLUMN city_tier TEXT NOT NULL DEFAULT 'Tier 3'")
         if "moisture_percent" not in weather_columns:
-            conn.execute("ALTER TABLE weather_forecasts ADD COLUMN moisture_percent REAL NOT NULL DEFAULT 60")
+            conn.execute("ALTER TABLE weather_forecasts ADD COLUMN moisture_percent REAL")
+        _ensure_nullable_weather_metrics(conn)
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS market_prices (

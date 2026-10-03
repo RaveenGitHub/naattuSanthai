@@ -3938,7 +3938,7 @@ def weather_page(
     )
 
     def display_metric(value, unit):
-        if value is None or (value == 0 and unit in {"%", "km/h"}):
+        if value is None:
             return f"— {unit} (தரவு இல்லை)"
         return f"{float(value):.0f} {unit}"
     alerts = list_weather_alerts(village_name)
@@ -4358,7 +4358,7 @@ def weather_market_page(request: Request, region: str = "Kallakurichi"):
     )
 
     def display_weather_metric(value, unit):
-        if value is None or (value == 0 and unit in {"%", "km/h"}):
+        if value is None:
             return f"— {unit} (தரவு இல்லை)"
         return f"{float(value):.0f} {unit}"
     forecast_moisture = forecast.get("moisture_percent")

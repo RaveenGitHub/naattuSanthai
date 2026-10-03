@@ -92,6 +92,18 @@ To fetch official IMD city forecasts, request API access and a key/token from th
 
 Without valid IMD credentials, forecast refresh returns an explicit not-configured/failure result and the page shows cities with no current data. Credentials and access tokens must remain in `.env` or a secret store; never commit them.
 
+Weather ingestion requires a finite temperature and rejects records with nonnumeric,
+nonfinite, or out-of-range supplied measurements. Rainfall and wind cannot be negative;
+humidity and soil moisture must be between 0 and 100 percent. Rejected records are
+logged by city and field without logging the raw payload. Valid records in the same
+response are still accepted.
+
+Missing rainfall, humidity, wind, and soil moisture are stored as SQL NULL and returned
+as JSON `null`, not invented zero readings. Both weather views label these measurements
+as unavailable and preserve explicitly reported zero measurements. Existing forecast
+rows are preserved during the automatic nullable-column migration; historical numeric
+values are not reinterpreted because their original missing-value provenance is unknown.
+
 ### Schedule automatic IMD refreshes on Windows
 
 The refresh worker runs outside Uvicorn so app restarts or multiple web workers cannot create duplicate timers. To run it once:
