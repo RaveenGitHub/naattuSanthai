@@ -3910,6 +3910,8 @@ def weather_page(
     taluk_name = (taluk or "").strip() or "Kallakurichi"
     village_name = (village or "").strip() or profile_defaults["village"] or "Periyar Nagar"
     period_name = (period or "daily").strip().lower() or "daily"
+    if period_name not in {"daily", "weekly", "monthly"}:
+        raise HTTPException(status_code=422, detail="period must be daily, weekly, or monthly")
     freshness_cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     requested_forecasts = list_weather_forecast(period_name, region_name)
     forecasts = [
@@ -3933,7 +3935,7 @@ def weather_page(
     wind = forecast.get("wind_kmh")
     rainfall_label = (
         "கடந்த 24 மணி மழை"
-        if forecast.get("source_name") == "India Meteorological Department"
+        if period_name == "daily" and forecast.get("source_name") == "India Meteorological Department"
         else "மழை"
     )
 

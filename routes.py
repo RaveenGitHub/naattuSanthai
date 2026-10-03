@@ -146,8 +146,8 @@ def trigger_weather_fetch(request: Request):
         "success": bool(live_fetch["records"]),
         "data": {
             "message": (
-                f"Updated forecasts for {live_fetch['city_coverage']['received']} of "
-                f"{live_fetch['city_coverage']['total']} cities."
+                f"Received {len(live_fetch['records'])} forecast records; daily coverage for "
+                f"{live_fetch['city_coverage']['received']} of {live_fetch['city_coverage']['total']} cities."
                 if live_fetch["records"]
                 else "No city forecasts were received; check the source configuration and fetch errors."
             ),

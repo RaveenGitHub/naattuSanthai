@@ -179,6 +179,17 @@ def _normalize_weather_payload(payload: object, source_name: str) -> list[dict]:
         if not city_meta:
             continue
         try:
+            period = record.get("period", "daily")
+            if not isinstance(period, str) or period not in {"daily", "weekly", "monthly"}:
+                raise ValueError("period must be daily, weekly, or monthly")
+            forecast_date = record.get("forecast_date") or record.get("observed_at")
+            if period != "daily":
+                if not isinstance(forecast_date, str):
+                    raise ValueError("Long-range forecasts require an ISO forecast_date")
+                datetime.fromisoformat(forecast_date.replace("Z", "+00:00"))
+                for field in ("summary_ta", "advisory_ta"):
+                    if not isinstance(record.get(field), str) or not record[field].strip():
+                        raise ValueError(f"Long-range forecasts require {field}")
             temperature = _weather_number(record, "temperature_c", "temperature", "temp")
             if temperature is None:
                 raise ValueError("Temperature is required")
@@ -192,7 +203,8 @@ def _normalize_weather_payload(payload: object, source_name: str) -> list[dict]:
         normalized.append({
             "region": city_meta["city"],
             "city_tier": city_meta["tier"],
-            "forecast_date": str(record.get("forecast_date") or record.get("observed_at") or datetime.now(timezone.utc).isoformat()),
+            "period": period,
+            "forecast_date": str(forecast_date or datetime.now(timezone.utc).isoformat()),
             "temperature_c": temperature,
             **metrics,
             "summary_ta": str(record.get("summary_ta") or "அதிகாரப்பூர்வ வானிலை புதுப்பிப்பு கிடைத்துள்ளது."),
@@ -320,7 +332,10 @@ def _fetch_imd_city_forecasts(timeout_seconds: int) -> dict:
 
 
 def _add_weather_city_coverage(result: dict) -> dict:
-    covered = {_weather_city_key(item["region"]) for item in result["records"]}
+    covered = {
+        _weather_city_key(item["region"]) for item in result["records"]
+        if item.get("period", "daily") == "daily"
+    }
     catalog = list_tamil_nadu_weather_cities()
     missing = [item["city"] for item in catalog if _weather_city_key(item["city"]) not in covered]
     result["city_coverage"] = {
@@ -399,9 +414,9 @@ def _fetch_authorized_weather_updates(timeout_seconds: int = 15) -> dict:
         now = datetime.now(timezone.utc).isoformat()
         with get_connection() as conn:
             conn.executemany(
-                "INSERT INTO weather_forecasts (id, region, period, forecast_date, temperature_c, rainfall_mm, humidity_pct, wind_kmh, summary_ta, advisory_ta, source_name, created_at, city_tier, moisture_percent) VALUES (?, ?, 'daily', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO weather_forecasts (id, region, period, forecast_date, temperature_c, rainfall_mm, humidity_pct, wind_kmh, summary_ta, advisory_ta, source_name, created_at, city_tier, moisture_percent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 [
-                    (f"WX-LIVE-{uuid4().hex}", item["region"], item["forecast_date"], item["temperature_c"], item["rainfall_mm"], item["humidity_pct"], item["wind_kmh"], item["summary_ta"], item["advisory_ta"], item["source_name"], now, item["city_tier"], item["moisture_percent"])
+                    (f"WX-LIVE-{uuid4().hex}", item["region"], item["period"], item["forecast_date"], item["temperature_c"], item["rainfall_mm"], item["humidity_pct"], item["wind_kmh"], item["summary_ta"], item["advisory_ta"], item["source_name"], now, item["city_tier"], item["moisture_percent"])
                     for item in records
                 ],
             )

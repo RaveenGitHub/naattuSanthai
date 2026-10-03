@@ -39,6 +39,16 @@ Build and ship a reliable agritech information stack that covers government sche
 - Next rollout work: verify real IMD payload coverage with authorized access, then
   close missing-city mapping gaps and validate weekly/monthly source contracts.
   Do not synthesize forecasts for uncovered cities.
+- Weekly/monthly JSON-feed contracts now preserve explicit source periods, require
+  an ISO outlook date and source-supplied summary/advisory, and reject unsupported
+  or incomplete records. Long-range records remain separate from daily city
+  coverage and the IMD today's-forecast connector; no synthetic outlooks are built.
+  Live longer-range feed verification remains blocked on authorized access.
+- Verification: 195 targeted tests passed for the period-contract increment;
+  after final API/UI adjustments, all 160 affected period, validation, and API
+  tests passed again. Editor diagnostics and `git diff --check` are clean.
+- Next implementation: forecast-date freshness checks, followed by live city
+  mapping and longer-range payload verification once authorized feeds are available.
 
 ## Status update — 2026-09-10
 

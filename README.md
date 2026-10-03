@@ -104,6 +104,24 @@ as unavailable and preserve explicitly reported zero measurements. Existing fore
 rows are preserved during the automatic nullable-column migration; historical numeric
 values are not reinterpreted because their original missing-value provenance is unknown.
 
+### Weekly and monthly source contracts
+
+Authorized JSON feeds configured through `IMD_WEATHER_FEED_URL` or
+`TNSDMA_WEATHER_FEED_URL` may supply `period` as `daily`, `weekly`, or `monthly`.
+Omitting it retains the daily contract. Weekly/monthly records must provide an ISO
+`forecast_date`, finite `temperature_c`, and nonempty source-supplied `summary_ta`
+and `advisory_ta`. Optional measurements retain the same validation/null rules.
+Unknown periods and incomplete long-range records are rejected and logged.
+The date identifies the source outlook date; it does not imply seven individual
+daily forecasts or a derived monthly total.
+
+Records retain their period in storage and are exposed by the corresponding
+`/api/weather/weekly` or `/api/weather/monthly` endpoint and weather page period.
+Long-range records never satisfy daily city coverage or populate the daily view.
+The official IMD city connector currently consumes today's forecast only; it
+does not synthesize weekly/monthly data from that response. Longer-range live
+availability still requires an authorized feed with the documented contract.
+
 ### Schedule automatic IMD refreshes on Windows
 
 The refresh worker runs outside Uvicorn so app restarts or multiple web workers cannot create duplicate timers. To run it once:
