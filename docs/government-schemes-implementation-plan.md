@@ -47,8 +47,19 @@ Build and ship a reliable agritech information stack that covers government sche
 - Verification: 195 targeted tests passed for the period-contract increment;
   after final API/UI adjustments, all 160 affected period, validation, and API
   tests passed again. Editor diagnostics and `git diff --check` are clean.
-- Next implementation: forecast-date freshness checks, followed by live city
-  mapping and longer-range payload verification once authorized feeds are available.
+- Forecast-date freshness checks are implemented across both weather views,
+  latest/archive APIs, city cards, and stored-freshness monitoring. Current records
+  require receipt within seven days plus a source date within seven India-calendar
+  days behind today or the permitted future horizon (daily 0, weekly 7, monthly 31).
+  Invalid dates are logged as unavailable; recently re-fetched old forecasts remain
+  stale, and bad newer rows cannot hide an existing current city forecast.
+- Verification: 207 targeted freshness, period, validation, monitoring, worker,
+  API, layered-app, environment, and deployment tests passed; editor diagnostics
+  are clean. Boundary tests cover India midnight, timezone offsets, exact receipt
+  age limits, invalid dates, and period-specific future limits.
+- Next implementation: verify live city mapping and longer-range source payloads
+  with authorized IMD/TNSDMA access. This remains blocked on locally configured
+  credentials/authorized feeds; do not infer coverage from mocked payloads.
 
 ## Status update — 2026-09-10
 

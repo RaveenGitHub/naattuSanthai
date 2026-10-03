@@ -86,7 +86,22 @@ The Docker runtime and Docker Compose configuration both pass these values throu
 
 ### Official city weather data
 
-The weather page lists the configured Tier 1, Tier 2, and Tier 3 Tamil Nadu city catalog and only displays measured forecast values when a matching forecast has been received within the last seven days. Missing or stale city data is identified rather than replaced with sample weather.
+The weather page lists the configured Tier 1, Tier 2, and Tier 3 Tamil Nadu city catalog and only displays measured forecast values when a matching forecast passes both receipt-age and source-date checks. Missing or stale city data is identified rather than replaced with sample weather.
+
+Current forecasts must have been received within the last seven days, not in the
+future. Their source date must be between seven calendar days ago and the period's
+future horizon: today for daily forecasts, seven days ahead for weekly, and 31 days
+ahead for monthly. Source dates use the India calendar; date-only and timezone-naive
+source dates are interpreted in India time, while legacy naive receipt timestamps
+are interpreted as UTC. Explicit offsets and `Z` timestamps are supported.
+Re-fetching an old source forecast does not make it current. Invalid dates/periods
+are logged and marked unavailable, without deleting stored history.
+
+Both weather views, latest/archive endpoints, city coverage, and stored-freshness
+counts use these same checks. The period-specific raw forecast endpoints retain
+historical rows; use `/api/weather/latest` or city forecast status for current daily
+data. A bad newer row does not hide an older row that still passes freshness checks.
+Fetch monitoring continues to report received records separately from freshness.
 
 To fetch official IMD city forecasts, request API access and a key/token from the [IMD API portal](https://api.imd.gov.in/public/index.php), then set `IMD_API_KEY` and `IMD_API_TOKEN` in your local `.env`. IMD binds API access to the registering client/IP; follow the portal's current access requirements. The default endpoint is `https://api.imd.gov.in/api/v1/cityforecast`. Restart the app after changing `.env`, sign in as an admin, then trigger a refresh with `POST /api/weather/fetch` (or use the admin UI/API client). The response and `GET /api/weather/fetch/status` report per-city freshness and missing-city coverage.
 

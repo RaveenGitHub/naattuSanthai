@@ -58,6 +58,7 @@ from services import (
     TOP_AGRI_PRODUCTS_TA,
     list_weather_alerts,
     list_weather_forecast,
+    list_current_weather_forecast,
     list_tamil_nadu_city_weather,
 )
 
@@ -3912,12 +3913,7 @@ def weather_page(
     period_name = (period or "daily").strip().lower() or "daily"
     if period_name not in {"daily", "weekly", "monthly"}:
         raise HTTPException(status_code=422, detail="period must be daily, weekly, or monthly")
-    freshness_cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
-    requested_forecasts = list_weather_forecast(period_name, region_name)
-    forecasts = [
-        item for item in requested_forecasts
-        if str(item.get("created_at", "")) >= freshness_cutoff
-    ]
+    forecasts = list_current_weather_forecast(period_name, region_name)
     forecast_source_status = "Regional forecast" if forecasts else "No current forecast data"
 
     forecast = forecasts[0] if forecasts else {
@@ -4343,11 +4339,7 @@ def weather_market_page(request: Request, region: str = "Kallakurichi"):
     if region_name == "Kallakurichi":
         region_name = profile_defaults["region"] or region_name
 
-    freshness_cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
-    daily_forecast = [
-        item for item in list_weather_forecast("daily", region_name)
-        if str(item.get("created_at", "")) >= freshness_cutoff
-    ]
+    daily_forecast = list_current_weather_forecast("daily", region_name)
 
     forecast = daily_forecast[0] if daily_forecast else {
         "region": region_name,

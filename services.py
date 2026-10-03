@@ -803,51 +803,84 @@ def list_weather_forecast(period: str, region: Optional[str] = None, city_tier: 
     return [dict(row) for row in rows]
 
 
+def weather_forecast_status(forecast: dict, now: Optional[datetime] = None) -> str:
+    now = now or datetime.now(timezone.utc)
+    india_time = timezone(timedelta(hours=5, minutes=30))
+    try:
+        period = forecast.get("period")
+        if not isinstance(period, str) or period not in {"daily", "weekly", "monthly"}:
+            raise ValueError("Unsupported forecast period")
+        received = datetime.fromisoformat(forecast["created_at"].replace("Z", "+00:00"))
+        source = datetime.fromisoformat(forecast["forecast_date"].replace("Z", "+00:00"))
+        if received.tzinfo is None:
+            received = received.replace(tzinfo=timezone.utc)
+        if source.tzinfo is None:
+            source = source.replace(tzinfo=india_time)
+    except (KeyError, TypeError, AttributeError, ValueError):
+        logging.getLogger(__name__).warning(
+            "Unavailable weather record: invalid dates or period for forecast %s",
+            forecast.get("id", "unknown"),
+        )
+        return "unavailable"
+    today = now.astimezone(india_time).date()
+    horizon = {"daily": 0, "weekly": 7, "monthly": 31}[period]
+    source_day = source.astimezone(india_time).date()
+    if not now - timedelta(days=7) <= received <= now:
+        return "stale"
+    if not today - timedelta(days=7) <= source_day <= today + timedelta(days=horizon):
+        return "stale"
+    return "current"
+
+
+def list_current_weather_forecast(
+    period: str, region: Optional[str] = None, city_tier: Optional[str] = None,
+) -> List[dict]:
+    now = datetime.now(timezone.utc)
+    records = list_weather_forecast(period, region, city_tier)
+    records.sort(key=lambda item: item["created_at"], reverse=True)
+    return [item for item in records if weather_forecast_status(item, now) == "current"]
+
+
 def list_latest_weather(region: Optional[str] = None, city_tier: Optional[str] = None) -> List[dict]:
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
-    query = "SELECT * FROM weather_forecasts WHERE created_at >= ? AND period = 'daily'"
-    params: list = [cutoff]
-    if region:
-        query += " AND LOWER(region) = LOWER(?)"
-        params.append(region)
-    if city_tier:
-        query += " AND city_tier = ?"
-        params.append(city_tier)
-    query += " ORDER BY created_at DESC, forecast_date DESC"
-    with get_connection() as conn:
-        return [dict(row) for row in conn.execute(query, params).fetchall()]
+    return list_current_weather_forecast("daily", region, city_tier)
 
 
 def list_tamil_nadu_city_weather(city_tier: Optional[str] = None) -> list[dict]:
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    now = datetime.now(timezone.utc)
     with get_connection() as conn:
         rows = conn.execute(
             "SELECT * FROM weather_forecasts WHERE period = 'daily' ORDER BY created_at DESC, forecast_date DESC"
         ).fetchall()
 
     latest_by_city = {}
+    current_by_city = {}
     for row in rows:
-        latest_by_city.setdefault(_weather_city_key(row["region"]), dict(row))
+        city_key = _weather_city_key(row["region"])
+        record = dict(row)
+        latest_by_city.setdefault(city_key, record)
+        if weather_forecast_status(record, now) == "current":
+            current_by_city.setdefault(city_key, record)
 
     cities = []
     for city in list_tamil_nadu_weather_cities():
         if city_tier and city["tier"] != city_tier:
             continue
-        forecast = latest_by_city.get(_weather_city_key(city["city"]))
-        current = forecast is not None and forecast["created_at"] >= cutoff
+        city_key = _weather_city_key(city["city"])
+        forecast = current_by_city.get(city_key) or latest_by_city.get(city_key)
+        status = weather_forecast_status(forecast, now) if forecast else "unavailable"
         cities.append({
             **city,
-            "forecast_status": "current" if current else "stale" if forecast else "unavailable",
-            "forecast": forecast if current else None,
+            "forecast_status": status,
+            "forecast": forecast if status == "current" else None,
             "last_updated_at": forecast["created_at"] if forecast else None,
         })
     return cities
 
 
 def list_archived_weather(region: Optional[str] = None, city_tier: Optional[str] = None) -> List[dict]:
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
-    query = "SELECT * FROM weather_forecasts WHERE created_at < ?"
-    params: list = [cutoff]
+    now = datetime.now(timezone.utc)
+    query = "SELECT * FROM weather_forecasts WHERE 1 = 1"
+    params: list = []
     if region:
         query += " AND LOWER(region) = LOWER(?)"
         params.append(region)
@@ -856,7 +889,8 @@ def list_archived_weather(region: Optional[str] = None, city_tier: Optional[str]
         params.append(city_tier)
     query += " ORDER BY created_at DESC, forecast_date DESC"
     with get_connection() as conn:
-        return [dict(row) for row in conn.execute(query, params).fetchall()]
+        records = [dict(row) for row in conn.execute(query, params).fetchall()]
+    return [item for item in records if weather_forecast_status(item, now) != "current"]
 
 
 def get_weather_fetch_status() -> dict:
@@ -871,14 +905,13 @@ def get_weather_fetch_status() -> dict:
         region_rows = conn.execute(
             "SELECT region, COUNT(*) AS count FROM weather_forecasts GROUP BY region ORDER BY count DESC"
         ).fetchall()
-        latest_count = conn.execute(
-            "SELECT COUNT(*) FROM weather_forecasts WHERE created_at >= ?",
-            ((datetime.now(timezone.utc) - timedelta(days=7)).isoformat(),),
-        ).fetchone()[0]
+        forecast_rows = conn.execute("SELECT * FROM weather_forecasts").fetchall()
         city_rows = conn.execute(
             "SELECT city_tier, COUNT(DISTINCT region) AS count FROM weather_forecasts GROUP BY city_tier"
         ).fetchall()
 
+    now = datetime.now(timezone.utc)
+    latest_count = sum(weather_forecast_status(dict(row), now) == "current" for row in forecast_rows)
     city_coverage = list_tamil_nadu_city_weather()
     current_city_count = sum(item["forecast_status"] == "current" for item in city_coverage)
     tier_coverage = {
@@ -904,6 +937,9 @@ def get_weather_fetch_status() -> dict:
         "latest_window_days": 7,
         "archive_after_days": 7,
         "monthly_retention_months": 12,
+        "source_date_lookback_days": 7,
+        "source_date_future_horizon_days": {"daily": 0, "weekly": 7, "monthly": 31},
+        "source_date_timezone": "Asia/Kolkata",
     }
     archive_policy["status"] = "pass" if retention_days >= 7 and archive_policy["monthly_retention_months"] >= 12 else "warning"
     quality_gate = {
