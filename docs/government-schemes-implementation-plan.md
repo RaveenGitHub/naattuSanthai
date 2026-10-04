@@ -83,6 +83,31 @@ Build and ship a reliable agritech information stack that covers government sche
   Next implementation remains live source verification after authorized access
   is configured; the dashboard exposes this blocker rather than fabricating data.
 
+## Scheme raw-ingestion implementation update — 2026-10-04
+
+- Added a separate configured official-JSON source pipeline for PM-Kisan,
+  Tamil Nadu Agriculture Department and Tamil Nadu Government Portal. Endpoints
+  must be explicitly supplied and verified; portal HTML is not parsed as a feed.
+- Raw source objects and provenance are stored separately from published schemes.
+  Per-source content hashes deduplicate repeated content while preserving receipt
+  timestamps. No automatic translation, approval or publication is performed.
+- Admin ingestion/run, status/history and raw-review APIs share a standalone
+  refresh worker. Network/429/5xx failures have bounded retry; malformed payloads
+  and untrusted/redirecting endpoints fail without publication or seed fallback.
+- Explicit Windows task registration supports midnight/noon raw refreshes with
+  overlap prevention and configuration preflight. OS registration and real feed
+  availability are not inferred from code or mocked tests.
+- The older scheme scheduler and seed-update route remain legacy prototype
+  surfaces, not production evidence. Use the new ingestion APIs/worker for raw
+  source collection. Existing published content remains unchanged.
+- Next implementation: normalized validation/review contracts linking raw
+  provenance to publishable Tamil records; live endpoint verification remains
+  necessary before scheduled source rollout.
+- Verification: 195 raw-ingestion, API, layered-app, weather-validation,
+  environment and deployment tests passed. The Windows task script passes parser
+  validation without registration; Python editor diagnostics and diff checks are
+  clean. Tests use isolated databases and mocked HTTP responses, not live feeds.
+
 ## Status update — 2026-09-10
 
 ### What has improved in the current implementation

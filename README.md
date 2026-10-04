@@ -184,6 +184,53 @@ The weather quality page shows this summary separately from stored forecast fres
 History stores counts and source outcomes, not API credentials, feed URLs, or raw exception text;
 the refresh response and worker logs provide immediate diagnostic details.
 
+## Official scheme raw-ingestion pipeline
+
+The new raw pipeline is separate from legacy seeded scheme content and its
+timestamp-only scheduler. It does **not** publish records or translate summaries.
+Configure at least one authorized JSON endpoint locally using
+`PM_KISAN_SCHEME_FEED_URL`, `TN_AGRI_SCHEME_FEED_URL`, or `TN_GOVT_SCHEME_FEED_URL`.
+Only HTTPS on that source's listed official host is accepted (PM-Kisan:
+`pmkisan.gov.in`; TN Agriculture: `agri.tn.gov.in`; TN Government:
+`tn.gov.in`/`www.tn.gov.in`). Userinfo, query strings, fragments, nonstandard
+ports and redirects are rejected. No feed URLs are supplied by default: official
+portal homepages are HTML, not verified JSON feed endpoints.
+
+Feeds must return a nonempty array of JSON objects, or `{"data": [...]}`, at most
+1,000 records and 2 MB of decoded response data. Nonfinite JSON values and malformed
+or empty feeds fail explicitly. Each object is preserved as canonical JSON with
+source URL, SHA-256 content hash, and first/last receipt timestamps; repeated content
+per source updates receipt metadata rather than creating duplicates. This is raw
+provenance, not verification of eligibility, translation quality, or publication.
+
+Admin-only endpoints:
+- `POST /api/schemes/ingestion/run`: fetch configured sources.
+- `GET /api/schemes/ingestion/status?limit=20`: safe configuration checks and
+  persistent completed-run history.
+- `GET /api/schemes/ingestion/raw?limit=20&source_id=pm-kisan`: raw records for review.
+
+Limits are 1–100. Ingestion retries network errors, HTTP 429 and 5xx up to three
+attempts, with a 15-second HTTP timeout and 1/2-second backoff. Other HTTP errors,
+redirects and payload errors are not retried. Partial/failed/unconfigured runs are
+not successful; history/logs contain source IDs and error codes, not feed URLs or
+raw exceptions. Raw admin records intentionally contain public-source provenance.
+No automatic raw-record pruning is enabled in this first increment.
+
+Run from the project root:
+```powershell
+.\.venv\Scripts\python.exe -m digital_farming.scheme_refresh --check
+.\.venv\Scripts\python.exe -m digital_farming.scheme_refresh
+powershell -ExecutionPolicy Bypass -File scripts\Register-SchemeRefreshTask.ps1
+```
+
+`--check` performs no fetch or database writes. The worker loads `.env`, writes
+rotating `logs/scheme-refresh.log`, and exits nonzero unless all configured sources
+succeed. Task registration is explicit, checks feed configuration, prevents overlapping
+instances, and runs at midnight/noon in Windows local time for the signed-in current
+user. Registration is not evidence of successful execution. Use a managed service
+account scheduler for unattended deployments. Live source verification is still
+required; mocked test responses are not proof of an official feed's availability.
+
 ## Run with Docker
 
 ```bash

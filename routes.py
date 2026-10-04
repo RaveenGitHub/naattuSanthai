@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 
 from auth import get_user_role
 from schemas import FarmCreate, FarmerCreate, SoilTestCreate
+from digital_farming.scheme_ingestion import ingest_scheme_sources, ingestion_status, list_raw_scheme_records
 from services import (
     create_farm,
     create_farmer,
@@ -259,6 +260,25 @@ def get_scheme_detail(scheme_id: str):
 def get_scheme_fetch_status_endpoint(request: Request):
     require_route_role(request, "admin")
     return {"success": True, "data": get_scheme_fetch_status(), "error": None}
+
+
+@router.post("/schemes/ingestion/run")
+def run_scheme_ingestion(request: Request):
+    require_route_role(request, "admin")
+    result = ingest_scheme_sources()
+    return {"success": result["status"] == "success", "data": result, "error": None if result["status"] == "success" else result["status"]}
+
+
+@router.get("/schemes/ingestion/status")
+def scheme_ingestion_status(request: Request, limit: int = Query(default=20, ge=1, le=100)):
+    require_route_role(request, "admin")
+    return {"success": True, "data": ingestion_status(limit), "error": None}
+
+
+@router.get("/schemes/ingestion/raw")
+def scheme_ingestion_raw(request: Request, source_id: Optional[str] = None, limit: int = Query(default=20, ge=1, le=100)):
+    require_route_role(request, "admin")
+    return {"success": True, "data": list_raw_scheme_records(source_id, limit), "error": None}
 
 
 @router.get("/admin/quality-gate")

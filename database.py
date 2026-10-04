@@ -326,6 +326,31 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS scheme_ingestion_runs (
+                id TEXT PRIMARY KEY,
+                status TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                finished_at TEXT NOT NULL,
+                sources TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS scheme_raw_records (
+                id TEXT PRIMARY KEY,
+                source_id TEXT NOT NULL,
+                source_url TEXT NOT NULL,
+                content_hash TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                first_received_at TEXT NOT NULL,
+                last_received_at TEXT NOT NULL,
+                UNIQUE(source_id, content_hash)
+            )
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS fetch_history (
                 id TEXT PRIMARY KEY,
                 source_name TEXT NOT NULL,
