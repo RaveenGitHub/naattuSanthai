@@ -1,6 +1,7 @@
 import json
 import sys
 from unittest.mock import Mock
+from uuid import uuid4
 
 import httpx
 import pytest
@@ -26,6 +27,19 @@ def feed_transport(monkeypatch, handler):
     monkeypatch.setattr(ingestion.httpx, "Client", lambda **kwargs: original(
         **kwargs, transport=httpx.MockTransport(handler),
     ))
+
+
+def persist_raw_record(payload, source_id="pm-kisan"):
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    digest = ingestion.hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    now = "2026-10-04T08:00:00+00:00"
+    raw_id = f"SCHEME-RAW-REVIEW-{uuid4().hex}"
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO scheme_raw_records VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (raw_id, source_id, "https://pmkisan.gov.in/feed", digest, raw, now, now),
+        )
+    return raw_id
 
 
 def test_unconfigured_run_is_persistent_and_does_not_seed_publication(scheme_database):
@@ -157,3 +171,173 @@ def test_worker_exit_code(scheme_database, monkeypatch, tmp_path, status, exit_c
     monkeypatch.setattr(scheme_refresh, "RotatingFileHandler", Mock())
     monkeypatch.setattr(ingestion, "ingest_scheme_sources", lambda: {"status": status})
     assert scheme_refresh.main() == exit_code
+
+
+def test_normalize_requires_editorial_tamil_and_is_idempotent(scheme_database):
+    raw_id = persist_raw_record({"title": "PM Kisan support", "description": "English description"})
+    draft = ingestion.normalize_raw_scheme_record(raw_id)
+    assert draft["status"] == "pending_translation"
+    assert draft["title_en"] == "PM Kisan support"
+    assert draft["title_ta"] is None
+    assert {"title", "summary", "eligibility", "benefits", "steps", "category", "scheme_type"} <= set(draft["validation_issues"])
+    assert ingestion.normalize_raw_scheme_record(raw_id)["id"] == draft["id"]
+    assert ingestion.list_scheme_review_drafts()[0]["raw_record_id"] == raw_id
+
+
+def complete_draft_fields():
+    return {
+        "title_ta": "பிரதமர் விவசாயி நிதி உதவி",
+        "summary_ta": "தகுதியான விவசாயிகளுக்கு நேரடி நிதி உதவி வழங்கப்படுகிறது.",
+        "eligibility_ta": "தகுதியுள்ள விவசாயிகள் பதிவு செய்யலாம்.",
+        "benefits_ta": "நேரடி நிதி உதவி கிடைக்கும்.",
+        "apply_steps_ta": "அதிகாரப்பூர்வ இணையதளத்தில் பதிவு செய்யவும்.",
+        "category": "subsidy",
+        "scheme_type": "central",
+    }
+
+
+def test_admin_review_publishes_valid_tamil_with_raw_provenance_atomically(scheme_database):
+    raw_id = persist_raw_record({"title": "PM Kisan support"})
+    draft = ingestion.normalize_raw_scheme_record(raw_id)
+    client = TestClient(app)
+    headers = {"X-User-Role": "admin"}
+    path = f"/api/schemes/ingestion/review/{draft['id']}"
+    updated = client.patch(path, json=complete_draft_fields(), headers=headers)
+    assert updated.status_code == 200
+    assert updated.json()["data"]["status"] == "pending_review"
+    resolved = client.post(path + "/resolve", json={
+        "decision": "approve", "reason": "Tamil copy checked against official notice",
+    }, headers=headers)
+    assert resolved.status_code == 200
+    published = resolved.json()["data"]
+    assert published["status"] == "published"
+    assert published["published_scheme_id"]
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT title_ta,source_record_id,source_content_hash FROM government_scheme_updates WHERE id=?",
+            (published["published_scheme_id"],),
+        ).fetchone()
+        action = conn.execute(
+            "SELECT decision,reviewer,reason FROM scheme_review_actions WHERE scheme_id=?",
+            (draft["id"],),
+        ).fetchone()
+        audit = conn.execute(
+            "SELECT username,action,outcome FROM audit_logs WHERE resource='scheme_normalized_records' ORDER BY created_at DESC LIMIT 1",
+        ).fetchone()
+    assert row["title_ta"] == complete_draft_fields()["title_ta"]
+    assert row["source_record_id"] == raw_id
+    assert row["source_content_hash"]
+    assert tuple(action) == ("approve", "admin", "Tamil copy checked against official notice")
+    assert tuple(audit) == ("admin", "scheme_ingestion_review", "success")
+    assert client.post(path + "/resolve", json={
+        "decision": "approve", "reason": "second approval",
+    }, headers=headers).status_code == 422
+
+
+def test_invalid_draft_cannot_be_approved_or_published(scheme_database):
+    raw_id = persist_raw_record({"title": "English only"})
+    draft = ingestion.normalize_raw_scheme_record(raw_id)
+    client = TestClient(app)
+    response = client.post(
+        f"/api/schemes/ingestion/review/{draft['id']}/resolve",
+        json={"decision": "approve", "reason": "attempt"},
+        headers={"X-User-Role": "admin"},
+    )
+    assert response.status_code == 422
+    with get_connection() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM government_scheme_updates").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM scheme_review_actions").fetchone()[0] == 0
+
+
+def test_reject_is_audited_and_never_publishes(scheme_database):
+    raw_id = persist_raw_record({"title": "English only"})
+    draft = ingestion.normalize_raw_scheme_record(raw_id)
+    result = ingestion.resolve_scheme_review_draft(draft["id"], "reject", "reviewer", "Cannot verify source")
+    assert result["status"] == "rejected"
+    with get_connection() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM government_scheme_updates").fetchone()[0] == 0
+        assert conn.execute(
+            "SELECT COUNT(*) FROM audit_logs WHERE resource='scheme_normalized_records'",
+        ).fetchone()[0] == 1
+
+
+def test_review_api_is_admin_only_and_validates_payload(scheme_database):
+    raw_id = persist_raw_record({"title": "English only"})
+    draft = ingestion.normalize_raw_scheme_record(raw_id)
+    client = TestClient(app)
+    path = f"/api/schemes/ingestion/review/{draft['id']}"
+    assert client.get("/api/schemes/ingestion/review").status_code == 403
+    assert client.get("/api/schemes/ingestion/review", headers={"X-User-Role": "operator"}).status_code == 403
+    assert client.get("/api/schemes/ingestion/review?status=bad", headers={"X-User-Role": "admin"}).status_code == 422
+    assert client.patch(path, json={"unknown": "field"}, headers={"X-User-Role": "admin"}).status_code == 422
+    assert client.patch(path, json={}, headers={"X-User-Role": "admin"}).status_code == 422
+    assert client.post(path + "/resolve", json={"decision": "approve", "reason": "x" * 1001}, headers={"X-User-Role": "admin"}).status_code == 422
+
+
+def test_published_source_record_cannot_be_published_twice(scheme_database):
+    raw_id = persist_raw_record({"title": "PM Kisan support"})
+    draft = ingestion.normalize_raw_scheme_record(raw_id)
+    ingestion.update_scheme_review_draft(draft["id"], complete_draft_fields())
+    ingestion.resolve_scheme_review_draft(draft["id"], "approve", "admin", "verified")
+    duplicate_raw_id = persist_raw_record(
+        {"title": "PM Kisan support", "updated_notice": True},
+        source_id="pm-kisan",
+    )
+    duplicate = ingestion.normalize_raw_scheme_record(duplicate_raw_id)
+    ingestion.update_scheme_review_draft(duplicate["id"], complete_draft_fields())
+    with pytest.raises(ValueError, match="already exists"):
+        ingestion.resolve_scheme_review_draft(duplicate["id"], "approve", "admin", "verified")
+    with get_connection() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM government_scheme_updates").fetchone()[0] == 1
+
+
+def test_admin_html_review_edits_and_approves_using_session_cookie(scheme_database):
+    raw_id = persist_raw_record({
+        "title": "PM Kisan support", "description": "Support for registered farmers.",
+        "source_markup": "<script>alert(1)</script>",
+    })
+    draft = ingestion.normalize_raw_scheme_record(raw_id)
+    client = TestClient(app)
+    login = client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    assert login.status_code == 200
+    page = client.get("/admin/scheme-ingestion-review")
+    assert page.status_code == 200
+    assert "Source text is not automatically translated" in page.text
+    assert "pending_translation" in page.text
+    assert "raw_record_id" not in page.text
+    assert raw_id in page.text
+    assert "Raw official feed record" in page.text
+    assert "Support for registered farmers." in page.text
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in page.text
+    assert "<script>alert(1)</script>" not in page.text
+    save = client.post(
+        f"/admin/scheme-ingestion-review/{draft['id']}/save",
+        data=complete_draft_fields(),
+        follow_redirects=False,
+    )
+    assert save.status_code == 303
+    assert save.headers["location"].endswith("?notice=saved")
+    publish = client.post(
+        f"/admin/scheme-ingestion-review/{draft['id']}/resolve",
+        data={"decision": "approve", "reason": "Reviewed against source notice"},
+        follow_redirects=False,
+    )
+    assert publish.status_code == 303
+    assert publish.headers["location"].endswith("?notice=published")
+    assert "title_ta" in client.get("/api/scheme/" + ingestion.list_scheme_review_drafts("published")[0]["published_scheme_id"]).json()["data"]
+
+
+def test_non_admin_cannot_open_or_post_review_ui(scheme_database):
+    client = TestClient(app)
+    assert client.get("/admin/scheme-ingestion-review", follow_redirects=False).status_code == 302
+    login = client.post("/auth/login", json={"username": "farmer1", "password": "farmer123"})
+    assert login.status_code == 200
+    page = client.get("/admin/scheme-ingestion-review", follow_redirects=False)
+    assert page.status_code == 302
+    assert page.headers["location"] == "/dashboard"
+    denied = client.post(
+        "/admin/scheme-ingestion-review/not-a-draft/save",
+        data=complete_draft_fields(),
+        follow_redirects=False,
+    )
+    assert denied.status_code == 302

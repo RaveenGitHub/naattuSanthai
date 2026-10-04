@@ -108,6 +108,31 @@ Build and ship a reliable agritech information stack that covers government sche
   validation without registration; Python editor diagnostics and diff checks are
   clean. Tests use isolated databases and mocked HTTP responses, not live feeds.
 
+## Scheme normalization and review implementation update — 2026-10-04
+
+- Added an idempotent normalized draft per raw source record. English source fields
+  are mapped only from recognized JSON keys; no automatic translation or inferred
+  eligibility/benefits is performed. Source ID, trusted source identity and URL,
+  raw-record ID, and validation issues remain linked.
+- Admins can review/edit draft text and classification fields. The existing scheme
+  quality rules enforce required Tamil title, summary, eligibility, benefits, steps,
+  plus category and scheme type. Invalid drafts cannot be approved.
+- Approval publishes immediately by explicit administrator action. Published rows
+  retain raw source-record ID/content hash, with publication, review decision, and
+  audit entry in one SQLite transaction. Duplicate source record/title and repeat
+  decisions are blocked. Rejections are recorded without publication.
+- Added the `/admin/scheme-ingestion-review` editorial UI and admin-only normalize,
+  review, edit, and resolve APIs. The review UI displays the escaped raw JSON
+  payload alongside each linked draft. Existing seeded scheme content is unchanged.
+- Python 3.8.5 compatibility is retained for the new raw ingestion module.
+- Verification: 156 targeted scheme-ingestion, API, layered-app, and deployment
+  tests passed. The HTML workflow test confirms raw source context is visible and
+  script-like payload content is escaped. Python diagnostics show no errors in the
+  touched ingestion module; remaining app diagnostics are unused-import warnings.
+- Next implementation: formalize source-specific normalization mappings and
+  migration/reprocessing behavior for changed raw notices before enabling live
+  ingestion. Authorized real-feed verification is still required for rollout.
+
 ## Status update — 2026-09-10
 
 ### What has improved in the current implementation

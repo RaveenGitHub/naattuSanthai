@@ -208,6 +208,24 @@ Admin-only endpoints:
 - `GET /api/schemes/ingestion/status?limit=20`: safe configuration checks and
   persistent completed-run history.
 - `GET /api/schemes/ingestion/raw?limit=20&source_id=pm-kisan`: raw records for review.
+- `POST /api/schemes/ingestion/raw/{raw_record_id}/normalize`: create an idempotent
+  normalized draft linked to one raw source record.
+- `GET /api/schemes/ingestion/review?status=pending_translation&limit=50`: review
+  drafts and validation issues.
+- `PATCH /api/schemes/ingestion/review/{draft_id}`: edit bounded English/Tamil and
+  classification fields; validation is recalculated on save.
+- `POST /api/schemes/ingestion/review/{draft_id}/resolve`: reject or approve. Approval
+  publishes immediately only if required Tamil content, category and scheme type pass
+  the existing scheme quality gate. Publication, review action, and audit event share
+  one SQLite transaction; duplicate source records/titles and repeat resolutions are
+  rejected.
+
+The admin UI is `/admin/scheme-ingestion-review` (also linked from the legacy review
+queue). Raw English content is only a reference; there is no automatic translation.
+An administrator must write/review all required Tamil fields, save a valid draft,
+then explicitly approve and provide a reason. Published records retain the raw record
+ID and content hash; source details and editorial decisions are auditable. Existing
+legacy seeded schemes are not changed by this workflow.
 
 Limits are 1–100. Ingestion retries network errors, HTTP 429 and 5xx up to three
 attempts, with a 15-second HTTP timeout and 1/2-second backoff. Other HTTP errors,

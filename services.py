@@ -1411,7 +1411,7 @@ def get_scheme_fetch_status() -> dict:
     invalid_records = []
     valid_scores = []
     for row in scheme_rows:
-        issues = _scheme_quality_issues(row, generic_tokens)
+        issues = scheme_quality_issues(row, generic_tokens)
         score = max(0, 100 - (len(issues) * 20))
         valid_scores.append(score)
         if issues:
@@ -1532,7 +1532,7 @@ def get_scheme_fetch_status() -> dict:
     }
 
 
-def _scheme_quality_issues(scheme: dict, generic_tokens: Optional[set[str]] = None) -> list[str]:
+def scheme_quality_issues(scheme: dict, generic_tokens: Optional[set[str]] = None) -> list[str]:
     tokens = generic_tokens or {"n/a", "na", "not available", "general support", "general scheme", "tbd", "to be updated", "placeholder"}
     def value(field: str) -> str:
         try:
@@ -1560,7 +1560,7 @@ def _scheme_quality_issues(scheme: dict, generic_tokens: Optional[set[str]] = No
 
 def validate_scheme_quality(scheme: dict) -> bool:
     """Return whether a scheme has enough content to enter the published feed."""
-    return not _scheme_quality_issues(scheme)
+    return not scheme_quality_issues(scheme)
 
 
 def seed_government_scheme_data() -> None:

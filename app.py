@@ -1,6 +1,7 @@
+import json
 import os
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from html import escape
 from time import monotonic
 from typing import Optional
@@ -44,6 +45,11 @@ from security import (
     verify_otp,
     verify_password,
     verify_token,
+)
+from digital_farming.scheme_ingestion import (
+    list_scheme_review_drafts,
+    resolve_scheme_review_draft,
+    update_scheme_review_draft,
 )
 from services import (
     get_scheme_fetch_history,
@@ -1947,6 +1953,7 @@ def admin_pilot_readiness_page(authorization: Optional[str] = Header(default=Non
 def admin_review_queue_page(request: Request, authorization: Optional[str] = Header(default=None)):
     require_admin_access(request, authorization)
     review_queue = get_scheme_fetch_status().get("review_queue", {"status": "pass", "flagged_count": 0, "pending_count": 0, "items": []})
+    ingestion_review_link = "<a href='/admin/scheme-ingestion-review'>Official-source Tamil review</a>"
     items = review_queue.get("items", [])
     if not items:
         row_html = """
@@ -2034,6 +2041,7 @@ def admin_review_queue_page(request: Request, authorization: Optional[str] = Hea
   <div class="container">
 
     <h1>Review Queue</h1>
+    <p>{ingestion_review_link}</p>
     <p class="lede">Flagged scheme records are routed here for manual validation before publication or wider farmer-facing rollout.</p>
 
     <section class="hero">
@@ -2057,6 +2065,119 @@ def admin_review_queue_page(request: Request, authorization: Optional[str] = Hea
 </body>
 </html>
 """
+
+
+@app.get("/admin/scheme-ingestion-review", response_class=HTMLResponse)
+def admin_scheme_ingestion_review_page(
+    request: Request, authorization: Optional[str] = Header(default=None),
+):
+    require_admin_access(request, authorization)
+    drafts = list_scheme_review_drafts(limit=100)
+    cards = []
+    for draft in drafts:
+        if draft["status"] not in {"pending_translation", "pending_review"}:
+            continue
+
+        def field(name, label, rows=1):
+            value = escape(str(draft.get(name) or ""))
+            if rows > 1:
+                control = f"<textarea name='{name}' rows='{rows}' maxlength='10000'>{value}</textarea>"
+            else:
+                control = f"<input name='{name}' maxlength='10000' value='{value}' />"
+            return f"<label>{label}{control}</label>"
+
+        issues = "".join(f"<li>{escape(str(issue))}</li>" for issue in draft["validation_issues"])
+        raw_payload = escape(json.dumps(draft["source_payload"], ensure_ascii=False, indent=2))
+        cards.append(f"""
+        <article class="draft">
+          <h2>{escape(str(draft.get('title_en') or 'Untitled source record'))}</h2>
+          <p><strong>Status:</strong> {escape(draft['status'])} |
+             <strong>Source:</strong> {escape(draft['source_name'])} |
+             <a href="{escape(draft['source_url'], quote=True)}" rel="noopener noreferrer">Official source</a></p>
+          <p><strong>Raw record provenance:</strong> {escape(draft['raw_record_id'])}</p>
+          <p><strong>English source summary:</strong> {escape(str(draft.get('summary_en') or 'Not supplied'))}</p>
+          <details><summary>Raw official feed record</summary><pre>{raw_payload}</pre></details>
+          <ul>{issues or '<li>No validation issues</li>'}</ul>
+          <form method="post" action="/admin/scheme-ingestion-review/{escape(draft['id'], quote=True)}/save">
+            {field('title_en', 'English title')}
+            {field('summary_en', 'English summary', 3)}
+            {field('title_ta', 'Tamil title / தமிழ் தலைப்பு')}
+            {field('summary_ta', 'Tamil summary / தமிழ் சுருக்கம்', 4)}
+            {field('eligibility_ta', 'Eligibility / தகுதி', 3)}
+            {field('benefits_ta', 'Benefits / நன்மைகள்', 3)}
+            {field('apply_steps_ta', 'Application steps / விண்ணப்ப படிகள்', 3)}
+            {field('category', 'Category')}
+            {field('scheme_type', 'Scheme type')}
+            <button type="submit">Save and validate draft</button>
+          </form>
+          <form method="post" action="/admin/scheme-ingestion-review/{escape(draft['id'], quote=True)}/resolve">
+            <label>Review reason<input name="reason" maxlength="1000" required /></label>
+            <button name="decision" value="approve">Approve and publish</button>
+            <button name="decision" value="reject">Reject</button>
+          </form>
+        </article>""")
+    content = "".join(cards) or "<section><h2>No pending ingestion drafts</h2></section>"
+    notice = request.query_params.get("notice", "")
+    notices = {
+        "saved": "Draft saved; review validation issues before approving.",
+        "published": "Approved draft was published with source provenance.",
+        "rejected": "Draft rejected and decision recorded.",
+    }
+    notice_html = f"<p role='status'>{escape(notices[notice])}</p>" if notice in notices else ""
+    return f"""<!DOCTYPE html>
+<html lang="ta"><head><meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Official scheme review</title>
+<style>
+* {{ box-sizing: border-box; }} body {{ margin:0; background:#f4f8f2; color:#17301d; font-family:'Nirmala UI','Segoe UI',Arial,sans-serif; }}
+main {{ max-width:1000px; margin:auto; padding:24px 18px; }} nav {{ display:flex; gap:16px; flex-wrap:wrap; }}
+a {{ color:#236039; }} .draft {{ background:white; border:1px solid #dfe9df; border-radius:16px; padding:20px; margin:18px 0; }}
+label {{ display:block; margin:12px 0; font-weight:600; }} input,textarea {{ display:block; width:100%; padding:10px; margin-top:5px; border:1px solid #aabbaa; border-radius:8px; font:inherit; }}
+button {{ padding:10px 14px; margin:8px 8px 0 0; border:0; border-radius:8px; background:#236039; color:white; font:inherit; cursor:pointer; }}
+li,p,pre {{ line-height:1.7; overflow-wrap:anywhere; white-space:pre-wrap; }} @media (max-width:600px) {{ .draft {{ padding:14px; }} }}
+</style></head><body><main>
+<nav aria-label="Admin navigation"><a href="/admin/overview">Admin overview</a>
+<a href="/admin/review-queue">Existing review queue</a><a href="/admin/fetch-history">Fetch history</a></nav>
+<h1>அரசு திட்ட மொழிபெயர்ப்பு மற்றும் வெளியீட்டு மதிப்பாய்வு / Official scheme review</h1>
+<p>Source text is not automatically translated. Save the completed Tamil fields before approving.
+Approval publishes immediately and stores the raw source ID and content hash with the published record.</p>
+{notice_html}{content}</main></body></html>"""
+
+
+@app.post("/admin/scheme-ingestion-review/{draft_id}/save")
+async def save_admin_scheme_ingestion_draft(request: Request, draft_id: str):
+    require_admin_access(request, request.headers.get("authorization"))
+    form_data = await request.form()
+    allowed = {
+        "title_en", "summary_en", "title_ta", "summary_ta", "eligibility_ta",
+        "benefits_ta", "apply_steps_ta", "category", "scheme_type",
+    }
+    changes = {key: str(form_data[key]) for key in allowed if key in form_data}
+    try:
+        update_scheme_review_draft(draft_id, changes)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return RedirectResponse("/admin/scheme-ingestion-review?notice=saved", status_code=303)
+
+
+@app.post("/admin/scheme-ingestion-review/{draft_id}/resolve")
+async def resolve_admin_scheme_ingestion_draft(request: Request, draft_id: str):
+    admin = require_admin_access(request, request.headers.get("authorization"))
+    form_data = await request.form()
+    decision = str(form_data.get("decision", "")).strip()
+    reason = str(form_data.get("reason", "")).strip()
+    try:
+        result = resolve_scheme_review_draft(
+            draft_id, decision, str(admin.get("sub") or "admin"), reason,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    notice = "published" if result["status"] == "published" else "rejected"
+    return RedirectResponse(f"/admin/scheme-ingestion-review?notice={notice}", status_code=303)
 
 
 @app.get("/admin/audit-logs", response_class=HTMLResponse)

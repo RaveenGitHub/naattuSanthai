@@ -5,8 +5,17 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from auth import get_user_role
-from schemas import FarmCreate, FarmerCreate, SoilTestCreate
-from digital_farming.scheme_ingestion import ingest_scheme_sources, ingestion_status, list_raw_scheme_records
+from schemas import FarmCreate, FarmerCreate, SchemeDraftDecision, SchemeDraftUpdate, SoilTestCreate
+from digital_farming.scheme_ingestion import (
+    ingest_scheme_sources,
+    ingestion_status,
+    list_raw_scheme_records,
+    list_scheme_review_drafts,
+    normalize_raw_scheme_record,
+    resolve_scheme_review_draft,
+    update_scheme_review_draft,
+)
+from security import verify_token
 from services import (
     create_farm,
     create_farmer,
@@ -279,6 +288,66 @@ def scheme_ingestion_status(request: Request, limit: int = Query(default=20, ge=
 def scheme_ingestion_raw(request: Request, source_id: Optional[str] = None, limit: int = Query(default=20, ge=1, le=100)):
     require_route_role(request, "admin")
     return {"success": True, "data": list_raw_scheme_records(source_id, limit), "error": None}
+
+
+@router.post("/schemes/ingestion/raw/{raw_record_id}/normalize")
+def normalize_ingested_scheme(request: Request, raw_record_id: str):
+    require_route_role(request, "admin")
+    try:
+        draft = normalize_raw_scheme_record(raw_record_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"success": True, "data": draft, "error": None}
+
+
+@router.get("/schemes/ingestion/review")
+def get_scheme_ingestion_review(
+    request: Request,
+    status: Optional[str] = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=100),
+):
+    require_route_role(request, "admin")
+    allowed_statuses = {"pending_translation", "pending_review", "published", "rejected"}
+    if status and status not in allowed_statuses:
+        raise HTTPException(status_code=422, detail="Unsupported review status")
+    return {"success": True, "data": list_scheme_review_drafts(status, limit), "error": None}
+
+
+@router.patch("/schemes/ingestion/review/{draft_id}")
+def patch_scheme_ingestion_draft(request: Request, draft_id: str, payload: SchemeDraftUpdate):
+    require_route_role(request, "admin")
+    changes = payload.model_dump(exclude_unset=True)
+    try:
+        draft = update_scheme_review_draft(draft_id, changes)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"success": True, "data": draft, "error": None}
+
+
+@router.post("/schemes/ingestion/review/{draft_id}/resolve")
+def resolve_scheme_ingestion_draft(request: Request, draft_id: str, payload: SchemeDraftDecision):
+    require_route_role(request, "admin")
+    token = (
+        request.cookies.get("digital_farming_session")
+        or request.headers.get("Authorization", "").partition(" ")[2].strip()
+    )
+    reviewer = "admin"
+    if token:
+        try:
+            reviewer = str(verify_token(token).get("sub") or "admin")
+        except Exception as exc:
+            raise HTTPException(status_code=401, detail="Invalid token") from exc
+    try:
+        draft = resolve_scheme_review_draft(draft_id, payload.decision, reviewer, payload.reason)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"success": True, "data": draft, "error": None}
 
 
 @router.get("/admin/quality-gate")

@@ -286,6 +286,10 @@ def init_db() -> None:
             conn.execute("ALTER TABLE government_scheme_updates ADD COLUMN archived_at TEXT")
         if "archive_reason" not in scheme_columns:
             conn.execute("ALTER TABLE government_scheme_updates ADD COLUMN archive_reason TEXT")
+        if "source_record_id" not in scheme_columns:
+            conn.execute("ALTER TABLE government_scheme_updates ADD COLUMN source_record_id TEXT")
+        if "source_content_hash" not in scheme_columns:
+            conn.execute("ALTER TABLE government_scheme_updates ADD COLUMN source_content_hash TEXT")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS migration_status (
@@ -346,6 +350,31 @@ def init_db() -> None:
                 first_received_at TEXT NOT NULL,
                 last_received_at TEXT NOT NULL,
                 UNIQUE(source_id, content_hash)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS scheme_normalized_records (
+                id TEXT PRIMARY KEY,
+                raw_record_id TEXT NOT NULL UNIQUE,
+                source_id TEXT NOT NULL,
+                source_name TEXT NOT NULL,
+                source_url TEXT NOT NULL,
+                title_en TEXT,
+                summary_en TEXT,
+                title_ta TEXT,
+                summary_ta TEXT,
+                eligibility_ta TEXT,
+                benefits_ta TEXT,
+                apply_steps_ta TEXT,
+                category TEXT,
+                scheme_type TEXT,
+                status TEXT NOT NULL,
+                validation_issues TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                published_scheme_id TEXT
             )
             """
         )

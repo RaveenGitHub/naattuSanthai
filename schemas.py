@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class FarmerCreate(BaseModel):
@@ -80,3 +80,21 @@ class Scheme(BaseModel):
     eligibility_criteria: dict
     application_deadline: Optional[str] = None
     status: str = "Active"
+
+
+class SchemeDraftUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title_en: Optional[str] = Field(default=None, max_length=10000)
+    summary_en: Optional[str] = Field(default=None, max_length=10000)
+    title_ta: Optional[str] = Field(default=None, max_length=10000)
+    summary_ta: Optional[str] = Field(default=None, max_length=10000)
+    eligibility_ta: Optional[str] = Field(default=None, max_length=10000)
+    benefits_ta: Optional[str] = Field(default=None, max_length=10000)
+    apply_steps_ta: Optional[str] = Field(default=None, max_length=10000)
+    category: Optional[str] = Field(default=None, max_length=100)
+    scheme_type: Optional[str] = Field(default=None, max_length=100)
+
+class SchemeDraftDecision(BaseModel):
+    decision: Literal["approve", "reject"]
+    reason: str = Field(min_length=1, max_length=1000)
