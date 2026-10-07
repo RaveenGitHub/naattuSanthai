@@ -10,15 +10,15 @@ Build a simple, reliable disease-support workflow that allows farmers to upload 
 
 | Phase | Status | Remaining work |
 |---|---|---|
-| 1. Image intake and scan UI | Partially implemented | Validate camera/capture behavior and complete accessible/mobile upload feedback. |
+| 1. Image intake and scan UI | Implemented for the safe prototype; field QA pending | Supported JPEG/PNG/WebP capture/upload, size/signature validation, screen-reader upload/status/error feedback, and no-inference disclosure are in place. Validate camera capture and mobile behavior in the field. |
 | 2. AI inference and diagnosis | Open | Select and integrate a real model/service and representative labeled evaluation data; the current output explicitly makes no image inference claim. |
 | 3. Tamil guidance | Partially implemented | Conservative no-diagnosis guidance is present; obtain agronomist/field review before adding disease-specific treatment. |
-| 4. History and storage | Partially implemented | Authenticated ownership, operator isolation, admin review, and protected history access are implemented. Complete richer browsing and retention policy. |
+| 4. History and storage | Partially implemented | Authenticated ownership, operator isolation, admin review, and protected history access are implemented; anonymous uploads are not added to user history. Complete richer browsing and retention policy. |
 | 5. UX and rollout | Open | Complete accessibility/voice decisions, field QA, pilot feedback, and release readiness checks. |
 
 **Next work:** choose an inference model/data strategy and obtain agronomy validation before enabling diagnosis claims. Do not infer clinical/agronomic certainty from crop name or notes.
 
-**Verification:** 16 focused API, auth, admin, audit, upload, and diagnosis-history tests passed on an isolated SQLite database. No model-accuracy or field-validation claim is made.
+**Verification update — 2026-10-07:** Nine focused intake, upload validation, uncertainty, and history-ownership tests passed on isolated SQLite data. Anonymous uploads do not create unowned history records. No model-accuracy or field-validation claim is made.
 
 ---
 

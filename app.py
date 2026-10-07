@@ -3141,6 +3141,7 @@ def disease_detection_page(
     crop_type: str = "Rice",
     image_url: str = "https://example.com/crop-scan.jpg",
     notes: str = "Yellowing leaves and spots observed",
+    upload_message: str = "",
 ):
     profile_defaults = resolve_profile_defaults(request, default_crop=crop_type)
     effective_crop_type = crop_type if crop_type and crop_type.lower() not in {"", "rice"} else profile_defaults["crop"]
@@ -3151,6 +3152,11 @@ def disease_detection_page(
     manual_review = "Manual review required" if str(result.get("confidence", "High")).lower() in {"low", "medium"} else "Assessment ready"
     crop_label = escape(str(effective_crop_type or "Rice"))
     notes_text = escape(str(notes or "No additional notes provided."))
+    upload_message_html = (
+        f'<p class="upload-feedback" role="alert">{escape(upload_message)}</p>'
+        if upload_message
+        else ""
+    )
     treatment_steps = "".join(f"<li>{escape(str(step))}</li>" for step in result.get("treatment_steps", [recommendation]))
     prevention_steps = "".join(f"<li>{escape(str(step))}</li>" for step in result.get("prevention_steps", ["Monitor the field closely and keep notes for the next review cycle."]))
     return f"""
@@ -3184,6 +3190,7 @@ def disease_detection_page(
     .logo {{ width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
     .nav {{ display: flex; flex-wrap: wrap; gap: 10px; }}
     .nav a {{ text-decoration: none; color: var(--text); background: #f5f7f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
+    a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible {{ outline:3px solid #165d2b; outline-offset:2px; }}
     h1 {{ margin: 28px 0 12px; font-size: clamp(2rem, 4vw, 3rem); }}
     .intro {{ color: var(--muted); line-height: 1.8; max-width: 75ch; }}
     .hero {{ display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px; margin-top: 24px; }}
@@ -3198,6 +3205,8 @@ def disease_detection_page(
     form {{ display: grid; gap: 12px; }}
     label {{ display: grid; gap: 6px; font-weight: 600; }}
     input, textarea, select {{ border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font: inherit; color: var(--text); background: #fff; }}
+    .upload-feedback {{ border:1px solid #b42318; border-radius:10px; padding:12px; color:#8f1d14; background:#fff0ee; }}
+    .upload-status {{ min-height:1.5em; color:var(--muted); }}
     textarea {{ min-height: 120px; resize: vertical; }}
     button {{
       background: linear-gradient(135deg, var(--primary), var(--secondary));
@@ -3217,7 +3226,9 @@ def disease_detection_page(
     <section class="hero">
       <div class="panel">
         <h2>படத்தை பதிவேற்று</h2>
-        <form method="post" action="/disease-detection" enctype="multipart/form-data">
+        {upload_message_html}
+        <p id="upload-status" class="upload-status" role="status" aria-live="polite"></p>
+        <form id="disease-upload-form" method="post" action="/disease-detection" enctype="multipart/form-data">
           <label>
             பயிர் வகை
             <select name="crop_type">
@@ -3229,8 +3240,9 @@ def disease_detection_page(
           </label>
           <label>
             படத்தை பதிவேற்று / Upload image
-            <input type="file" name="file" accept="image/*" required />
+            <input type="file" name="file" accept="image/jpeg,image/png,image/webp" capture="environment" aria-describedby="image-format-help" required />
           </label>
+          <small id="image-format-help">JPEG, PNG, or WebP; maximum size 8 MB. படம் தானாக ஆய்வு செய்யப்படாது.</small>
           <label>
             அவதானிப்பு குறிப்புகள்
             <textarea name="notes">{notes_text}</textarea>
@@ -3266,6 +3278,13 @@ def disease_detection_page(
       </article>
     </section>
   </div>
+  <script>
+    const uploadForm = document.getElementById('disease-upload-form');
+    uploadForm.addEventListener('submit', () => {{
+      document.getElementById('upload-status').textContent = 'படம் பதிவேற்றப்படுகிறது; இது தானியங்கி நோயறிதல் அல்ல.';
+      uploadForm.querySelector('button[type="submit"]').disabled = true;
+    }});
+  </script>
 </body>
 </html>
 """
@@ -3278,11 +3297,28 @@ def disease_detection_upload(
     notes: str = Form(""),
     file: UploadFile = File(...),
 ):
-    image_url = validate_uploaded_image(file)
+    try:
+        image_url = validate_uploaded_image(file)
+    except HTTPException as exc:
+        return HTMLResponse(
+            content=disease_detection_page(
+                request,
+                crop_type=crop_type,
+                notes=notes,
+                upload_message=str(exc.detail),
+            ),
+            status_code=exc.status_code,
+        )
     if file.content_type:
         image_url = f"{image_url}::{file.content_type}"
     session = get_session_payload(request)
-    diagnose_crop_issue(crop_type, image_url, notes, created_by=str(session.get("sub") or ""))
+    diagnose_crop_issue(
+        crop_type,
+        image_url,
+        notes,
+        created_by=str(session.get("sub") or ""),
+        persist=bool(session.get("sub")),
+    )
     return disease_detection_page(request, crop_type, image_url, notes)
 
 

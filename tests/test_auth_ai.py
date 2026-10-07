@@ -3,6 +3,7 @@ import uuid
 from fastapi.testclient import TestClient
 
 from app import app
+from database import get_connection
 from security import create_user
 
 client = TestClient(app)
@@ -308,6 +309,10 @@ def test_disease_detection_page_renders_for_users():
     assert "நோய் கண்டறிதல்" in response.text or "Disease Detection" in response.text
     assert "படத்தை பதிவேற்று" in response.text or "Upload image" in response.text
     assert "சிகிச்சை" in response.text or "Treatment" in response.text
+    assert 'capture="environment"' in response.text
+    assert "image/jpeg,image/png,image/webp" in response.text
+    assert 'role="status" aria-live="polite"' in response.text
+    assert "maximum size 8 MB" in response.text
 
 
 def test_disease_detection_page_shows_live_recommendation_from_query_params():
@@ -326,6 +331,10 @@ def test_disease_detection_page_accepts_image_upload():
     assert response.status_code == 200
     assert 'type="file"' in response.text
     assert 'enctype="multipart/form-data"' in response.text
+    with get_connection() as conn:
+        anonymous_count_before = conn.execute(
+            "SELECT COUNT(*) FROM diagnosis_records WHERE created_by IS NULL OR created_by = ''"
+        ).fetchone()[0]
 
     upload = client.post(
         "/disease-detection",
@@ -335,6 +344,23 @@ def test_disease_detection_page_accepts_image_upload():
     assert upload.status_code == 200
     assert "Image review required" in upload.text
     assert "does not analyze image pixels" in upload.text
+    with get_connection() as conn:
+        anonymous_count_after = conn.execute(
+            "SELECT COUNT(*) FROM diagnosis_records WHERE created_by IS NULL OR created_by = ''"
+        ).fetchone()[0]
+    assert anonymous_count_after == anonymous_count_before
+
+
+def test_disease_detection_form_shows_accessible_upload_validation_error():
+    response = client.post(
+        "/disease-detection",
+        data={"crop_type": "Rice", "notes": "Leaf spots"},
+        files={"file": ("notes.txt", b"not an image", "text/plain")},
+    )
+    assert response.status_code == 400
+    assert 'role="alert"' in response.text
+    assert "valid crop image" in response.text.lower()
+    assert "Image review required" in response.text
 
 
 def test_disease_upload_route_accepts_image_file_for_ai_diagnosis():
