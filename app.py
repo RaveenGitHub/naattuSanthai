@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from pydantic import ValidationError
 
 from database import get_connection, get_migration_status
 from digital_farming.services.advisory import get_field_advisory
@@ -30,10 +31,12 @@ from schemas_auth import (
 )
 from security import (
     authenticate,
+    complete_password_reset,
     create_user,
     get_profile,
     get_admin_user_detail,
-    hash_password,
+    invalidate_password_reset_token,
+    issue_password_reset_token,
     list_audit_logs,
     list_users,
     record_audit_log,
@@ -43,6 +46,7 @@ from security import (
     seed_default_users,
     set_user_status,
     send_activation_email,
+    send_password_reset_email,
     update_profile,
     unlock_user,
     verify_otp,
@@ -1090,7 +1094,10 @@ async def api_v1_register(request: Request):
     if not isinstance(data, dict):
         raise HTTPException(status_code=400, detail="Request body is required")
 
-    payload = RegisterRequest(**data)
+    try:
+        payload = RegisterRequest(**data)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail="Registration information is invalid") from exc
 
     if not payload.username or not payload.password:
         raise HTTPException(status_code=400, detail="Username and password are required")
@@ -1113,6 +1120,11 @@ async def api_v1_register(request: Request):
         raise HTTPException(status_code=400, detail="Please provide a valid email address")
     if payload.phone and not payload.phone.isdigit():
         raise HTTPException(status_code=400, detail="Phone number must contain digits only")
+    if not payload.email:
+        raise HTTPException(
+            status_code=503,
+            detail="Phone verification is unavailable. Register with an email address for activation.",
+        )
 
     try:
         result = create_user(
@@ -1148,8 +1160,7 @@ async def api_v1_register(request: Request):
             "email": payload.email,
             "phone": payload.phone,
             "village": payload.village,
-            "otp_code": result.get("otp_code"),
-            "activation_email_sent": activation_email_sent,
+            "verification_delivery_status": "email_sent" if activation_email_sent else "unavailable",
         },
         "message": "Registration submitted successfully. Please complete activation.",
     }
@@ -1166,11 +1177,16 @@ async def api_v1_forgot_password(request: Request):
         data = dict(form_data)
     try:
         payload = ForgotPasswordRequest(**data)
-    except Exception as exc:
+    except ValidationError as exc:
         raise HTTPException(status_code=422, detail="A valid email address is required") from exc
     email = (payload.email or "").strip()
-    if not email or "@" not in email:
+    if not email:
         raise HTTPException(status_code=400, detail="Please provide a valid registered email address")
+    reset = issue_password_reset_token(email)
+    if reset:
+        delivered = send_password_reset_email(reset["email"], reset["username"], reset["token"])
+        if not delivered:
+            invalidate_password_reset_token(reset["token_hash"])
     if "text/html" in request.headers.get("accept", "").lower():
         return RedirectResponse(url="/login?recovery=sent", status_code=303)
     return {
@@ -1180,24 +1196,27 @@ async def api_v1_forgot_password(request: Request):
 
 
 @app.post("/api/v1/auth/reset-password")
-def api_v1_reset_password(request: Request, payload: AuthResetPasswordRequest):
+async def api_v1_reset_password(request: Request):
     enforce_auth_rate_limit(request, "reset-password")
-    if not payload.username or not payload.new_password:
-        raise HTTPException(status_code=400, detail="Username and new password are required")
-
-    with get_connection() as conn:
-        row = conn.execute("SELECT username FROM users WHERE username = ?", (payload.username,)).fetchone()
-        if row is None:
-            raise HTTPException(status_code=400, detail="Invalid or unregistered username")
-        conn.execute(
-            "UPDATE users SET password = ? WHERE username = ?",
-            (hash_password(payload.new_password), payload.username),
-        )
-
-    record_audit_log(payload.username, "password_reset", "users", "success", "Password reset via auth reset flow")
+    content_type = request.headers.get("content-type", "")
+    if "application/json" in content_type.lower():
+        data = await request.json()
+    else:
+        form_data = await request.form()
+        data = dict(form_data)
+    try:
+        payload = AuthResetPasswordRequest(**data)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail="A valid reset code and password are required") from exc
+    try:
+        result = complete_password_reset(payload.reset_token, payload.new_password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if "text/html" in request.headers.get("accept", "").lower():
+        return RedirectResponse(url="/login?recovery=complete", status_code=303)
     return {
         "success": True,
-        "data": {"username": payload.username, "status": "updated"},
+        "data": result,
         "message": "Password reset completed successfully.",
     }
 
@@ -5839,13 +5858,13 @@ def forgot_password_page():
   <div class="container">
     <div class="panel">
       <h1>Forgot password</h1>
-      <p>Enter your registered email address to receive a secure reset link. The system validates the email and only sends the reset link if the account is registered.</p>
+      <p>Enter your registered email address to receive a single-use reset code. For privacy, the response is the same whether or not an account exists.</p>
       <form action="/api/v1/auth/forgot-password" method="post">
         <label>
           Email address
           <input type="email" name="email" placeholder="name@farmers.org" required />
         </label>
-        <button type="submit">Send reset link</button>
+        <button type="submit">Send reset code</button>
       </form>
       <div class="muted-links">
         <a href="/login">Back to login</a>
@@ -5902,15 +5921,15 @@ def reset_password_page():
   <div class="container">
     <div class="panel">
       <h1>Set a new password</h1>
-      <p>Use the registered username and choose a new secure password. Passwords are hashed before storage.</p>
+      <p>Enter the single-use code sent to your registered email and choose a new password.</p>
       <form action="/api/v1/auth/reset-password" method="post">
         <label>
-          Username
-          <input type="text" name="username" placeholder="operator1" required />
+          Reset code
+          <input type="text" name="reset_token" autocomplete="one-time-code" required />
         </label>
         <label>
           New password
-          <input type="password" name="new_password" placeholder="Choose a strong password" required />
+          <input type="password" name="new_password" minlength="8" maxlength="128" autocomplete="new-password" placeholder="Choose a strong password" required />
         </label>
         <button type="submit">Update password</button>
       </form>

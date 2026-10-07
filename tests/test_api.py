@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from app import app
 from database import create_db_backup, get_connection, get_migration_status, init_db, record_migration_status
-from security import create_token, create_user, set_user_status, verify_token
+from security import create_token, create_user, issue_password_reset_token, set_user_status, verify_token
 from services import get_scheme_fetch_status, list_archived_scheme_updates
 from services import get_scheme_fetch_status
 import services
@@ -1388,6 +1388,7 @@ def test_form_submission_registers_user_and_persists_data():
 
     response = isolated_client.post(
         "/api/v1/auth/register",
+        headers={"X-Forwarded-For": "203.0.113.42"},
         data={
             "username": username,
             "password": "SecurePass123",
@@ -1408,7 +1409,7 @@ def test_form_submission_registers_user_and_persists_data():
     assert payload["success"] is True
     assert payload["data"]["status"] == "pending_verification"
 
-    with __import__("sqlite3").connect("digital_farming.db") as conn:
+    with get_connection() as conn:
         row = conn.execute(
             "SELECT username, full_name, email, phone, status FROM users WHERE username = ?",
             (username,),
@@ -1421,6 +1422,43 @@ def test_form_submission_registers_user_and_persists_data():
     assert row[4] == "pending_verification"
 
 
+def test_public_registration_cannot_assign_privileged_roles():
+    username = f"privilege_attempt_{__import__('uuid').uuid4().hex[:8]}"
+    response = TestClient(app).post(
+        "/api/v1/auth/register",
+        json={
+            "username": username,
+            "password": "SecurePass123",
+            "role": "admin",
+            "full_name": "Untrusted Role",
+            "email": f"{username}@example.com",
+            "village": "Kallakurichi",
+            "region": "Villupuram",
+            "area": "1",
+            "primary_crop": "rice",
+            "land_size": "1",
+            "water_source": "rainfed",
+        },
+    )
+    assert response.status_code == 422
+    with get_connection() as conn:
+        assert conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone() is None
+
+
+def test_forgot_password_response_does_not_reveal_account_existence(monkeypatch):
+    username = f"forgot_user_{__import__('uuid').uuid4().hex[:8]}"
+    email = f"{username}@example.com"
+    create_user(username, "SecurePass123", "farmer", email=email)
+    monkeypatch.setattr("app.send_password_reset_email", lambda *args: True)
+
+    known = client.post("/api/v1/auth/forgot-password", json={"email": email})
+    unknown = client.post("/api/v1/auth/forgot-password", json={"email": "missing@example.com"})
+    assert known.status_code == unknown.status_code == 200
+    assert known.json() == unknown.json()
+    assert username not in known.text
+    assert email not in known.text
+
+
 def test_browser_registration_redirects_to_login_after_success():
     username = f"browser_register_{__import__('uuid').uuid4().hex[:8]}"
     response = TestClient(app).post(
@@ -1430,6 +1468,7 @@ def test_browser_registration_redirects_to_login_after_success():
             "username": username,
             "password": "SecurePass123",
             "role": "farmer",
+            "email": f"{username}@example.com",
             "full_name": "Browser Farmer",
             "phone": "9876543210",
             "village": "Kallakurichi",
@@ -1453,6 +1492,7 @@ def test_registration_rejects_incomplete_agronomy_profile():
             "username": username,
             "password": "SecurePass123",
             "role": "farmer",
+            "email": f"{username}@example.com",
             "phone": "9876543210",
             "full_name": "Incomplete Farmer",
             "village": "Kallakurichi",
@@ -1474,6 +1514,7 @@ def test_registration_is_rate_limited_per_ip():
                 "username": username,
                 "password": "SecurePass123",
                 "role": "farmer",
+                "email": f"{username}@example.com",
                 "phone": "9876543210",
                 "full_name": "Rate Limit Farmer",
                 "village": "Kallakurichi",
@@ -1499,6 +1540,7 @@ def test_registration_creates_pending_user_and_requires_otp_verification_before_
             "username": username,
             "password": "SecurePass123",
             "role": "farmer",
+            "email": f"{username}@example.com",
             "phone": "9876543210",
             "full_name": "OTP Farmer",
             "village": "Kallakurichi",
@@ -1513,9 +1555,9 @@ def test_registration_creates_pending_user_and_requires_otp_verification_before_
     payload = response.json()
     assert payload["success"] is True
     assert payload["data"]["status"] == "pending_verification"
-    assert payload["data"].get("otp_code")
+    assert "otp_code" not in payload["data"]
 
-    with __import__("sqlite3").connect("digital_farming.db") as conn:
+    with get_connection() as conn:
         row = conn.execute("SELECT status, otp_code FROM users WHERE username = ?", (username,)).fetchone()
     assert row is not None
     assert row[0] == "pending_verification"
@@ -1534,6 +1576,66 @@ def test_registration_creates_pending_user_and_requires_otp_verification_before_
     final_login = isolated_client.post("/auth/login", json={"username": username, "password": "SecurePass123"})
     assert final_login.status_code == 200
     assert final_login.json()["role"] == "farmer"
+
+
+def test_phone_only_registration_is_rejected_without_sms_delivery():
+    username = f"phone_only_{__import__('uuid').uuid4().hex[:8]}"
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": username,
+            "password": "SecurePass123",
+            "role": "farmer",
+            "phone": "9876543210",
+            "full_name": "Phone Only Farmer",
+            "village": "Kallakurichi",
+            "region": "Villupuram",
+            "area": "1",
+            "primary_crop": "rice",
+            "land_size": "1",
+            "water_source": "rainfed",
+        },
+    )
+    assert response.status_code == 503
+    assert "Phone verification is unavailable" in response.json()["detail"]
+    with get_connection() as conn:
+        assert conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone() is None
+
+
+def test_password_reset_requires_single_use_email_code_and_revokes_existing_sessions():
+    username = f"reset_user_{__import__('uuid').uuid4().hex[:8]}"
+    create_user(username, "OldPassword123", "farmer", email=f"{username}@example.com")
+    old_token = create_token(username)
+    issued = issue_password_reset_token(f"{username}@example.com")
+    assert issued is not None
+    with get_connection() as conn:
+        stored = conn.execute(
+            "SELECT token_hash, used_at FROM password_reset_tokens WHERE username = ?",
+            (username,),
+        ).fetchone()
+    assert stored is not None
+    assert stored["token_hash"] != issued["token"]
+    assert stored["used_at"] is None
+
+    response = client.post(
+        "/api/v1/auth/reset-password",
+        json={"reset_token": issued["token"], "new_password": "NewPassword123"},
+    )
+    assert response.status_code == 200
+    with __import__("pytest").raises(ValueError):
+        verify_token(old_token)
+
+    replay = client.post(
+        "/api/v1/auth/reset-password",
+        json={"reset_token": issued["token"], "new_password": "AnotherPassword123"},
+    )
+    assert replay.status_code == 400
+    assert client.post(
+        "/auth/login", json={"username": username, "password": "OldPassword123"},
+    ).status_code == 401
+    assert client.post(
+        "/auth/login", json={"username": username, "password": "NewPassword123"},
+    ).status_code == 200
 
 
 def test_registration_persists_farmer_profile_fields_for_onboarding():

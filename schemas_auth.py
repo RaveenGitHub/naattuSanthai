@@ -145,12 +145,12 @@ class ProfileUpdateRequest(ProfileFieldsModel):
 
 
 class RegisterRequest(ProfileFieldsModel):
-    username: str
-    password: str
-    role: str = "farmer"
+    username: str = Field(min_length=1, max_length=80)
+    password: str = Field(min_length=8, max_length=128)
+    role: Literal["farmer"] = "farmer"
     full_name: str = ""
-    email: str = None
-    phone: str = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
     village: str = ""
     region: str = ""
     area: str = ""
@@ -164,9 +164,18 @@ class RegisterRequest(ProfileFieldsModel):
 
 
 class ForgotPasswordRequest(BaseModel):
-    email: str
+    email: str = Field(min_length=3, max_length=254)
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        cleaned = value.strip()
+        local, separator, domain = cleaned.partition("@")
+        if not separator or not local or "." not in domain or domain.startswith(".") or domain.endswith("."):
+            raise ValueError("A valid email address is required")
+        return cleaned
 
 
 class AuthResetPasswordRequest(BaseModel):
-    username: str
-    new_password: str
+    reset_token: str = Field(min_length=32, max_length=256)
+    new_password: str = Field(min_length=8, max_length=128)

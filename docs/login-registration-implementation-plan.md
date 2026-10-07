@@ -8,13 +8,14 @@
 |---|---|---|
 | Core registration, verification, login, and session behavior | Implemented per recorded verification | Re-run the focused regression suite when auth code changes. |
 | Token revocation and account lifecycle | Implemented in application code | Logout revokes the supplied session and advances the account token version; status changes and password resets also invalidate issued tokens. Validate multi-worker behavior in the deployment DB. |
+| Recovery and public registration controls | Implemented and focused-tested | Reset codes are email-delivered, hashed, expiring, single-use, and do not disclose account existence; public registration cannot self-assign privileged roles. Phone-only registration is explicitly unavailable until an SMS provider is configured; verify SMTP delivery before rollout. |
 | API/session production hardening | Partially implemented | Verify migration/versioning, idle/absolute timeouts, rate limits, monitoring, redaction, and backup/restore policy in the deployment environment. |
 | Web client hardening | Partially implemented | Validate session rechecks and stale-state clearing across reload, tab reopen, timeout, and role-denial flows. |
 | Release signoff and deployment | Open | Complete browser end-to-end checks, environment/secret configuration, monitoring, backup/restore, and rollback readiness. |
 
 **Next milestone:** close the deployment and release gates in Sections 13–16. Do not describe the module as production-ready until these checks have passing evidence recorded.
 
-**Verification update — 2026-10-07:** Focused auth/session regression checks passed alongside the admin and diagnosis tests. Production deployment, monitoring, backup/restore, browser end-to-end, and rollback validation remain open.
+**Verification update — 2026-10-07:** Seven focused auth and recovery regressions passed, including single-use password reset, existing-session revocation, registration verification gating, privileged-role rejection, account-enumeration-safe recovery responses, browser recovery flow, and profile password reset. SMTP/SMS provider configuration and verification, production deployment, monitoring, backup/restore, browser end-to-end, and rollback validation remain open.
 
 ## Goal
 

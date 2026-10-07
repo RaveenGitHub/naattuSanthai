@@ -163,6 +163,104 @@ def send_activation_email(email: str, username: str, otp_code: Optional[str]) ->
         return False
 
 
+def issue_password_reset_token(email: str) -> Optional[Dict[str, str]]:
+    normalized_email = email.strip().lower()
+    with get_connection() as conn:
+        user = conn.execute(
+            "SELECT username, email FROM users WHERE LOWER(email) = ?",
+            (normalized_email,),
+        ).fetchone()
+        if user is None:
+            return None
+        token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        now = datetime.now(timezone.utc)
+        expires_at = (now + timedelta(minutes=30)).isoformat()
+        conn.execute(
+            "UPDATE password_reset_tokens SET used_at = ? WHERE username = ? AND used_at IS NULL",
+            (now.isoformat(), user["username"]),
+        )
+        conn.execute(
+            "INSERT INTO password_reset_tokens (token_hash, username, expires_at, created_at) VALUES (?, ?, ?, ?)",
+            (token_hash, user["username"], expires_at, now.isoformat()),
+        )
+    return {
+        "username": user["username"],
+        "email": user["email"],
+        "token": token,
+        "token_hash": token_hash,
+    }
+
+
+def send_password_reset_email(email: str, username: str, token: str) -> bool:
+    if not settings.smtp_host or not settings.smtp_from_email:
+        record_audit_log(username, "password_reset_requested", "auth", "failure", "Mail delivery is not configured")
+        return False
+
+    message = EmailMessage()
+    message["Subject"] = "Digital Farming password reset"
+    message["From"] = settings.smtp_from_email
+    message["To"] = email
+    message.set_content(
+        f"Hello {username},\n\n"
+        f"Use this single-use password reset code within 30 minutes:\n\n{token}\n\n"
+        "If you did not request this, ignore this email."
+    )
+
+    try:
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as smtp:
+            if settings.smtp_use_tls:
+                smtp.starttls()
+            if settings.smtp_username:
+                smtp.login(settings.smtp_username, settings.smtp_password)
+            smtp.send_message(message)
+    except (OSError, smtplib.SMTPException):
+        record_audit_log(username, "password_reset_requested", "auth", "failure", "Mail delivery failed")
+        return False
+    record_audit_log(username, "password_reset_requested", "auth", "success", "Reset instructions delivered")
+    return True
+
+
+def invalidate_password_reset_token(token_hash: str) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE password_reset_tokens SET used_at = ? WHERE token_hash = ? AND used_at IS NULL",
+            (datetime.now(timezone.utc).isoformat(), token_hash),
+        )
+
+
+def complete_password_reset(token: str, new_password: str) -> Dict[str, str]:
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    now = datetime.now(timezone.utc)
+    with get_connection() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        reset = conn.execute(
+            "SELECT username, expires_at, used_at FROM password_reset_tokens WHERE token_hash = ?",
+            (token_hash,),
+        ).fetchone()
+        if reset is None or reset["used_at"] is not None:
+            raise ValueError("Reset code is invalid or expired")
+        try:
+            expires_at = datetime.fromisoformat(reset["expires_at"])
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Reset code is invalid or expired") from exc
+        if now > expires_at:
+            raise ValueError("Reset code is invalid or expired")
+        username = reset["username"]
+        cursor = conn.execute(
+            "UPDATE users SET password = ?, token_version = token_version + 1, updated_at = ? WHERE username = ?",
+            (hash_password(new_password), now.isoformat(), username),
+        )
+        if cursor.rowcount != 1:
+            raise ValueError("Reset code is invalid or expired")
+        conn.execute(
+            "UPDATE password_reset_tokens SET used_at = ? WHERE username = ? AND used_at IS NULL",
+            (now.isoformat(), username),
+        )
+        record_audit_log(username, "password_reset", "users", "success", "Password reset completed", conn=conn)
+    return {"username": username, "status": "updated"}
+
+
 def list_users(
     *,
     search: str = "",

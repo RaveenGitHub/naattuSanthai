@@ -283,6 +283,20 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                token_hash TEXT PRIMARY KEY,
+                username TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                used_at TEXT
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_username ON password_reset_tokens(username)"
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS government_scheme_updates (
                 id TEXT PRIMARY KEY,
                 title_ta TEXT NOT NULL,
