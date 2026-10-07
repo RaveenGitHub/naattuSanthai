@@ -11,13 +11,13 @@ Implement the Admin Page as a server-authorized user-management module. Deliver 
 | Phase | Status | Remaining work |
 |---|---|---|
 | 1. Data contract and authorization | Partially implemented | Typed summary/detail/list contracts, shared admin checks, token status/version checks, and self/final-admin safeguards are in place. Still verify every admin denial path and complete request-context audit metadata. |
-| 2. User list API and UI | Partially implemented | Search, role/status/date filters, 25/100 paging, indexes, all required list columns, and encoded filter-preserving pagination are in place. Finish responsive card fallback, accessible mutation feedback, and complete error/loading states. |
-| 3. User detail | Partially implemented | Secret-safe detail response and view audit are in place. Replace the JSON alert with a usable detail surface and add linked-module summaries or explicit empty states. |
-| 4. Activation and deactivation | Partially implemented | Backend transitions, idempotent retries, final-admin protection, and token-version invalidation are implemented. Finish accessible status feedback and test protected-page/API denial after transitions. |
-| 5. Audit and monitoring | Partially implemented | Actor/action/outcome/affected-user filters and list/action/average-query-latency metrics are available. Complete denied/failed event coverage and validate metric usefulness operationally. |
-| 6. Testing and release readiness | Open | 16 focused API/auth/admin/audit/disease tests passed on isolated SQLite data. Run the full regression suite, the 10,000-user benchmark, security/accessibility checks, and release/rollback validation. |
+| 2. User list API and UI | Implemented; browser/accessibility validation pending | Search, role/status/date filters, bounded paging, indexes, all required list columns, and filter-preserving pagination are in place. The page has a narrow-screen card layout, keyboard-native controls, and live mutation/error feedback. Validate across supported browsers and viewport sizes. |
+| 3. User detail | Implemented for the current data contract | Secret-safe detail response and view audit are in place. A semantic dialog renders profile fields safely and states that linked-module summaries are not yet available. Add those summaries when the related user-level data sources are defined. |
+| 4. Activation and deactivation | Implemented and focused-tested | Backend transitions, idempotent retries, final-admin protection, token-version invalidation, visible UI feedback, and stale API/page access rejection are covered. |
+| 5. Audit and monitoring | Partially implemented | Actor/action/outcome/affected-user filters and list/action/average-query-latency metrics are available. Denied access to protected APIs and admin pages is now audited; add request-context/IP metadata and validate metric usefulness operationally. |
+| 6. Testing and release readiness | Open | Five focused admin authorization, UI, lifecycle, and audit regressions passed on isolated SQLite data. A 10,000-user local SQLite render returned 25 rows in 0.6349 seconds (under the 2-second target). Run the full regression suite, deployment-equivalent benchmark, browser/accessibility checks, and release/rollback validation. |
 
-**Next work:** finish admin detail and responsive/error-state UX, close denial-audit gaps, then run scale and release validation. Keep phases partially implemented until each remaining acceptance item has evidence.
+**Next work:** add audit request-context metadata, validate the admin page in supported browsers and assistive technologies, and run full regression plus deployment-equivalent release checks. Keep release readiness open until those gates have evidence.
 
 ## 2. Current Repository Baseline
 
@@ -26,7 +26,7 @@ Implement the Admin Page as a server-authorized user-management module. Deliver 
 - Audit-log storage and admin audit views already exist, and current user-management routes record list, view, and lifecycle outcomes.
 - The admin list API supports search, role/status/registration/last-login filters, and page sizes up to 100; the legacy `/api/users` compatibility route remains separate.
 - Status changes increment the user's token version. Logout revokes the token and increments that version so access/refresh tokens cannot become valid again after reactivation.
-- Account details exclude credentials and tokens. The page still presents profile JSON in an alert rather than a full detail layout.
+- Account details exclude credentials and tokens. The page renders the current profile contract in an accessible dialog and provides an explicit empty state for linked-module summaries not yet backed by data.
 
 ## 3. Phase 1 - Data Contract and Authorization
 

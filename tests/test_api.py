@@ -45,7 +45,7 @@ def test_admin_route_denial_is_audited():
     )
     assert response.status_code == 403
 
-    with __import__("sqlite3").connect("digital_farming.db") as conn:
+    with get_connection() as conn:
         row = conn.execute(
             "SELECT username, action, resource, outcome, details FROM audit_logs WHERE action = ? AND resource = ? ORDER BY created_at DESC LIMIT 1",
             ("route_denied", "/api/users"),
@@ -58,6 +58,20 @@ def test_admin_route_denial_is_audited():
         "failure",
         "Access denied: Admin access required",
     )
+
+    admin_route_denial = client.get(
+        "/api/admin/users",
+        headers={"Authorization": "Bearer " + farmer_login.json()["token"]},
+    )
+    assert admin_route_denial.status_code == 403
+    with get_connection() as conn:
+        denial = conn.execute(
+            "SELECT username, resource, outcome, details FROM audit_logs "
+            "WHERE action = ? AND resource = ? ORDER BY created_at DESC LIMIT 1",
+            ("admin_access_denied", "/api/admin/users"),
+        ).fetchone()
+    assert denial is not None
+    assert tuple(denial) == ("farmer1", "/api/admin/users", "failure", "Admin access required")
 
 
 def test_admin_user_management_lists_details_and_controls_status():
@@ -107,6 +121,27 @@ def test_admin_user_management_lists_details_and_controls_status():
 def test_admin_user_management_page_requires_admin_and_renders_filters():
     guest = TestClient(app)
     assert guest.get("/admin/users", follow_redirects=False).status_code == 302
+    with get_connection() as conn:
+        denial = conn.execute(
+            "SELECT username, resource, outcome FROM audit_logs "
+            "WHERE action = ? AND resource = ? ORDER BY created_at DESC LIMIT 1",
+            ("admin_access_denied", "/admin/users"),
+        ).fetchone()
+    assert denial is not None
+    assert tuple(denial) == ("anonymous", "/admin/users", "failure")
+
+    farmer_client = TestClient(app)
+    farmer_login = farmer_client.post("/auth/login", json={"username": "farmer1", "password": "farmer123"})
+    assert farmer_login.status_code == 200
+    assert farmer_client.get("/admin/users", follow_redirects=False).status_code == 302
+    with get_connection() as conn:
+        denial = conn.execute(
+            "SELECT username, resource, outcome FROM audit_logs "
+            "WHERE action = ? AND resource = ? ORDER BY created_at DESC LIMIT 1",
+            ("admin_access_denied", "/admin/users"),
+        ).fetchone()
+    assert denial is not None
+    assert tuple(denial) == ("farmer1", "/admin/users", "failure")
 
     admin_login = client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
     assert admin_login.status_code == 200
@@ -115,6 +150,13 @@ def test_admin_user_management_page_requires_admin_and_renders_filters():
     assert "Registered users" in response.text
     assert "Search" in response.text
     assert "Activate" in response.text or "Deactivate" in response.text
+    assert '<dialog id="user-detail-dialog"' in response.text
+    assert "No linked module summaries are available yet." in response.text
+    assert 'data-label="Email"' in response.text
+    assert ":focus-visible" in response.text
+    assert 'id="user-detail-feedback"' in response.text
+    assert "window.alert(JSON.stringify" not in response.text
+    assert 'aria-live="polite"' in response.text
 
 
 def test_admin_user_list_enforces_bounded_page_size_and_date_filters():
@@ -174,6 +216,14 @@ def test_deactivation_revokes_tokens_and_status_changes_are_idempotent(monkeypat
 
     changed = set_user_status("operator1", "target1", "deactivate")
     assert changed["status"] == "inactive"
+    stale_api = TestClient(app).get(
+        "/api/diagnose/history",
+        headers={"Authorization": "Bearer " + stale_token},
+    )
+    assert stale_api.status_code == 401
+    stale_page_client = TestClient(app)
+    stale_page_client.cookies.set("digital_farming_session", stale_token)
+    assert stale_page_client.get("/dashboard", follow_redirects=False).status_code == 302
     with __import__("pytest").raises(ValueError, match="no longer active"):
         verify_token(stale_token)
 

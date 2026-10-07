@@ -984,6 +984,16 @@ def enforce_auth_rate_limit(request: Request, endpoint_name: str, *, key_suffix:
     bucket.append(now)
 
 
+def audit_admin_page_denial(request: Request, session: dict, reason: str) -> None:
+    record_audit_log(
+        str(session.get("sub") or "anonymous"),
+        "admin_access_denied",
+        request.url.path,
+        "failure",
+        reason,
+    )
+
+
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
@@ -1017,17 +1027,22 @@ async def require_authenticated_session(request: Request, call_next):
     if path == "/admin/overview":
       session = get_session_payload(request)
       if not session:
+        audit_admin_page_denial(request, session, "Authentication required")
         return RedirectResponse(url="/login", status_code=302)
       if str(session.get("role", "")).lower() != "admin":
+        audit_admin_page_denial(request, session, "Admin access required")
         return RedirectResponse(url="/dashboard", status_code=302)
       return await call_next(request)
 
     if path in PROTECTED_PAGE_PATHS or path.startswith(ADMIN_PAGE_PREFIXES):
         session = get_session_payload(request)
         if not session:
+            if path.startswith(ADMIN_PAGE_PREFIXES):
+                audit_admin_page_denial(request, session, "Authentication required")
             return RedirectResponse(url="/login", status_code=302)
 
         if path.startswith("/admin/") and str(session.get("role", "")).lower() != "admin":
+            audit_admin_page_denial(request, session, "Admin access required")
             return RedirectResponse(url="/dashboard", status_code=302)
 
         if path == "/profile":
@@ -1291,18 +1306,32 @@ def get_bearer_token(authorization: Optional[str]) -> str:
 
 
 def require_admin_access(request: Request, authorization: Optional[str]) -> dict:
-    token = authorization and get_bearer_token(authorization)
+    def deny(message: str, *, actor: str = "anonymous", status_code: int = 401):
+        record_audit_log(actor, "admin_access_denied", request.url.path, "failure", message)
+        raise HTTPException(status_code=status_code, detail=message)
+
+    try:
+        token = get_bearer_token(authorization) if authorization else None
+    except HTTPException as exc:
+        deny(exc.detail)
     if not token:
         session = get_session_payload(request)
         if session.get("role") == "admin":
             return session
-        raise HTTPException(status_code=401, detail="Authentication required")
+        deny(
+            "Authentication required",
+            actor=str(session.get("sub") or "anonymous"),
+        )
     try:
         payload = verify_token(token)
     except Exception as exc:  # pragma: no cover - security exception path
-        raise HTTPException(status_code=401, detail="Invalid token") from exc
+        deny("Invalid token")
     if payload.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+        deny(
+            "Admin access required",
+            actor=str(payload.get("sub") or "anonymous"),
+            status_code=403,
+        )
     return payload
 
 
@@ -5184,16 +5213,16 @@ def admin_users_page(
         action_label = "Deactivate" if action == "deactivate" else ("Reactivate" if action == "reactivate" else "Activate")
         rows += f"""
         <tr>
-          <td>{escape(str(item.get('id', '')))}</td>
-          <td>{escape(str(item.get('username', '')))}</td>
-          <td>{escape(str(item.get('full_name') or 'Not provided'))}</td>
-          <td>{escape(str(item.get('email') or 'Not provided'))}</td>
-          <td>{escape(str(item.get('phone') or 'Not provided'))}</td>
-          <td>{escape(str(item.get('role', '')))}</td>
-          <td><span class="status status-{escape(user_status)}">{escape(user_status)}</span></td>
-          <td>{escape(str(item.get('created_at') or 'Unknown'))}</td>
-          <td>{escape(str(item.get('last_login_at') or 'Never'))}</td>
-          <td><button class="view-button" data-username="{escape(str(item.get('username', '')))}">View</button>
+          <td data-label="User ID">{escape(str(item.get('id', '')))}</td>
+          <td data-label="Username">{escape(str(item.get('username', '')))}</td>
+          <td data-label="Full name">{escape(str(item.get('full_name') or 'Not provided'))}</td>
+          <td data-label="Email">{escape(str(item.get('email') or 'Not provided'))}</td>
+          <td data-label="Phone">{escape(str(item.get('phone') or 'Not provided'))}</td>
+          <td data-label="Role">{escape(str(item.get('role', '')))}</td>
+          <td data-label="Status"><span class="status status-{escape(user_status)}">{escape(user_status)}</span></td>
+          <td data-label="Registered">{escape(str(item.get('created_at') or 'Unknown'))}</td>
+          <td data-label="Last login">{escape(str(item.get('last_login_at') or 'Never'))}</td>
+          <td data-label="Actions"><button class="view-button" data-username="{escape(str(item.get('username', '')))}">View</button>
           <button class="status-button" data-username="{escape(str(item.get('username', '')))}" data-action="{action}">{action_label}</button></td>
         </tr>
         """
@@ -5224,17 +5253,30 @@ def admin_users_page(
     * {{ box-sizing:border-box; }} body {{ margin:0; font-family:'Nirmala UI','Segoe UI',Arial,sans-serif; background:linear-gradient(180deg,#eefaf0,#f7f5ef); color:var(--text); }}
     .container {{ max-width:1200px; margin:auto; padding:28px 18px 56px; }} .topbar {{ display:flex; justify-content:space-between; gap:14px; align-items:center; padding-bottom:18px; border-bottom:1px solid var(--line); }}
     nav {{ display:flex; gap:10px; flex-wrap:wrap; }} nav a, button {{ border:1px solid var(--line); border-radius:10px; padding:9px 13px; background:#f4f8f4; color:var(--text); font:inherit; font-weight:700; text-decoration:none; cursor:pointer; }}
+    a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible {{ outline:3px solid #165d2b; outline-offset:2px; }}
     h1 {{ margin:28px 0 8px; }} .lede {{ color:var(--muted); line-height:1.8; }} .panel {{ background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:20px; margin-top:20px; box-shadow:0 12px 30px rgba(23,48,29,.07); }}
     .filters {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }} .filters label {{ display:grid; gap:5px; font-size:.88rem; font-weight:700; }} input, select {{ width:100%; border:1px solid var(--line); border-radius:10px; padding:11px; font:inherit; }} .primary {{ background:var(--primary); color:#fff; border-color:var(--primary); }}
     .table-wrap {{ overflow-x:auto; }} table {{ width:100%; min-width:1200px; border-collapse:collapse; }} th,td {{ text-align:left; padding:12px 10px; border-bottom:1px solid var(--line); vertical-align:middle; }} th {{ color:var(--muted); font-size:.82rem; }}
     .status {{ display:inline-block; border-radius:999px; padding:5px 9px; font-size:.78rem; font-weight:800; }} .status-active {{ background:#e7f6ea; color:var(--primary); }} .status-inactive,.status-locked {{ background:#fde8e7; color:var(--danger); }} .status-pending_verification {{ background:#fff3da; color:var(--warning); }}
     .view-button {{ margin-right:6px; }} .status-button {{ background:#fff3da; }} .pagination {{ display:flex; gap:10px; margin-top:18px; }} .pagination a {{ color:var(--primary); font-weight:700; }}
-    @media (max-width:760px) {{ .topbar {{ flex-direction:column; align-items:stretch; }} .filters {{ grid-template-columns:1fr; }} }}
+    .feedback {{ border-radius:10px; padding:12px; background:#e7f6ea; color:var(--primary); }} .feedback.error {{ background:#fde8e7; color:var(--danger); }}
+    dialog {{ width:min(680px,calc(100% - 28px)); max-height:85vh; overflow:auto; border:1px solid var(--line); border-radius:18px; padding:22px; color:var(--text); box-shadow:0 24px 70px rgba(0,0,0,.25); }}
+    dialog::backdrop {{ background:rgba(15,35,20,.55); }} .dialog-heading {{ display:flex; justify-content:space-between; align-items:center; gap:12px; }} .dialog-heading h2 {{ margin:0; }}
+    .detail-fields {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }} .detail-fields div {{ min-width:0; padding:10px; background:#f4f8f4; border-radius:10px; }} .detail-fields dt {{ color:var(--muted); font-size:.82rem; font-weight:700; }} .detail-fields dd {{ margin:5px 0 0; overflow-wrap:anywhere; }}
+    @media (max-width:760px) {{
+      .topbar {{ flex-direction:column; align-items:stretch; }} .filters {{ grid-template-columns:1fr; }}
+      .table-wrap {{ overflow:visible; }} table {{ min-width:0; }} thead {{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }}
+      tbody {{ display:grid; gap:12px; }} tbody tr {{ display:block; border:1px solid var(--line); border-radius:12px; padding:8px; }}
+      tbody td {{ display:grid; grid-template-columns:minmax(95px,35%) minmax(0,1fr); gap:10px; border-bottom:1px solid var(--line); overflow-wrap:anywhere; }}
+      tbody td::before {{ content:attr(data-label); color:var(--muted); font-weight:700; }} tbody td:last-child {{ border-bottom:0; }}
+      .detail-fields {{ grid-template-columns:1fr; }}
+    }}
   </style>
 </head>
 <body><main class="container">
   <header class="topbar"><strong>Admin User Management</strong><nav><a href="/admin/overview">Overview</a><a href="/admin/audit-logs">Audit logs</a></nav></header>
   <h1>Registered users</h1><p class="lede">Search profiles, review account status, and control access with audited actions.</p>
+  <p id="user-feedback" class="feedback" role="status" aria-live="polite" aria-atomic="true" hidden></p>
   <section class="panel"><form class="filters" method="get">
     <label>Search<input name="search" value="{escape(search)}" placeholder="Name, email, phone, username" /></label>
     <label>Role<select name="role"><option value="">All roles</option><option value="admin" {'selected' if role == 'admin' else ''}>Admin</option><option value="farmer" {'selected' if role == 'farmer' else ''}>Farmer</option><option value="operator" {'selected' if role == 'operator' else ''}>Operator</option></select></label>
@@ -5245,19 +5287,89 @@ def admin_users_page(
     <label>Last login through<input type="date" name="last_login_to" value="{last_login_to.isoformat() if last_login_to else ''}" /></label>
     <button class="primary" type="submit">Filter</button></form></section>
   <section class="panel"><div><strong>{result['total']}</strong> matching users</div><div class="table-wrap"><table><thead><tr><th>User ID</th><th>Username</th><th>Full name</th><th>Email</th><th>Phone</th><th>Role</th><th>Status</th><th>Registered</th><th>Last login</th><th>Actions</th></tr></thead><tbody>{rows}</tbody></table></div><div class="pagination">{pagination}</div></section>
+  <dialog id="user-detail-dialog" aria-labelledby="user-detail-title">
+    <div class="dialog-heading"><h2 id="user-detail-title">User profile</h2><button type="button" id="close-user-detail">Close</button></div>
+    <p id="user-detail-feedback" class="feedback" role="status" aria-live="polite">Loading profile…</p>
+    <dl id="user-detail-fields" class="detail-fields"></dl>
+    <section><h3>Linked modules</h3><p>No linked module summaries are available yet.</p></section>
+  </dialog>
   <script>
+    const feedback = document.getElementById('user-feedback');
+    const detailDialog = document.getElementById('user-detail-dialog');
+    const detailFeedback = document.getElementById('user-detail-feedback');
+    const detailFields = document.getElementById('user-detail-fields');
+    const showFeedback = (message, isError = false) => {{
+      feedback.textContent = message;
+      feedback.classList.toggle('error', isError);
+      feedback.hidden = false;
+    }};
+    const readResponse = async (response) => {{
+      let payload = {{}};
+      try {{ payload = await response.json(); }} catch (error) {{ payload = {{}}; }}
+      if (!response.ok) throw new Error(payload.detail || 'The request could not be completed.');
+      return payload;
+    }};
     const statusButtons = document.querySelectorAll('.status-button');
     statusButtons.forEach((button) => button.addEventListener('click', async () => {{
       const username = button.dataset.username;
       const action = button.dataset.action;
       if (!window.confirm(`${{action}} ${{username}}?`)) return;
-      const response = await fetch(`/api/admin/users/${{encodeURIComponent(username)}}/status`, {{method:'POST', headers:{{'Content-Type':'application/json'}}, credentials:'same-origin', body:JSON.stringify({{action}})}});
-      if (response.ok) window.location.reload(); else window.alert('Unable to update account status.');
+      const label = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Updating…';
+      try {{
+        const response = await fetch(`/api/admin/users/${{encodeURIComponent(username)}}/status`, {{method:'POST', headers:{{'Content-Type':'application/json'}}, credentials:'same-origin', body:JSON.stringify({{action}})}});
+        await readResponse(response);
+        const newStatus = action === 'deactivate' ? 'inactive' : 'active';
+        const statusBadge = button.closest('tr').querySelector('.status');
+        statusBadge.className = `status status-${{newStatus}}`;
+        statusBadge.textContent = newStatus;
+        const nextAction = newStatus === 'active' ? 'deactivate' : 'reactivate';
+        button.dataset.action = nextAction;
+        button.textContent = nextAction === 'deactivate' ? 'Deactivate' : 'Reactivate';
+        showFeedback(`${{username}} is now ${{newStatus}}.`);
+      }} catch (error) {{
+        button.textContent = label;
+        showFeedback(error.message || 'Unable to update account status.', true);
+      }} finally {{
+        button.disabled = false;
+      }}
     }}));
     document.querySelectorAll('.view-button').forEach((button) => button.addEventListener('click', async () => {{
-      const response = await fetch(`/api/admin/users/${{encodeURIComponent(button.dataset.username)}}`, {{credentials:'same-origin'}});
-      if (response.ok) window.alert(JSON.stringify((await response.json()).data, null, 2)); else window.alert('Unable to load user profile.');
+      detailDialog.showModal();
+      detailFields.replaceChildren();
+      detailFeedback.textContent = 'Loading profile…';
+      button.disabled = true;
+      try {{
+        const response = await fetch(`/api/admin/users/${{encodeURIComponent(button.dataset.username)}}`, {{credentials:'same-origin'}});
+        const payload = await readResponse(response);
+        const fields = [
+          ['id', 'User ID'], ['username', 'Username'], ['full_name', 'Full name'], ['email', 'Email'],
+          ['phone', 'Phone'], ['village', 'Village'], ['region', 'Region'], ['area', 'Area'],
+          ['primary_crop', 'Primary crop'], ['land_size', 'Land size'], ['water_source', 'Water source'],
+          ['farming_method', 'Farming method'], ['secondary_crops', 'Secondary crops'], ['tools', 'Tools'],
+          ['irrigation_type', 'Irrigation type'], ['role', 'Role'], ['status', 'Status'],
+          ['created_at', 'Registered'], ['last_login_at', 'Last login']
+        ];
+        fields.forEach(([key, label]) => {{
+          const wrapper = document.createElement('div');
+          const term = document.createElement('dt');
+          const value = document.createElement('dd');
+          term.textContent = label;
+          value.textContent = payload.data[key] || 'Not provided';
+          wrapper.append(term, value);
+          detailFields.appendChild(wrapper);
+        }});
+        detailFeedback.textContent = 'Profile loaded.';
+        detailFeedback.classList.remove('error');
+      }} catch (error) {{
+        detailFeedback.textContent = error.message || 'Unable to load user profile.';
+        detailFeedback.classList.add('error');
+      }} finally {{
+        button.disabled = false;
+      }}
     }}));
+    document.getElementById('close-user-detail').addEventListener('click', () => detailDialog.close());
   </script>
 </main></body></html>
 """
