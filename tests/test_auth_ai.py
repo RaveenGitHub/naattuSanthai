@@ -174,7 +174,7 @@ def test_user_can_view_profile_and_reset_password():
 
     reset_response = client.post(
         "/api/profile/reset-password",
-        json={"current_password": "password123", "new_password": "newpassword456"},
+        json={"current_password": "password123", "new_password": "NewPassword456"},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert reset_response.status_code == 200
@@ -182,7 +182,7 @@ def test_user_can_view_profile_and_reset_password():
 
     re_login = client.post(
         "/auth/login",
-        json={"username": "operator1", "password": "newpassword456"},
+        json={"username": "operator1", "password": "NewPassword456"},
     )
     assert re_login.status_code == 200
     assert re_login.json()["role"] == "operator"

@@ -6,6 +6,12 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, Field, field_validator
 
 
+def validate_password_strength(value: str) -> str:
+    if not any(character.isupper() for character in value) or not any(character.isdigit() for character in value):
+        raise ValueError("Password must contain at least one uppercase letter and one number")
+    return value
+
+
 class LoginRequest(BaseModel):
     username: str
     password: str
@@ -88,6 +94,11 @@ class PasswordResetRequest(BaseModel):
     current_password: str
     new_password: str
 
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, value: str) -> str:
+        return validate_password_strength(value)
+
 
 class ProfileFieldsModel(BaseModel):
     full_name: Optional[str] = None
@@ -162,6 +173,11 @@ class RegisterRequest(ProfileFieldsModel):
     tools: str = ""
     irrigation_type: str = ""
 
+    @field_validator("password")
+    @classmethod
+    def validate_registration_password(cls, value: str) -> str:
+        return validate_password_strength(value)
+
 
 class ForgotPasswordRequest(BaseModel):
     email: str = Field(min_length=3, max_length=254)
@@ -179,3 +195,8 @@ class ForgotPasswordRequest(BaseModel):
 class AuthResetPasswordRequest(BaseModel):
     reset_token: str = Field(min_length=32, max_length=256)
     new_password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_reset_password(cls, value: str) -> str:
+        return validate_password_strength(value)

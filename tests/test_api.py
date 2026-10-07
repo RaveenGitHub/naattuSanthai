@@ -1542,6 +1542,29 @@ def test_public_registration_cannot_assign_privileged_roles():
         assert conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone() is None
 
 
+def test_public_registration_rejects_passwords_without_complexity_requirements():
+    username = f"weak_password_{__import__('uuid').uuid4().hex[:8]}"
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": username,
+            "password": "lowercase123",
+            "role": "farmer",
+            "email": f"{username}@example.com",
+            "full_name": "Weak Password Farmer",
+            "village": "Kallakurichi",
+            "region": "Villupuram",
+            "area": "1",
+            "primary_crop": "rice",
+            "land_size": "1",
+            "water_source": "rainfed",
+        },
+    )
+    assert response.status_code == 422
+    with get_connection() as conn:
+        assert conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone() is None
+
+
 def test_forgot_password_response_does_not_reveal_account_existence(monkeypatch):
     username = f"forgot_user_{__import__('uuid').uuid4().hex[:8]}"
     email = f"{username}@example.com"
@@ -1713,6 +1736,12 @@ def test_password_reset_requires_single_use_email_code_and_revokes_existing_sess
     assert stored is not None
     assert stored["token_hash"] != issued["token"]
     assert stored["used_at"] is None
+
+    weak_password = client.post(
+        "/api/v1/auth/reset-password",
+        json={"reset_token": issued["token"], "new_password": "lowercase123"},
+    )
+    assert weak_password.status_code == 422
 
     response = client.post(
         "/api/v1/auth/reset-password",
