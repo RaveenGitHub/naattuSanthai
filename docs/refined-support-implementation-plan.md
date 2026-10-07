@@ -2,6 +2,21 @@
 
 # **தமிழ்‑முதல் வேளாண்மை பயன்பாடு – செயல்படுத்தல் பின்னணி பட்டியல்**
 
+## Implementation Status — 2026-10-07
+
+**Overall status: Partially implemented; backlog and field-readiness checks remain open.** The repository has server-side role checks, account-status-aware and revocable tokens, protected profile/history pages, profile storage/editing, and profile-aware advisory/page behavior. The changes do not establish that every role journey, personalization surface, operational control, or field acceptance criterion is complete.
+
+| Backlog area | Status | Next work |
+|---|---|---|
+| Access control and session hardening | Partially implemented | Validate role denial and session expiry/logout behavior across protected pages and route transitions; record evidence for every acceptance item. |
+| Farmer onboarding and profile completion | Partially implemented | Verify required-field policy, profile completeness, input validation, and recommendation refresh after edits. |
+| Auto-filter and personalization | Partially implemented | Confirm consistent profile/default filtering across dashboard, advisory, weather, market, soil, and disease; add regression tests for missing and mismatched profile data. |
+| Core service quality and agronomy guidance | Partially implemented | Complete agronomy review and real-data quality checks; explicitly treat disease diagnosis as a prototype until image inference is validated. |
+| Admin monitoring and production readiness | Partially implemented | Close monitoring, backup/restore, rollback, secrets, and release-checklist items. |
+| QA, field validation, and sign-off | Open | Run role/session end-to-end tests and obtain Tamil, agronomy, and field-user review before sign-off. |
+
+The unchecked items below remain open until their acceptance criteria are verified; existing implementation or unit tests alone do not close field, deployment, or cross-surface validation.
+
 ---
 
 # **EPIC 1 — Access Control Framework (Admin + Profile)**

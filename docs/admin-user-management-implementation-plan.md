@@ -4,13 +4,29 @@
 
 Implement the Admin Page as a server-authorized user-management module. Deliver the read-only list and detail workflow first, then lifecycle mutations, audit coverage, and performance hardening. Preserve the existing Admin role and treat System Admin as a future extension until a separate role is introduced.
 
+## Implementation Status — 2026-10-07
+
+**Overall status: In progress.** The admin list, detail/status APIs, typed list/detail responses, date filters, bounded admin pagination, supported user indexes, and basic audit monitoring are implemented. Lifecycle actions enforce transitions and final-admin/self-deactivation safeguards; account-status changes and logout invalidate issued tokens. The UI and release/performance acceptance remain incomplete.
+
+| Phase | Status | Remaining work |
+|---|---|---|
+| 1. Data contract and authorization | Partially implemented | Typed summary/detail/list contracts, shared admin checks, token status/version checks, and self/final-admin safeguards are in place. Still verify every admin denial path and complete request-context audit metadata. |
+| 2. User list API and UI | Partially implemented | Search, role/status/date filters, 25/100 paging, indexes, all required list columns, and encoded filter-preserving pagination are in place. Finish responsive card fallback, accessible mutation feedback, and complete error/loading states. |
+| 3. User detail | Partially implemented | Secret-safe detail response and view audit are in place. Replace the JSON alert with a usable detail surface and add linked-module summaries or explicit empty states. |
+| 4. Activation and deactivation | Partially implemented | Backend transitions, idempotent retries, final-admin protection, and token-version invalidation are implemented. Finish accessible status feedback and test protected-page/API denial after transitions. |
+| 5. Audit and monitoring | Partially implemented | Actor/action/outcome/affected-user filters and list/action/average-query-latency metrics are available. Complete denied/failed event coverage and validate metric usefulness operationally. |
+| 6. Testing and release readiness | Open | 16 focused API/auth/admin/audit/disease tests passed on isolated SQLite data. Run the full regression suite, the 10,000-user benchmark, security/accessibility checks, and release/rollback validation. |
+
+**Next work:** finish admin detail and responsive/error-state UX, close denial-audit gaps, then run scale and release validation. Keep phases partially implemented until each remaining acceptance item has evidence.
+
 ## 2. Current Repository Baseline
 
-- Admin HTML pages and API routes already require admin authorization.
-- User records already contain profile, role, status, registration, login, and failed-login fields.
-- Audit-log storage and admin audit views already exist.
-- Existing unlock behavior can be reused as the first activation capability.
-- The current user list API is minimal and must be expanded for the PRD fields and filters.
+- The admin user page and list, detail, and status API routes are present and use the shared admin-access guard.
+- User records already contain profile, role, status, registration, login, and failed-login fields; login rejects pending, inactive, and locked accounts.
+- Audit-log storage and admin audit views already exist, and current user-management routes record list, view, and lifecycle outcomes.
+- The admin list API supports search, role/status/registration/last-login filters, and page sizes up to 100; the legacy `/api/users` compatibility route remains separate.
+- Status changes increment the user's token version. Logout revokes the token and increments that version so access/refresh tokens cannot become valid again after reactivation.
+- Account details exclude credentials and tokens. The page still presents profile JSON in an alert rather than a full detail layout.
 
 ## 3. Phase 1 - Data Contract and Authorization
 

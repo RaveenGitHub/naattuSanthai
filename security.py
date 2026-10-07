@@ -4,6 +4,7 @@ import base64
 import hashlib
 import hmac
 import os
+import sqlite3
 import smtplib
 from email.message import EmailMessage
 import secrets
@@ -169,6 +170,10 @@ def list_users(
     status: str = "",
     page: int = 1,
     page_size: int = 1000,
+    created_from: Optional[str] = None,
+    created_to: Optional[str] = None,
+    last_login_from: Optional[str] = None,
+    last_login_to: Optional[str] = None,
 ) -> Dict[str, object]:
     seed_default_users()
     page = max(1, page)
@@ -185,6 +190,18 @@ def list_users(
     if status.strip():
         clauses.append("status = ?")
         params.append(status.strip())
+    if created_from:
+        clauses.append("created_at >= ?")
+        params.append(f"{created_from}T00:00:00")
+    if created_to:
+        clauses.append("created_at < ?")
+        params.append(f"{(datetime.fromisoformat(created_to).date() + timedelta(days=1)).isoformat()}T00:00:00")
+    if last_login_from:
+        clauses.append("last_login_at >= ?")
+        params.append(f"{last_login_from}T00:00:00")
+    if last_login_to:
+        clauses.append("last_login_at < ?")
+        params.append(f"{(datetime.fromisoformat(last_login_to).date() + timedelta(days=1)).isoformat()}T00:00:00")
     where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
     with get_connection() as conn:
         total = conn.execute(f"SELECT COUNT(*) FROM users{where}", params).fetchone()[0]
@@ -213,23 +230,50 @@ def get_admin_user_detail(username: str) -> Dict[str, object]:
 
 
 def set_user_status(admin_username: str, username: str, action: str, reason: str = "") -> Dict[str, str]:
-    allowed_actions = {"activate": "active", "reactivate": "active", "deactivate": "inactive"}
+    allowed_actions = {
+        "activate": ({"pending_verification", "inactive", "locked"}, "active"),
+        "reactivate": ({"inactive"}, "active"),
+        "deactivate": ({"active"}, "inactive"),
+    }
     if action not in allowed_actions:
         raise ValueError("Unsupported account action")
     if admin_username == username and action == "deactivate":
         raise ValueError("An admin cannot deactivate their own account")
-    user = _get_user(username)
-    if user is None:
-        raise ValueError("User not found")
-    new_status = allowed_actions[action]
+
+    allowed_from, new_status = allowed_actions[action]
     now = datetime.now(timezone.utc).isoformat()
     with get_connection() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        user = conn.execute(
+            "SELECT role, status FROM users WHERE username = ?",
+            (username,),
+        ).fetchone()
+        if user is None:
+            raise ValueError("User not found")
+        current_status = user["status"] or "active"
+        if current_status == new_status:
+            return {"username": username, "status": new_status, "action": action, "unchanged": "true"}
+        if current_status not in allowed_from:
+            raise ValueError(f"Cannot {action} a user with status {current_status}")
+        if action == "deactivate" and user["role"] == "admin":
+            active_admins = conn.execute(
+                "SELECT COUNT(*) FROM users WHERE role = 'admin' AND status = 'active'"
+            ).fetchone()[0]
+            if active_admins <= 1:
+                raise ValueError("Cannot deactivate the final active admin")
         conn.execute(
-            "UPDATE users SET status = ?, failed_login_attempts = 0, otp_code = NULL, otp_expires_at = NULL, updated_at = ? WHERE username = ?",
+            "UPDATE users SET status = ?, token_version = token_version + 1, failed_login_attempts = 0, otp_code = NULL, otp_expires_at = NULL, updated_at = ? WHERE username = ?",
             (new_status, now, username),
         )
-    record_audit_log(admin_username, f"user_{action}", f"users/{username}", "success", reason or f"Account status set to {new_status}")
-    return {"username": username, "status": new_status, "action": action}
+        record_audit_log(
+            admin_username,
+            f"user_{action}",
+            f"users/{username}",
+            "success",
+            reason or f"Account status set to {new_status}",
+            conn=conn,
+        )
+    return {"username": username, "status": new_status, "action": action, "unchanged": "false"}
 
 
 def get_profile(username: str) -> Dict[str, str]:
@@ -290,7 +334,7 @@ def reset_password(username: str, current_password: str, new_password: str) -> D
 
     with get_connection() as conn:
         conn.execute(
-            "UPDATE users SET password = ? WHERE username = ?",
+            "UPDATE users SET password = ?, token_version = token_version + 1 WHERE username = ?",
             (hash_password(new_password), username),
         )
 
@@ -308,7 +352,7 @@ def unlock_user(username: str) -> Dict[str, str]:
 
     with get_connection() as conn:
         conn.execute(
-            "UPDATE users SET status = ?, failed_login_attempts = 0, otp_code = NULL, otp_expires_at = NULL, updated_at = ? WHERE username = ?",
+            "UPDATE users SET status = ?, token_version = token_version + 1, failed_login_attempts = 0, otp_code = NULL, otp_expires_at = NULL, updated_at = ? WHERE username = ?",
             ("active", datetime.now(timezone.utc).isoformat(), username),
         )
 
@@ -321,7 +365,7 @@ def _get_user(username: str) -> Optional[Dict[str, str]]:
         row = conn.execute(
             """
                  SELECT id, username, password, role, status, otp_code, otp_expires_at, failed_login_attempts,
-                   email, phone, full_name, village, region, area, primary_crop, land_size,
+                   token_version, email, phone, full_name, village, region, area, primary_crop, land_size,
                      water_source, farming_method, secondary_crops, tools, irrigation_type,
                      created_at, updated_at, last_login_at
             FROM users WHERE username = ?
@@ -344,6 +388,7 @@ def _get_user(username: str) -> Optional[Dict[str, str]]:
         "password": stored_password,
         "role": row["role"],
         "status": row["status"] or "active",
+        "token_version": row["token_version"] or 0,
         "otp_code": row["otp_code"],
         "otp_expires_at": row["otp_expires_at"],
         "failed_login_attempts": row["failed_login_attempts"] or 0,
@@ -393,7 +438,7 @@ def seed_default_users() -> None:
         if password_matches_default or password_matches_hashed_default:
             with get_connection() as conn:
                 conn.execute(
-                    "UPDATE users SET password = ?, role = ?, status = CASE WHEN status = 'locked' THEN 'active' ELSE status END, failed_login_attempts = 0, updated_at = ? WHERE username = ?",
+                    "UPDATE users SET password = ?, role = ?, status = CASE WHEN status = 'locked' THEN 'active' ELSE status END, token_version = token_version + CASE WHEN status = 'locked' THEN 1 ELSE 0 END, failed_login_attempts = 0, updated_at = ? WHERE username = ?",
                     (hash_password(details["password"]), details["role"], datetime.now(timezone.utc).isoformat(), username),
                 )
             continue
@@ -415,7 +460,7 @@ def seed_default_users() -> None:
         if (row["status"] or "active") == "locked":
             with get_connection() as conn:
                 conn.execute(
-                    "UPDATE users SET status = ?, failed_login_attempts = 0 WHERE username = ?",
+                    "UPDATE users SET status = ?, token_version = token_version + 1, failed_login_attempts = 0 WHERE username = ?",
                     ("active", username),
                 )
 
@@ -426,11 +471,15 @@ def seed_default_users() -> None:
                     ("active", username),
                 )
 
-
-seed_default_users()
-
-
-def record_audit_log(username: str, action: str, resource: str, outcome: str, details: Optional[str] = None) -> Dict[str, str]:
+def record_audit_log(
+    username: str,
+    action: str,
+    resource: str,
+    outcome: str,
+    details: Optional[str] = None,
+    *,
+    conn: Optional[sqlite3.Connection] = None,
+) -> Dict[str, str]:
     event_id = f"AUD-{uuid4().hex}"
     record = {
         "id": event_id,
@@ -441,19 +490,48 @@ def record_audit_log(username: str, action: str, resource: str, outcome: str, de
         "details": details,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    with get_connection() as conn:
-        conn.execute(
+    def insert_record(connection: sqlite3.Connection) -> None:
+        connection.execute(
             "INSERT INTO audit_logs (id, username, action, resource, outcome, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (record["id"], record["username"], record["action"], record["resource"], record["outcome"], record["details"], record["created_at"]),
         )
+
+    if conn is None:
+        with get_connection() as connection:
+            insert_record(connection)
+    else:
+        insert_record(conn)
     return record
 
 
-def list_audit_logs(limit: int = 100) -> List[Dict[str, str]]:
+def list_audit_logs(
+    limit: int = 100,
+    *,
+    username: str = "",
+    action: str = "",
+    outcome: str = "",
+    affected_user: str = "",
+) -> List[Dict[str, str]]:
+    clauses = []
+    params: List[object] = []
+    if username.strip():
+        clauses.append("username = ?")
+        params.append(username.strip())
+    if action.strip():
+        clauses.append("action = ?")
+        params.append(action.strip())
+    if outcome.strip():
+        clauses.append("outcome = ?")
+        params.append(outcome.strip())
+    if affected_user.strip():
+        clauses.append("resource = ?")
+        params.append(f"users/{affected_user.strip()}")
+    where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+    params.append(min(1000, max(1, limit)))
     with get_connection() as conn:
         rows = conn.execute(
-            "SELECT id, username, action, resource, outcome, details, created_at FROM audit_logs ORDER BY created_at DESC LIMIT ?",
-            (limit,),
+            f"SELECT id, username, action, resource, outcome, details, created_at FROM audit_logs{where} ORDER BY created_at DESC LIMIT ?",
+            params,
         ).fetchall()
     return [
         {
@@ -473,11 +551,14 @@ def create_token(username: str, token_type: str = "access") -> str:
     user = _get_user(username)
     if user is None:
         raise ValueError("User not found")
+    if user["status"] != "active":
+        raise ValueError("Account is not active")
     expiry_hours = settings.jwt_expiry_hours if token_type == "access" else 168
     now = datetime.now(timezone.utc)
     payload = {
         "sub": username,
         "role": user["role"],
+        "ver": user["token_version"],
         "type": token_type,
         "jti": uuid4().hex,
         "iat": int(now.timestamp()),
@@ -490,7 +571,59 @@ def verify_token(token: str, expected_type: Optional[str] = None) -> Dict[str, s
     payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     if expected_type and payload.get("type") not in {None, expected_type}:
         raise ValueError("Unexpected token type")
+    username = payload.get("sub")
+    if not username:
+        raise ValueError("Invalid token")
+    user = _get_user(username)
+    if (
+        user is None
+        or user.get("status") != "active"
+        or user.get("role") != payload.get("role")
+        or user.get("token_version") != payload.get("ver", 0)
+    ):
+        raise ValueError("Account is no longer active")
+    jti = payload.get("jti")
+    if jti:
+        with get_connection() as conn:
+            revoked = conn.execute(
+                "SELECT 1 FROM revoked_auth_tokens WHERE jti = ?",
+                (jti,),
+            ).fetchone()
+        if revoked is not None:
+            raise ValueError("Token has been revoked")
     return payload
+
+
+def revoke_token(token: str) -> bool:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except jwt.PyJWTError:
+        return False
+    jti = payload.get("jti")
+    username = payload.get("sub")
+    expires_at = payload.get("exp")
+    if not jti or not username or not expires_at:
+        return False
+    revoked_at = datetime.now(timezone.utc).isoformat()
+    expires_iso = datetime.fromtimestamp(float(expires_at), timezone.utc).isoformat()
+    with get_connection() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        already_revoked = conn.execute(
+            "SELECT 1 FROM revoked_auth_tokens WHERE jti = ?",
+            (jti,),
+        ).fetchone()
+        if already_revoked is not None:
+            return True
+        conn.execute(
+            "INSERT OR IGNORE INTO revoked_auth_tokens (jti, username, expires_at, revoked_at) VALUES (?, ?, ?, ?)",
+            (jti, username, expires_iso, revoked_at),
+        )
+        conn.execute(
+            "UPDATE users SET token_version = token_version + 1 WHERE username = ?",
+            (username,),
+        )
+        record_audit_log(username, "logout", "auth", "success", "Active tokens revoked", conn=conn)
+    return True
 
 
 def refresh_access_token(current_token: str) -> Dict[str, str]:
@@ -564,8 +697,8 @@ def authenticate(username: str, password: str) -> Dict[str, str]:
         new_status = "locked" if attempts >= 5 else user.get("status", "active")
         with get_connection() as conn:
             conn.execute(
-                "UPDATE users SET failed_login_attempts = ?, status = ?, updated_at = ? WHERE username = ?",
-                (attempts, new_status, datetime.now(timezone.utc).isoformat(), username),
+                "UPDATE users SET failed_login_attempts = ?, status = ?, token_version = token_version + ?, updated_at = ? WHERE username = ?",
+                (attempts, new_status, 1 if new_status == "locked" else 0, datetime.now(timezone.utc).isoformat(), username),
             )
         record_audit_log(username, "login", "auth", "failure", "Invalid username or password")
         if new_status == "locked":
@@ -581,3 +714,6 @@ def authenticate(username: str, password: str) -> Dict[str, str]:
     token = create_token(username)
     record_audit_log(username, "login", "auth", "success", "JWT token issued")
     return {"token": token, "role": user["role"]}
+
+
+seed_default_users()

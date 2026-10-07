@@ -56,6 +56,9 @@ def test_ai_diagnosis_returns_recommendation():
     assert "prevention_steps" in body["data"]
     assert isinstance(body["data"]["treatment_steps"], list)
     assert isinstance(body["data"]["prevention_steps"], list)
+    assert body["data"]["image_analyzed"] is False
+    assert body["data"]["manual_review_required"] is True
+    assert body["data"]["confidence"] == "Low"
 
 
 def test_ai_diagnosis_history_is_available_to_authorized_user():
@@ -98,7 +101,8 @@ def test_ai_diagnosis_returns_tamil_farmer_guidance():
     body = response.json()
     text = " ".join(body["data"]["treatment_steps"] + body["data"]["prevention_steps"])
     assert any(word in text for word in ["சிகிச்சை", "தடுப்பு", "நெல்", "மழை", "நீர்"])
-    assert "Leaf blast" in body["data"]["diagnosis"] or "இலை" in body["data"]["diagnosis"]
+    assert "Image review required" == body["data"]["diagnosis"]
+    assert "பூச்சிக்கொல்லி" in text
 
 
 def test_new_user_can_be_created_and_authenticated_from_database():
@@ -173,6 +177,7 @@ def test_user_can_view_profile_and_reset_password():
         headers={"Authorization": f"Bearer {token}"},
     )
     assert reset_response.status_code == 200
+    assert client.get("/api/profile", headers={"Authorization": f"Bearer {token}"}).status_code == 401
 
     re_login = client.post(
         "/auth/login",
@@ -311,7 +316,8 @@ def test_disease_detection_page_shows_live_recommendation_from_query_params():
     )
     assert response.status_code == 200
     assert "Rice" in response.text or "நெல்" in response.text
-    assert "Leaf blast" in response.text or "இலை" in response.text
+    assert "Image review required" in response.text
+    assert "does not analyze image pixels" in response.text
     assert "Apply" in response.text or "சிகிச்சை" in response.text
 
 
@@ -324,11 +330,11 @@ def test_disease_detection_page_accepts_image_upload():
     upload = client.post(
         "/disease-detection",
         data={"crop_type": "Rice", "notes": "Yellow leaves and spots"},
-        files={"file": ("rice-leaf.jpg", b"fake-image-content", "image/jpeg")},
+        files={"file": ("rice-leaf.jpg", b"\xff\xd8\xfffake-image-content", "image/jpeg")},
     )
     assert upload.status_code == 200
-    assert "Leaf blast" in upload.text
-    assert "Apply recommended fungicide spray" in upload.text
+    assert "Image review required" in upload.text
+    assert "does not analyze image pixels" in upload.text
 
 
 def test_disease_upload_route_accepts_image_file_for_ai_diagnosis():
@@ -343,7 +349,7 @@ def test_disease_upload_route_accepts_image_file_for_ai_diagnosis():
 
     response = client.post(
         "/api/diagnose/upload",
-        files={"file": ("leaf-scan.jpg", b"fake-image-bytes", "image/jpeg")},
+        files={"file": ("leaf-scan.jpg", b"\xff\xd8\xfffake-image-bytes", "image/jpeg")},
         data={"crop_type": "Rice", "notes": "Yellowing leaves and spots"},
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -365,6 +371,28 @@ def test_disease_upload_route_rejects_non_image_files():
     )
     assert response.status_code == 400
     assert "image" in response.json()["detail"].lower()
+
+
+def test_disease_upload_rejects_oversized_and_unsupported_images():
+    login = client.post("/auth/login", json={"username": "operator1", "password": "password123"})
+    assert login.status_code == 200
+    headers = {"Authorization": f"Bearer {login.json()['token']}"}
+
+    oversized = client.post(
+        "/api/diagnose/upload",
+        headers=headers,
+        data={"crop_type": "Rice"},
+        files={"file": ("large.jpg", b"x" * (8 * 1024 * 1024 + 1), "image/jpeg")},
+    )
+    assert oversized.status_code == 413
+
+    unsupported = client.post(
+        "/api/diagnose/upload",
+        headers=headers,
+        data={"crop_type": "Rice"},
+        files={"file": ("leaf.svg", b"<svg/>", "image/svg+xml")},
+    )
+    assert unsupported.status_code == 400
 
 
 def test_disease_detection_flags_low_confidence_results_for_manual_review():
@@ -394,6 +422,40 @@ def test_disease_history_page_lists_previous_scans():
     assert response.status_code == 200
     assert "கண்டறிதல் வரலாறு" in response.text or "Diagnosis History" in response.text
     assert "Tomato" in response.text or "தக்காளி" in response.text
+
+
+def test_disease_history_is_private_to_the_authenticated_operator():
+    isolated_client = TestClient(app)
+    first = f"historyfirst_{uuid.uuid4().hex[:8]}"
+    second = f"historysecond_{uuid.uuid4().hex[:8]}"
+    create_user(first, "historypass", "operator")
+    create_user(second, "historypass", "operator")
+
+    first_token = isolated_client.post(
+        "/auth/login", json={"username": first, "password": "historypass"},
+    ).json()["token"]
+    assert isolated_client.get("/disease-detection").status_code == 200
+    assert isolated_client.get(
+        "/api/diagnose/history", headers={"Authorization": f"Bearer {first_token}"},
+    ).json()["data"] == []
+    second_token = isolated_client.post(
+        "/auth/login", json={"username": second, "password": "historypass"},
+    ).json()["token"]
+    saved = isolated_client.post(
+        "/api/diagnose",
+        json={"crop_type": "Rice", "image_url": "leaf.jpg", "notes": "Yellow spots"},
+        headers={"Authorization": f"Bearer {first_token}"},
+    )
+    assert saved.status_code == 200
+
+    first_history = isolated_client.get(
+        "/api/diagnose/history", headers={"Authorization": f"Bearer {first_token}"},
+    )
+    second_history = isolated_client.get(
+        "/api/diagnose/history", headers={"Authorization": f"Bearer {second_token}"},
+    )
+    assert any(item["image_url"] == "leaf.jpg" for item in first_history.json()["data"])
+    assert not any(item["image_url"] == "leaf.jpg" for item in second_history.json()["data"])
 
 
 def test_admin_overview_page_renders_monitoring_metrics():

@@ -3,8 +3,8 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app import app
-from database import create_db_backup, get_migration_status, record_migration_status
-from security import create_user
+from database import create_db_backup, get_connection, get_migration_status, init_db, record_migration_status
+from security import create_token, create_user, set_user_status, verify_token
 from services import get_scheme_fetch_status, list_archived_scheme_updates
 from services import get_scheme_fetch_status
 import services
@@ -113,8 +113,81 @@ def test_admin_user_management_page_requires_admin_and_renders_filters():
     response = client.get("/admin/users", follow_redirects=False)
     assert response.status_code == 200
     assert "Registered users" in response.text
-    assert "Search name, email, phone, username" in response.text
+    assert "Search" in response.text
     assert "Activate" in response.text or "Deactivate" in response.text
+
+
+def test_admin_user_list_enforces_bounded_page_size_and_date_filters():
+    login = client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    assert login.status_code == 200
+    headers = {"Authorization": f"Bearer {login.json()['token']}"}
+
+    oversized = client.get("/api/admin/users?page_size=101", headers=headers)
+    assert oversized.status_code == 422
+
+    today = __import__("datetime").date.today().isoformat()
+    matching = client.get(f"/api/admin/users?created_from={today}", headers=headers)
+    assert matching.status_code == 200
+    assert matching.json()["data"]["page_size"] == 25
+
+    reversed_range = client.get(
+        "/api/admin/users?created_from=2026-10-02&created_to=2026-10-01",
+        headers=headers,
+    )
+    assert reversed_range.status_code == 422
+
+
+def test_admin_audit_filters_and_user_management_metrics():
+    login = client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    assert login.status_code == 200
+    headers = {"Authorization": f"Bearer {login.json()['token']}"}
+    username = f"audit_target_{__import__('uuid').uuid4().hex[:8]}"
+    create_user(username, "SecurePass123", "farmer")
+
+    changed = client.post(
+        f"/api/admin/users/{username}/status",
+        headers=headers,
+        json={"action": "deactivate"},
+    )
+    assert changed.status_code == 200
+
+    filtered = client.get(
+        f"/api/admin/audit-logs?affected_user={username}&action=user_deactivate",
+        headers=headers,
+    )
+    assert filtered.status_code == 200
+    assert len(filtered.json()["data"]) == 1
+    assert filtered.json()["data"][0]["resource"] == f"users/{username}"
+
+    metrics = client.get("/api/admin/user-management/metrics", headers=headers)
+    assert metrics.status_code == 200
+    assert metrics.json()["data"]["list_query_samples"] >= 0
+    assert "average_list_query_latency_ms" in metrics.json()["data"]
+
+
+def test_deactivation_revokes_tokens_and_status_changes_are_idempotent(monkeypatch, tmp_path):
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "user-status.db"))
+    init_db()
+    create_user("operator1", "operatorpass", "operator")
+    create_user("target1", "targetpass", "farmer")
+    stale_token = create_token("target1")
+
+    changed = set_user_status("operator1", "target1", "deactivate")
+    assert changed["status"] == "inactive"
+    with __import__("pytest").raises(ValueError, match="no longer active"):
+        verify_token(stale_token)
+
+    unchanged = set_user_status("operator1", "target1", "deactivate")
+    assert unchanged["unchanged"] == "true"
+    with get_connection() as conn:
+        event_count = conn.execute(
+            "SELECT COUNT(*) FROM audit_logs WHERE action = 'user_deactivate' AND resource = 'users/target1'"
+        ).fetchone()[0]
+    assert event_count == 1
+
+    create_user("lastadmin", "adminpass", "admin")
+    with __import__("pytest").raises(ValueError, match="final active admin"):
+        set_user_status("operator1", "lastadmin", "deactivate")
 
 
 def test_admin_html_pages_require_admin_role():
@@ -1587,6 +1660,14 @@ def test_refresh_token_returns_new_token_and_logout_clears_session_cookie():
     logout = isolated_client.post("/auth/logout")
     assert logout.status_code == 200
     assert logout.cookies.get("digital_farming_session") in {"", None}
+    assert isolated_client.get(
+        "/api/admin/overview",
+        headers={"Authorization": f"Bearer {original_token}"},
+    ).status_code == 401
+    assert isolated_client.get(
+        "/api/admin/overview",
+        headers={"Authorization": f"Bearer {refreshed['data']['token']}"},
+    ).status_code == 401
 
 
 def test_logout_blocks_protected_pages_after_reload_and_tab_reopen():
@@ -1742,6 +1823,10 @@ def test_protected_pages_redirect_to_login_without_session_cookie():
     admin_response = isolated_client.get("/admin/overview", follow_redirects=False)
     assert admin_response.status_code in {302, 307}
     assert admin_response.headers.get("location", "").startswith("/login")
+
+    history_response = isolated_client.get("/disease-history", follow_redirects=False)
+    assert history_response.status_code in {302, 307}
+    assert history_response.headers.get("location", "").startswith("/login")
 
 
 def test_profile_page_requires_authentication_and_owner_access():

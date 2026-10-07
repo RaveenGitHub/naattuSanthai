@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import math
-from typing import Optional
+from typing import List, Literal, Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class LoginRequest(BaseModel):
@@ -24,8 +24,64 @@ class UserCreateRequest(BaseModel):
 
 
 class AdminUserStatusRequest(BaseModel):
-    action: str
-    reason: str = ""
+    action: Literal["activate", "deactivate", "reactivate"]
+    reason: str = Field(default="", max_length=1000)
+
+
+class AdminUserSummary(BaseModel):
+    id: str
+    username: str
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    role: str
+    status: str
+    created_at: str
+    last_login_at: Optional[str] = None
+
+
+class AdminUserListResult(BaseModel):
+    items: List[AdminUserSummary]
+    page: int
+    page_size: int
+    total: int
+    total_pages: int
+
+
+class AdminUserListResponse(BaseModel):
+    success: bool
+    data: AdminUserListResult
+    error: Optional[str] = None
+
+
+class AdminUserDetail(BaseModel):
+    id: str
+    username: str
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    village: Optional[str] = None
+    region: Optional[str] = None
+    area: Optional[str] = None
+    primary_crop: Optional[str] = None
+    land_size: Optional[str] = None
+    water_source: Optional[str] = None
+    farming_method: Optional[str] = None
+    secondary_crops: Optional[str] = None
+    tools: Optional[str] = None
+    irrigation_type: Optional[str] = None
+    role: str
+    status: str
+    failed_login_attempts: int
+    created_at: str
+    updated_at: Optional[str] = None
+    last_login_at: Optional[str] = None
+
+
+class AdminUserDetailResponse(BaseModel):
+    success: bool
+    data: AdminUserDetail
+    error: Optional[str] = None
 
 
 class PasswordResetRequest(BaseModel):

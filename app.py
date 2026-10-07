@@ -1,14 +1,14 @@
 import json
 import os
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from html import escape
 from time import monotonic
 from typing import Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 from uuid import uuid4
 
-from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from database import get_connection, get_migration_status
@@ -18,6 +18,8 @@ from routes import router
 from schemas_auth import (
     AuthResetPasswordRequest,
     AdminUserStatusRequest,
+    AdminUserDetailResponse,
+    AdminUserListResponse,
     DiagnoseRequest,
     ForgotPasswordRequest,
     LoginRequest,
@@ -36,6 +38,7 @@ from security import (
     list_users,
     record_audit_log,
     refresh_access_token,
+    revoke_token,
     reset_password,
     seed_default_users,
     set_user_status,
@@ -849,7 +852,7 @@ app = FastAPI(title="Digital Farming Support Center")
 app.state.started_at = datetime.now(timezone.utc)
 app.include_router(router)
 
-PROTECTED_PAGE_PATHS = {"/dashboard", "/profile"}
+PROTECTED_PAGE_PATHS = {"/dashboard", "/profile", "/disease-history"}
 ADMIN_PAGE_PREFIXES = ("/admin/",)
 
 AUTH_RATE_LIMIT_WINDOW_SECONDS = 60
@@ -920,11 +923,43 @@ def get_client_ip(request: Request) -> str:
 def validate_uploaded_image(file: UploadFile) -> str:
     filename = (file.filename or "").strip()
     content_type = (file.content_type or "").lower().strip()
-    allowed_extensions = (".jpg", ".jpeg", ".png", ".webp", ".gif")
-    has_image_type = content_type.startswith("image/")
-    has_image_extension = filename.lower().endswith(allowed_extensions)
-    if not has_image_type and not has_image_extension:
+    allowed_types = {
+        "image/jpeg": (".jpg", ".jpeg"),
+        "image/png": (".png",),
+        "image/webp": (".webp",),
+    }
+    extension = os.path.splitext(filename.lower())[1]
+    if content_type:
+        valid_image = content_type in allowed_types and (
+            not extension or extension in allowed_types[content_type]
+        )
+    else:
+        valid_image = any(filename.lower().endswith(ext) for exts in allowed_types.values() for ext in exts)
+    if not valid_image:
         raise HTTPException(status_code=400, detail="Please upload a valid crop image file.")
+    file.file.seek(0, os.SEEK_END)
+    file_size = file.file.tell()
+    file.file.seek(0)
+    if file_size > 8 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Crop images must be 8 MB or smaller.")
+    file.file.seek(0)
+    signature = file.file.read(12)
+    file.file.seek(0)
+    valid_signatures = {
+        "image/jpeg": signature.startswith(b"\xff\xd8\xff"),
+        "image/png": signature.startswith(b"\x89PNG\r\n\x1a\n"),
+        "image/webp": signature.startswith(b"RIFF") and signature[8:12] == b"WEBP",
+    }
+    if content_type:
+        valid_image_content = valid_signatures[content_type]
+    else:
+        valid_image_content = (
+            signature.startswith(b"\xff\xd8\xff") and extension in {".jpg", ".jpeg"}
+            or signature.startswith(b"\x89PNG\r\n\x1a\n") and extension == ".png"
+            or signature.startswith(b"RIFF") and signature[8:12] == b"WEBP" and extension == ".webp"
+        )
+    if not valid_image_content:
+        raise HTTPException(status_code=400, detail="The uploaded file contents are not a supported image.")
     return filename or "uploaded-crop-image"
 
 
@@ -1204,16 +1239,26 @@ def auth_refresh(request: Request, authorization: Optional[str] = Header(default
 
 
 @app.post("/api/v1/auth/logout")
-def api_v1_logout():
-    response = JSONResponse({"success": True, "message": "Session closed successfully."})
-    response.delete_cookie("digital_farming_session", path="/")
-    return response
+def api_v1_logout(request: Request, authorization: Optional[str] = Header(default=None)):
+    return logout(request, authorization)
 
 
 @app.post("/auth/logout")
-def auth_logout():
+def auth_logout(request: Request, authorization: Optional[str] = Header(default=None)):
+    return logout(request, authorization)
+
+
+def logout(request: Request, authorization: Optional[str] = None):
+    token = request.cookies.get("digital_farming_session")
+    if not token and authorization:
+        scheme, separator, supplied_token = authorization.strip().partition(" ")
+        if separator and scheme.lower() == "bearer":
+            token = supplied_token.strip()
+    if token:
+        revoke_token(token)
     response = JSONResponse({"success": True, "message": "Session closed successfully."})
-    response.delete_cookie("digital_farming_session", path="/")
+    secure_cookie = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+    response.delete_cookie("digital_farming_session", path="/", secure=secure_cookie, httponly=True, samesite="Lax")
     return response
 
 
@@ -1251,7 +1296,12 @@ def diagnose(request: DiagnoseRequest, authorization: Optional[str] = Header(def
         raise HTTPException(status_code=401, detail="Invalid token") from exc
     if payload.get("role") not in {"operator", "admin"}:
         raise HTTPException(status_code=403, detail="Operator/Admin access required")
-    result = diagnose_crop_issue(request.crop_type, request.image_url, request.notes)
+    result = diagnose_crop_issue(
+        request.crop_type,
+        request.image_url,
+        request.notes,
+        created_by=str(payload.get("sub") or ""),
+    )
     return {"success": True, "data": result, "error": None}
 
 
@@ -1274,7 +1324,12 @@ def diagnose_upload(
     if file.content_type:
         image_url = f"{image_url}::{file.content_type}"
 
-    result = diagnose_crop_issue(crop_type, image_url, notes)
+    result = diagnose_crop_issue(
+        crop_type,
+        image_url,
+        notes,
+        created_by=str(payload.get("sub") or ""),
+    )
     return {"success": True, "data": result, "error": None}
 
 
@@ -1287,7 +1342,14 @@ def diagnose_history(authorization: Optional[str] = Header(default=None)):
         raise HTTPException(status_code=401, detail="Invalid token") from exc
     if payload.get("role") not in {"operator", "admin"}:
         raise HTTPException(status_code=403, detail="Operator/Admin access required")
-    return {"success": True, "data": list_diagnosis_history(), "error": None}
+    return {
+        "success": True,
+        "data": list_diagnosis_history(
+            username=str(payload.get("sub") or ""),
+            include_all=payload.get("role") == "admin",
+        ),
+        "error": None,
+    }
 
 
 @app.get("/api/users")
@@ -1309,23 +1371,49 @@ def get_users(request: Request, authorization: Optional[str] = Header(default=No
     return {"success": True, "data": list_users()["items"], "error": None}
 
 
-@app.get("/api/admin/users")
+@app.get("/api/admin/users", response_model=AdminUserListResponse)
 def admin_users_endpoint(
     request: Request,
     search: str = "",
     role: str = "",
     status: str = "",
-    page: int = 1,
-    page_size: int = 25,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+    created_from: Optional[date] = None,
+    created_to: Optional[date] = None,
+    last_login_from: Optional[date] = None,
+    last_login_to: Optional[date] = None,
     authorization: Optional[str] = Header(default=None),
 ):
     payload_token = require_admin_access(request, authorization)
-    result = list_users(search=search, role=role, status=status, page=page, page_size=page_size)
-    record_audit_log(payload_token.get("sub", "unknown"), "users_listed", "admin/users", "success", f"page={page}")
+    list_started_at = monotonic()
+    if created_from and created_to and created_from > created_to:
+        raise HTTPException(status_code=422, detail="created_from must not be after created_to")
+    if last_login_from and last_login_to and last_login_from > last_login_to:
+        raise HTTPException(status_code=422, detail="last_login_from must not be after last_login_to")
+    result = list_users(
+        search=search,
+        role=role,
+        status=status,
+        page=page,
+        page_size=page_size,
+        created_from=created_from.isoformat() if created_from else None,
+        created_to=created_to.isoformat() if created_to else None,
+        last_login_from=last_login_from.isoformat() if last_login_from else None,
+        last_login_to=last_login_to.isoformat() if last_login_to else None,
+    )
+    query_latency_ms = (monotonic() - list_started_at) * 1000
+    record_audit_log(
+        payload_token.get("sub", "unknown"),
+        "users_listed",
+        "admin/users",
+        "success",
+        f"page={page}; page_size={page_size}; query_ms={query_latency_ms:.2f}",
+    )
     return {"success": True, "data": result, "error": None}
 
 
-@app.get("/api/admin/users/{username}")
+@app.get("/api/admin/users/{username}", response_model=AdminUserDetailResponse)
 def admin_user_detail_endpoint(request: Request, username: str, authorization: Optional[str] = Header(default=None)):
     payload_token = require_admin_access(request, authorization)
     try:
@@ -1348,12 +1436,20 @@ def admin_user_status_endpoint(
         result = set_user_status(admin_payload.get("sub", "unknown"), username, payload.action, payload.reason)
     except ValueError as exc:
         record_audit_log(admin_payload.get("sub", "unknown"), f"user_{payload.action}", f"users/{username}", "failure", str(exc))
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        status_code = 404 if str(exc) == "User not found" else 400
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
     return {"success": True, "data": result, "error": None}
 
 
 @app.get("/api/audit/logs")
-def get_audit_logs_endpoint(authorization: Optional[str] = Header(default=None)):
+def get_audit_logs_endpoint(
+    username: str = Query(default="", max_length=100),
+    action: str = Query(default="", max_length=100),
+    outcome: str = Query(default="", max_length=20),
+    affected_user: str = Query(default="", max_length=100),
+    limit: int = Query(default=100, ge=1, le=1000),
+    authorization: Optional[str] = Header(default=None),
+):
     token = get_bearer_token(authorization)
     try:
         payload = verify_token(token)
@@ -1361,7 +1457,17 @@ def get_audit_logs_endpoint(authorization: Optional[str] = Header(default=None))
         raise HTTPException(status_code=401, detail="Invalid token") from exc
     if payload.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    return {"success": True, "data": list_audit_logs(), "error": None}
+    return {
+        "success": True,
+        "data": list_audit_logs(
+            limit,
+            username=username,
+            action=action,
+            outcome=outcome,
+            affected_user=affected_user,
+        ),
+        "error": None,
+    }
 
 
 @app.post("/api/users")
@@ -1608,16 +1714,69 @@ def admin_source_registry_api():
 
 
 @app.get("/api/admin/audit-logs")
-def admin_audit_logs_api(authorization: Optional[str] = Header(default=None)):
-    token = get_bearer_token(authorization)
-    try:
-        payload = verify_token(token)
-    except Exception as exc:  # pragma: no cover - security exception path
-        raise HTTPException(status_code=401, detail="Invalid token") from exc
-    if payload.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+def admin_audit_logs_api(
+    request: Request,
+    username: str = Query(default="", max_length=100),
+    action: str = Query(default="", max_length=100),
+    outcome: str = Query(default="", max_length=20),
+    affected_user: str = Query(default="", max_length=100),
+    limit: int = Query(default=100, ge=1, le=1000),
+    authorization: Optional[str] = Header(default=None),
+):
+    require_admin_access(request, authorization)
+    return {
+        "success": True,
+        "data": list_audit_logs(
+            limit,
+            username=username,
+            action=action,
+            outcome=outcome,
+            affected_user=affected_user,
+        ),
+        "error": None,
+    }
 
-    return {"success": True, "data": list_audit_logs(), "error": None}
+
+@app.get("/api/admin/user-management/metrics")
+def admin_user_management_metrics(
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+):
+    require_admin_access(request, authorization)
+    with get_connection() as conn:
+        counts = conn.execute(
+            """
+            SELECT action, outcome, COUNT(*) AS event_count
+            FROM audit_logs
+            WHERE action = 'users_listed' OR action LIKE 'user_%'
+            GROUP BY action, outcome
+            ORDER BY action, outcome
+            """
+        ).fetchall()
+        latency_events = conn.execute(
+            "SELECT details FROM audit_logs WHERE action = 'users_listed' ORDER BY created_at DESC LIMIT 1000"
+        ).fetchall()
+    latencies = []
+    for event in latency_events:
+        for part in (event["details"] or "").split(";"):
+            if part.strip().startswith("query_ms="):
+                try:
+                    latencies.append(float(part.strip().split("=", 1)[1]))
+                except ValueError:
+                    continue
+                break
+    return {
+        "success": True,
+        "data": {
+            "action_counts": [
+                {"action": row["action"], "outcome": row["outcome"], "count": row["event_count"]}
+                for row in counts
+            ],
+            "list_query_samples": len(latencies),
+            "average_list_query_latency_ms": sum(latencies) / len(latencies) if latencies else None,
+        },
+        "error": None,
+    }
 
 
 @app.get("/api/admin/fetch-history")
@@ -2181,9 +2340,21 @@ async def resolve_admin_scheme_ingestion_draft(request: Request, draft_id: str):
 
 
 @app.get("/admin/audit-logs", response_class=HTMLResponse)
-def admin_audit_logs_page(request: Request, authorization: Optional[str] = Header(default=None)):
+def admin_audit_logs_page(
+    request: Request,
+    username: str = Query(default="", max_length=100),
+    action: str = Query(default="", max_length=100),
+    outcome: str = Query(default="", max_length=20),
+    affected_user: str = Query(default="", max_length=100),
+    authorization: Optional[str] = Header(default=None),
+):
     require_admin_access(request, authorization)
-    logs = list_audit_logs()
+    logs = list_audit_logs(
+        username=username,
+        action=action,
+        outcome=outcome,
+        affected_user=affected_user,
+    )
     rows = "".join(
         """
         <tr>
@@ -2237,11 +2408,15 @@ def admin_audit_logs_page(request: Request, authorization: Optional[str] = Heade
     .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
     h1 {{ margin: 28px 0 10px; font-size: clamp(2rem, 4vw, 3rem); }}
     .lede {{ color: var(--muted); line-height: 1.8; max-width: 72ch; }}
+    .filters {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; gap: 10px; margin-top: 18px; }}
+    .filters label {{ display: grid; gap: 5px; font-weight: 700; }}
+    .filters input, .filters select, .filters button {{ border: 1px solid var(--line); border-radius: 10px; padding: 10px; font: inherit; }}
+    .filters button {{ background: var(--primary); color: white; cursor: pointer; }}
     table {{ width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); border: 1px solid var(--line); margin-top: 20px; }}
     th, td {{ border-bottom: 1px solid var(--line); padding: 12px 14px; text-align: left; vertical-align: top; color: var(--text); }}
     th {{ background: #f7faf6; font-weight: 700; }}
     td {{ color: var(--muted); }}
-    @media (max-width: 760px) {{ .topbar {{ flex-direction: column; align-items: flex-start; }} table {{ display: block; overflow-x: auto; }} }}
+    @media (max-width: 760px) {{ .topbar {{ flex-direction: column; align-items: flex-start; }} .filters {{ grid-template-columns: 1fr; }} table {{ display: block; overflow-x: auto; }} }}
   </style>
 </head>
 <body>
@@ -2249,6 +2424,14 @@ def admin_audit_logs_page(request: Request, authorization: Optional[str] = Heade
 
     <h1>Audit Logs</h1>
     <p class="lede">Every privileged action is recorded here so admins can review authentication, scheme review, and operational changes with an auditable trail.</p>
+
+    <form class="filters" method="get">
+      <label>Actor username<input name="username" value="{escape(username)}" maxlength="100" /></label>
+      <label>Action<input name="action" value="{escape(action)}" maxlength="100" /></label>
+      <label>Outcome<select name="outcome"><option value="">All outcomes</option><option value="success" {'selected' if outcome == 'success' else ''}>Success</option><option value="failure" {'selected' if outcome == 'failure' else ''}>Failure</option></select></label>
+      <label>Affected username<input name="affected_user" value="{escape(affected_user)}" maxlength="100" /></label>
+      <button type="submit">Filter logs</button>
+    </form>
 
     <table>
       <thead>
@@ -2913,14 +3096,13 @@ def disease_detection_page(
 ):
     profile_defaults = resolve_profile_defaults(request, default_crop=crop_type)
     effective_crop_type = crop_type if crop_type and crop_type.lower() not in {"", "rice"} else profile_defaults["crop"]
-    result = diagnose_crop_issue(effective_crop_type, image_url, notes)
+    result = diagnose_crop_issue(effective_crop_type, image_url, notes, persist=False)
     diagnosis = escape(str(result.get("diagnosis", "General stress pattern detected")))
     recommendation = escape(str(result.get("recommendation", "Inspect the field and review nutrient balance.")))
     confidence = escape(str(result.get("confidence", "High")))
     manual_review = "Manual review required" if str(result.get("confidence", "High")).lower() in {"low", "medium"} else "Assessment ready"
     crop_label = escape(str(effective_crop_type or "Rice"))
     notes_text = escape(str(notes or "No additional notes provided."))
-    image_text = escape(str(image_url or "https://example.com/crop-scan.jpg"))
     treatment_steps = "".join(f"<li>{escape(str(step))}</li>" for step in result.get("treatment_steps", [recommendation]))
     prevention_steps = "".join(f"<li>{escape(str(step))}</li>" for step in result.get("prevention_steps", ["Monitor the field closely and keep notes for the next review cycle."]))
     return f"""
@@ -2981,7 +3163,7 @@ def disease_detection_page(
 
     <h1>பயிரின் நோய் மற்றும் அழுத்த நிலையை விரைவாக கண்டறியுங்கள்</h1>
     <p class="intro">
-      இலை, தண்டு அல்லது பழம் படங்களை பதிவேற்றுவதன் மூலம் நிச்சயமற்ற அல்லது சாத்தியமான நோய், பூச்சி தாக்குதல், அல்லது ஊட்டச்சத்து குறைபாட்டை ஆரம்பத்தில் கண்டறிந்து, தமிழில் செயல்படக்கூடிய சிகிச்சை வழிமுறைகளை வழங்குகிறது.
+      இது தற்போது பயிற்சியளிக்கப்பட்ட பட-நோய் கண்டறிதல் மாதிரி அல்ல. படத்தின் உள்ளடக்கம் தானாக ஆய்வு செய்யப்படாது; முடிவுகள் நோயை உறுதிப்படுத்தவோ மருந்து தேர்வு செய்யவோ பயன்படாது. தெளிவான படத்துடன் வேளாண்மை நிபுணரிடம் ஆலோசனை பெறுங்கள்.
     </p>
 
     <section class="hero">
@@ -3010,7 +3192,7 @@ def disease_detection_page(
       </div>
 
       <div class="panel">
-        <h2>தற்போதைய முடிவு</h2>
+        <h2>தற்காலிக மதிப்பீடு</h2>
         <div class="stats">
           <div class="stat"><span>கணிப்பு</span><strong>{diagnosis}</strong></div>
           <div class="stat"><span>நம்பிக்கை</span><strong>{confidence}</strong></div>
@@ -3043,20 +3225,31 @@ def disease_detection_page(
 
 @app.post("/disease-detection", response_class=HTMLResponse)
 def disease_detection_upload(
-  request: Request,
-  crop_type: str = Form("Rice"),
-  notes: str = Form(""),
-  file: UploadFile = File(...),
+    request: Request,
+    crop_type: str = Form("Rice"),
+    notes: str = Form(""),
+    file: UploadFile = File(...),
 ):
-  image_url = validate_uploaded_image(file)
-  if file.content_type:
-    image_url = f"{image_url}::{file.content_type}"
-  return disease_detection_page(request, crop_type, image_url, notes)
+    image_url = validate_uploaded_image(file)
+    if file.content_type:
+        image_url = f"{image_url}::{file.content_type}"
+    session = get_session_payload(request)
+    diagnose_crop_issue(crop_type, image_url, notes, created_by=str(session.get("sub") or ""))
+    return disease_detection_page(request, crop_type, image_url, notes)
 
 
 @app.get("/disease-history", response_class=HTMLResponse)
-def disease_history_page():
-    records = list_diagnosis_history(limit=20)
+def disease_history_page(request: Request):
+    session = get_session_payload(request)
+    records = list_diagnosis_history(
+        limit=20,
+        username=str(session.get("sub") or ""),
+        include_all=session.get("role") == "admin",
+    )
+    return _render_disease_history_page(records)
+
+
+def _render_disease_history_page(records):
     if not records:
         rows_html = "<tr><td colspan='4'>No diagnosis history available yet.</td></tr>"
     else:
@@ -4942,27 +5135,60 @@ def admin_users_page(
     search: str = "",
     role: str = "",
     status: str = "",
-    page: int = 1,
+    page: int = Query(default=1, ge=1),
+    created_from: Optional[date] = None,
+    created_to: Optional[date] = None,
+    last_login_from: Optional[date] = None,
+    last_login_to: Optional[date] = None,
     authorization: Optional[str] = Header(default=None),
 ):
     require_admin_access(request, authorization)
-    result = list_users(search=search, role=role, status=status, page=page, page_size=25)
-    rows = "".join(
-        f"""
+    if created_from and created_to and created_from > created_to:
+        raise HTTPException(status_code=422, detail="created_from must not be after created_to")
+    if last_login_from and last_login_to and last_login_from > last_login_to:
+        raise HTTPException(status_code=422, detail="last_login_from must not be after last_login_to")
+    result = list_users(
+        search=search,
+        role=role,
+        status=status,
+        page=page,
+        page_size=25,
+        created_from=created_from.isoformat() if created_from else None,
+        created_to=created_to.isoformat() if created_to else None,
+        last_login_from=last_login_from.isoformat() if last_login_from else None,
+        last_login_to=last_login_to.isoformat() if last_login_to else None,
+    )
+    rows = ""
+    for item in result["items"]:
+        user_status = str(item.get("status", "active"))
+        action = "deactivate" if user_status == "active" else ("reactivate" if user_status == "inactive" else "activate")
+        action_label = "Deactivate" if action == "deactivate" else ("Reactivate" if action == "reactivate" else "Activate")
+        rows += f"""
         <tr>
+          <td>{escape(str(item.get('id', '')))}</td>
           <td>{escape(str(item.get('username', '')))}</td>
           <td>{escape(str(item.get('full_name') or 'Not provided'))}</td>
           <td>{escape(str(item.get('email') or 'Not provided'))}</td>
+          <td>{escape(str(item.get('phone') or 'Not provided'))}</td>
           <td>{escape(str(item.get('role', '')))}</td>
-          <td><span class="status status-{escape(str(item.get('status', 'active')))}">{escape(str(item.get('status', 'active')))}</span></td>
+          <td><span class="status status-{escape(user_status)}">{escape(user_status)}</span></td>
+          <td>{escape(str(item.get('created_at') or 'Unknown'))}</td>
           <td>{escape(str(item.get('last_login_at') or 'Never'))}</td>
           <td><button class="view-button" data-username="{escape(str(item.get('username', '')))}">View</button>
-          <button class="status-button" data-username="{escape(str(item.get('username', '')))}" data-status="{escape(str(item.get('status', 'active')))}">{('Deactivate' if item.get('status') == 'active' else 'Activate')}</button></td>
+          <button class="status-button" data-username="{escape(str(item.get('username', '')))}" data-action="{action}">{action_label}</button></td>
         </tr>
         """
-        for item in result["items"]
-    ) or "<tr><td colspan='7'>No users match the selected filters.</td></tr>"
-    query = f"search={escape(search)}&role={escape(role)}&status={escape(status)}"
+    if not rows:
+        rows = "<tr><td colspan='10'>No users match the selected filters.</td></tr>"
+    query = urlencode({
+        "search": search,
+        "role": role,
+        "status": status,
+        "created_from": created_from.isoformat() if created_from else "",
+        "created_to": created_to.isoformat() if created_to else "",
+        "last_login_from": last_login_from.isoformat() if last_login_from else "",
+        "last_login_to": last_login_to.isoformat() if last_login_to else "",
+    })
     pagination = ""
     if result["page"] > 1:
         pagination += f'<a href="/admin/users?{query}&page={result["page"] - 1}">Previous</a>'
@@ -4980,23 +5206,31 @@ def admin_users_page(
     .container {{ max-width:1200px; margin:auto; padding:28px 18px 56px; }} .topbar {{ display:flex; justify-content:space-between; gap:14px; align-items:center; padding-bottom:18px; border-bottom:1px solid var(--line); }}
     nav {{ display:flex; gap:10px; flex-wrap:wrap; }} nav a, button {{ border:1px solid var(--line); border-radius:10px; padding:9px 13px; background:#f4f8f4; color:var(--text); font:inherit; font-weight:700; text-decoration:none; cursor:pointer; }}
     h1 {{ margin:28px 0 8px; }} .lede {{ color:var(--muted); line-height:1.8; }} .panel {{ background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:20px; margin-top:20px; box-shadow:0 12px 30px rgba(23,48,29,.07); }}
-    .filters {{ display:grid; grid-template-columns:2fr 1fr 1fr auto; gap:10px; }} input, select {{ width:100%; border:1px solid var(--line); border-radius:10px; padding:11px; font:inherit; }} .primary {{ background:var(--primary); color:#fff; border-color:var(--primary); }}
-    .table-wrap {{ overflow-x:auto; }} table {{ width:100%; min-width:900px; border-collapse:collapse; }} th,td {{ text-align:left; padding:12px 10px; border-bottom:1px solid var(--line); vertical-align:middle; }} th {{ color:var(--muted); font-size:.82rem; }}
+    .filters {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }} .filters label {{ display:grid; gap:5px; font-size:.88rem; font-weight:700; }} input, select {{ width:100%; border:1px solid var(--line); border-radius:10px; padding:11px; font:inherit; }} .primary {{ background:var(--primary); color:#fff; border-color:var(--primary); }}
+    .table-wrap {{ overflow-x:auto; }} table {{ width:100%; min-width:1200px; border-collapse:collapse; }} th,td {{ text-align:left; padding:12px 10px; border-bottom:1px solid var(--line); vertical-align:middle; }} th {{ color:var(--muted); font-size:.82rem; }}
     .status {{ display:inline-block; border-radius:999px; padding:5px 9px; font-size:.78rem; font-weight:800; }} .status-active {{ background:#e7f6ea; color:var(--primary); }} .status-inactive,.status-locked {{ background:#fde8e7; color:var(--danger); }} .status-pending_verification {{ background:#fff3da; color:var(--warning); }}
     .view-button {{ margin-right:6px; }} .status-button {{ background:#fff3da; }} .pagination {{ display:flex; gap:10px; margin-top:18px; }} .pagination a {{ color:var(--primary); font-weight:700; }}
-    @media (max-width:760px) {{ .topbar,.filters {{ grid-template-columns:1fr; flex-direction:column; align-items:stretch; }} }}
+    @media (max-width:760px) {{ .topbar {{ flex-direction:column; align-items:stretch; }} .filters {{ grid-template-columns:1fr; }} }}
   </style>
 </head>
 <body><main class="container">
   <header class="topbar"><strong>Admin User Management</strong><nav><a href="/admin/overview">Overview</a><a href="/admin/audit-logs">Audit logs</a></nav></header>
   <h1>Registered users</h1><p class="lede">Search profiles, review account status, and control access with audited actions.</p>
-  <section class="panel"><form class="filters" method="get"><input name="search" value="{escape(search)}" placeholder="Search name, email, phone, username" /><select name="role"><option value="">All roles</option><option value="admin" {'selected' if role == 'admin' else ''}>Admin</option><option value="farmer" {'selected' if role == 'farmer' else ''}>Farmer</option><option value="operator" {'selected' if role == 'operator' else ''}>Operator</option></select><select name="status"><option value="">All statuses</option><option value="active" {'selected' if status == 'active' else ''}>Active</option><option value="inactive" {'selected' if status == 'inactive' else ''}>Inactive</option><option value="pending_verification" {'selected' if status == 'pending_verification' else ''}>Pending</option><option value="locked" {'selected' if status == 'locked' else ''}>Locked</option></select><button class="primary" type="submit">Filter</button></form></section>
-  <section class="panel"><div><strong>{result['total']}</strong> matching users</div><div class="table-wrap"><table><thead><tr><th>Username</th><th>Full name</th><th>Email</th><th>Role</th><th>Status</th><th>Last login</th><th>Actions</th></tr></thead><tbody>{rows}</tbody></table></div><div class="pagination">{pagination}</div></section>
+  <section class="panel"><form class="filters" method="get">
+    <label>Search<input name="search" value="{escape(search)}" placeholder="Name, email, phone, username" /></label>
+    <label>Role<select name="role"><option value="">All roles</option><option value="admin" {'selected' if role == 'admin' else ''}>Admin</option><option value="farmer" {'selected' if role == 'farmer' else ''}>Farmer</option><option value="operator" {'selected' if role == 'operator' else ''}>Operator</option></select></label>
+    <label>Status<select name="status"><option value="">All statuses</option><option value="active" {'selected' if status == 'active' else ''}>Active</option><option value="inactive" {'selected' if status == 'inactive' else ''}>Inactive</option><option value="pending_verification" {'selected' if status == 'pending_verification' else ''}>Pending</option><option value="locked" {'selected' if status == 'locked' else ''}>Locked</option></select></label>
+    <label>Registered from<input type="date" name="created_from" value="{created_from.isoformat() if created_from else ''}" /></label>
+    <label>Registered through<input type="date" name="created_to" value="{created_to.isoformat() if created_to else ''}" /></label>
+    <label>Last login from<input type="date" name="last_login_from" value="{last_login_from.isoformat() if last_login_from else ''}" /></label>
+    <label>Last login through<input type="date" name="last_login_to" value="{last_login_to.isoformat() if last_login_to else ''}" /></label>
+    <button class="primary" type="submit">Filter</button></form></section>
+  <section class="panel"><div><strong>{result['total']}</strong> matching users</div><div class="table-wrap"><table><thead><tr><th>User ID</th><th>Username</th><th>Full name</th><th>Email</th><th>Phone</th><th>Role</th><th>Status</th><th>Registered</th><th>Last login</th><th>Actions</th></tr></thead><tbody>{rows}</tbody></table></div><div class="pagination">{pagination}</div></section>
   <script>
     const statusButtons = document.querySelectorAll('.status-button');
     statusButtons.forEach((button) => button.addEventListener('click', async () => {{
       const username = button.dataset.username;
-      const action = button.dataset.status === 'active' ? 'deactivate' : 'activate';
+      const action = button.dataset.action;
       if (!window.confirm(`${{action}} ${{username}}?`)) return;
       const response = await fetch(`/api/admin/users/${{encodeURIComponent(username)}}/status`, {{method:'POST', headers:{{'Content-Type':'application/json'}}, credentials:'same-origin', body:JSON.stringify({{action}})}});
       if (response.ok) window.location.reload(); else window.alert('Unable to update account status.');

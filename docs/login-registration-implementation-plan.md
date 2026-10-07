@@ -2,7 +2,19 @@
 
 ## Status
 
-Status: Completed for the current product baseline. The implementation covers registration, OTP verification, login gating, session controls, and protected route flow; no further engineering work is required unless policy or compliance requirements change.
+**Implementation status — 2026-10-07: Functional baseline implemented; production/release readiness remains open.** The recorded verification in this plan covers registration, verification gating, session controls, protected routes, refresh-token rotation, and auth regression/build checks. That evidence is not a substitute for deployment-specific checks. The unchecked release, hardening, and runbook items below remain pending and must be validated in the target environment before production rollout.
+
+| Work area | Status | Next work |
+|---|---|---|
+| Core registration, verification, login, and session behavior | Implemented per recorded verification | Re-run the focused regression suite when auth code changes. |
+| Token revocation and account lifecycle | Implemented in application code | Logout revokes the supplied session and advances the account token version; status changes and password resets also invalidate issued tokens. Validate multi-worker behavior in the deployment DB. |
+| API/session production hardening | Partially implemented | Verify migration/versioning, idle/absolute timeouts, rate limits, monitoring, redaction, and backup/restore policy in the deployment environment. |
+| Web client hardening | Partially implemented | Validate session rechecks and stale-state clearing across reload, tab reopen, timeout, and role-denial flows. |
+| Release signoff and deployment | Open | Complete browser end-to-end checks, environment/secret configuration, monitoring, backup/restore, and rollback readiness. |
+
+**Next milestone:** close the deployment and release gates in Sections 13–16. Do not describe the module as production-ready until these checks have passing evidence recorded.
+
+**Verification update — 2026-10-07:** Focused auth/session regression checks passed alongside the admin and diagnosis tests. Production deployment, monitoring, backup/restore, browser end-to-end, and rollback validation remain open.
 
 ## Goal
 

@@ -100,6 +100,8 @@ def _ensure_user_verification_columns() -> None:
             conn.execute("ALTER TABLE users ADD COLUMN irrigation_type TEXT DEFAULT ''")
         if "status" not in columns:
             conn.execute("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'")
+        if "token_version" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0")
         if "otp_code" not in columns:
             conn.execute("ALTER TABLE users ADD COLUMN otp_code TEXT")
         if "otp_expires_at" not in columns:
@@ -216,10 +218,15 @@ def init_db() -> None:
                 recommendation TEXT NOT NULL,
                 notes TEXT,
                 confidence TEXT NOT NULL,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                created_by TEXT
             )
             """
         )
+        diagnosis_columns = {row[1] for row in conn.execute("PRAGMA table_info(diagnosis_records)").fetchall()}
+        if "created_by" not in diagnosis_columns:
+            conn.execute("ALTER TABLE diagnosis_records ADD COLUMN created_by TEXT")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_diagnosis_records_created_by ON diagnosis_records(created_by)")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
@@ -241,6 +248,7 @@ def init_db() -> None:
                 tools TEXT DEFAULT '',
                 irrigation_type TEXT DEFAULT '',
                 status TEXT NOT NULL DEFAULT 'active',
+                token_version INTEGER NOT NULL DEFAULT 0,
                 otp_code TEXT,
                 otp_expires_at TEXT,
                 failed_login_attempts INTEGER NOT NULL DEFAULT 0,
@@ -260,6 +268,16 @@ def init_db() -> None:
                 outcome TEXT NOT NULL,
                 details TEXT,
                 created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS revoked_auth_tokens (
+                jti TEXT PRIMARY KEY,
+                username TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                revoked_at TEXT NOT NULL
             )
             """
         )
@@ -393,6 +411,13 @@ def init_db() -> None:
         )
 
     _ensure_user_verification_columns()
+    with get_connection() as conn:
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_users_last_login_at ON users(last_login_at)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone)")
 
 
 BACKUP_DIRECTORY = Path(__file__).resolve().parent / "backups"

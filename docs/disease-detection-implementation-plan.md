@@ -2,7 +2,23 @@
 
 ## 1. Goal
 
-Build a simple, reliable disease detection workflow that allows farmers to upload a crop image, receive AI-based diagnosis, and follow clear Tamil treatment and prevention guidance.
+Build a simple, reliable disease-support workflow that allows farmers to upload a crop image and receive a validated diagnosis only when a real inference model is integrated, with safe Tamil guidance and clear uncertainty handling.
+
+## Implementation Status — 2026-10-07
+
+**Overall status: Safe intake prototype; image-based diagnosis remains open.** The repository has a Tamil scan page, supported image-format and size checks, diagnosis/history APIs, SQLite history scoped to the authenticated user/operator, and conservative Tamil guidance. The current flow explicitly reports that it does not analyze image pixels, marks confidence Low, and requires manual review; it must not be presented as an image classifier.
+
+| Phase | Status | Remaining work |
+|---|---|---|
+| 1. Image intake and scan UI | Partially implemented | Validate camera/capture behavior and complete accessible/mobile upload feedback. |
+| 2. AI inference and diagnosis | Open | Select and integrate a real model/service and representative labeled evaluation data; the current output explicitly makes no image inference claim. |
+| 3. Tamil guidance | Partially implemented | Conservative no-diagnosis guidance is present; obtain agronomist/field review before adding disease-specific treatment. |
+| 4. History and storage | Partially implemented | Authenticated ownership, operator isolation, admin review, and protected history access are implemented. Complete richer browsing and retention policy. |
+| 5. UX and rollout | Open | Complete accessibility/voice decisions, field QA, pilot feedback, and release readiness checks. |
+
+**Next work:** choose an inference model/data strategy and obtain agronomy validation before enabling diagnosis claims. Do not infer clinical/agronomic certainty from crop name or notes.
+
+**Verification:** 16 focused API, auth, admin, audit, upload, and diagnosis-history tests passed on an isolated SQLite database. No model-accuracy or field-validation claim is made.
 
 ---
 

@@ -1,5 +1,18 @@
 # Digital Farming Decision Support — Implementation Plan
 
+## Implementation Status — 2026-10-07
+
+**Overall status: Core workflows implemented; live-source verification and rollout remain open.** The dated updates below document weather monitoring/readiness, official-JSON raw scheme ingestion, normalization, admin review, and publication foundations. Test results cited there use isolated databases and/or mocked responses; they do not prove live source access, recurring production jobs, or farmer readiness. This status supersedes older gap statements where later dated implementation updates describe newer work.
+
+| Work area | Status | Remaining work |
+|---|---|---|
+| Weather data validation and operational readiness | Implemented with rollout blocked | Configure authorized IMD access, verify live payload coverage and city mappings, and confirm live refresh outcomes before claiming weather coverage. |
+| Scheme raw ingestion and review | Partially implemented | Verify authorized real endpoints; formalize source-specific normalization plus changed-notice migration/reprocessing; operationalize scheduled runs only after source verification. |
+| Scheme publication and farmer experience | Partially implemented | Complete content/readability review with real notices and farmers; define archive/retention operations and validate multi-year usability. |
+| Monitoring, pilot, and release | Open | Run production-like scheduler/source checks, complete operational alerts and rollout/rollback evidence, and conduct field validation. |
+
+**Next work:** unblock authorized live-source verification without substituting synthetic data, then close mapping/normalization and operational scheduling gaps. Track test verification separately from real-feed and field evidence.
+
 ## 1. Goal
 
 Build and ship a reliable agritech information stack that covers government schemes, soil testing, weather intelligence, and disease support. Each module must fetch trustworthy data, translate and summarize it in Tamil, expose a clear latest/archive experience for farmers, and remain monitorable by admins.
@@ -133,7 +146,7 @@ Build and ship a reliable agritech information stack that covers government sche
   migration/reprocessing behavior for changed raw notices before enabling live
   ingestion. Authorized real-feed verification is still required for rollout.
 
-## Status update — 2026-09-10
+## Historical status update — 2026-09-10
 
 ### What has improved in the current implementation
 
@@ -174,6 +187,8 @@ This plan is divided into six phases. It balances MVP readiness, quality checks,
 ---
 
 ## 3. Phase-by-Phase Implementation
+
+The phase-level implementation reviews in this section are historical snapshots. Use the dated implementation updates and the current status table above as the source of truth for what is implemented and what remains open.
 
 ## Phase 1 — Foundation and Data Model
 
@@ -861,12 +876,10 @@ Mitigation:
 
 ## 11. Recommended Next Actions
 
-1. finalize and prioritize official source list
-2. create data model and schema in the repo
-3. implement fetch/update + status endpoint
-4. add AI summary pipeline with validation
-5. build Tamil UI panels and detail route
-6. test with real scheme samples and farmer feedback
+1. Configure authorized access to official weather and scheme feeds and validate real payloads without relying on mocked test results.
+2. Complete weather city mapping and source-specific scheme normalization/reprocessing for changed notices.
+3. Operationalize scheduled ingestion only after source access and payload contracts are verified.
+4. Complete farmer-facing content review, field validation, monitoring, and rollback evidence before broader rollout.
 
 ---
 
