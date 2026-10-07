@@ -2085,6 +2085,8 @@ def test_authenticated_farmer_profile_sets_weather_and_market_defaults():
     assert standalone_weather_response.status_code == 200
     assert "Salem" in standalone_weather_response.text
     assert "Mettur" in standalone_weather_response.text
+    assert "District:</strong> Salem" in standalone_weather_response.text
+    assert "Taluk:</strong> Mettur" in standalone_weather_response.text
 
     market_response = isolated_client.get("/market-intelligence", follow_redirects=False)
     assert market_response.status_code == 200
@@ -2121,6 +2123,37 @@ def test_sustainability_and_traceability_pages_render_farmer_summary():
     assert "கயிறு" in traceability_response.text or "Traceability" in traceability_response.text
     assert "Kumaran" in traceability_response.text or "குமரன்" in traceability_response.text
     assert "வகுப்பு" in traceability_response.text or "Grade" in traceability_response.text
+
+
+def test_farmer_profile_defaults_can_be_overridden_by_explicit_page_filters():
+    isolated_client = TestClient(app)
+    username = f"override_user_{__import__('uuid').uuid4().hex[:8]}"
+    create_user(
+        username,
+        "StrongPass123",
+        "farmer",
+        village="Mettur",
+        region="Salem",
+        primary_crop="cotton",
+        land_size="3.5",
+    )
+    login = isolated_client.post("/auth/login", json={"username": username, "password": "StrongPass123"})
+    assert login.status_code == 200
+
+    assert "Cotton Field Dashboard" in isolated_client.get("/dashboard").text
+    assert "Rice Field Dashboard" in isolated_client.get(
+        "/dashboard?crop=rice&region=Kallakurichi"
+    ).text
+    assert "rice" in isolated_client.get("/advisory?crop=rice").text.lower()
+    assert "Groundnut" in isolated_client.get("/soil-health?crop=groundnut").text
+    market = isolated_client.get("/market-intelligence?crop=rice&market=Kallakurichi").text
+    assert "rice" in market.lower() and "Kallakurichi" in market
+    assert "Kallakurichi" in isolated_client.get("/weather?region=Kallakurichi").text
+    assert "Kallakurichi" in isolated_client.get("/weather-market?region=Kallakurichi").text
+    assert 'value="Rice" selected' in isolated_client.get("/disease-detection?crop_type=Rice").text
+    assert "Rice crop calendar" in isolated_client.get("/crop-calendar?crop=rice").text
+    assert "3.5" in isolated_client.get("/sustainability").text
+    assert "5.0" in isolated_client.get("/sustainability?farm_size_ha=5.0").text
 
 
 def test_crop_calendar_page_renders_profile_crop_stages():

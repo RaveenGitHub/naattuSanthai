@@ -9,13 +9,15 @@
 | Backlog area | Status | Next work |
 |---|---|---|
 | Access control and session hardening | Partially implemented | Validate role denial and session expiry/logout behavior across protected pages and route transitions; record evidence for every acceptance item. |
-| Farmer onboarding and profile completion | Partially implemented | Verify required-field policy, profile completeness, input validation, and recommendation refresh after edits. |
-| Auto-filter and personalization | Partially implemented | Confirm consistent profile/default filtering across dashboard, advisory, weather, market, soil, and disease; add regression tests for missing and mismatched profile data. |
+| Farmer onboarding and profile completion | Partially implemented | Verify required-field policy, profile completeness, input validation, and recommendation refresh after edits. Phone-only registration remains unavailable until SMS delivery is configured. |
+| Auto-filter and personalization | Implemented for current web surfaces; field validation pending | Omitted query filters now use profile defaults while explicit crop, region, market, and farm-size filters remain authoritative across dashboard, advisory, weather, market, soil, disease, crop calendar, and sustainability pages. Continue real-data and field checks. |
 | Core service quality and agronomy guidance | Partially implemented | Complete agronomy review and real-data quality checks; explicitly treat disease diagnosis as a prototype until image inference is validated. |
 | Admin monitoring and production readiness | Partially implemented | Close monitoring, backup/restore, rollback, secrets, and release-checklist items. |
 | QA, field validation, and sign-off | Open | Run role/session end-to-end tests and obtain Tamil, agronomy, and field-user review before sign-off. |
 
 The unchecked items below remain open until their acceptance criteria are verified; existing implementation or unit tests alone do not close field, deployment, or cross-surface validation.
+
+**Verification update — 2026-10-07:** Four focused profile-default/edit/crop-calendar regressions passed on isolated SQLite data, including a new cross-surface test for explicit filter overrides. Personalized weather output now uses the farmer's region/village for district/taluk defaults rather than unrelated hard-coded locations. This does not establish field suitability or agronomy correctness.
 
 ---
 

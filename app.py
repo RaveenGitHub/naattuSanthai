@@ -1628,14 +1628,14 @@ def app_shell():
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
-def dashboard(request: Request, crop: str = "rice", region: str = "Kallakurichi"):
+def dashboard(request: Request, crop: Optional[str] = None, region: Optional[str] = None):
   profile_defaults = resolve_profile_defaults(
     request,
-    default_region=region,
-    default_crop=crop,
+    default_region=region or "Kallakurichi",
+    default_crop=crop or "rice",
   )
-  effective_crop = crop if crop and crop.lower() not in {"", "rice"} else profile_defaults["crop"]
-  effective_region = region if region and region.lower() not in {"", "kallakurichi"} else profile_defaults["region"]
+  effective_crop = (crop or "").strip() or profile_defaults["crop"]
+  effective_region = (region or "").strip() or profile_defaults["region"]
   crop_label = escape((str(effective_crop).strip() or "rice").title())
   region_label = escape(str(effective_region).strip() or "Kallakurichi")
   dashboard_page = DASHBOARD_PAGE.replace(
@@ -3097,9 +3097,9 @@ ADVISORY_PAGE = """
 
 
 @app.get("/advisory", response_class=HTMLResponse)
-def advisory_page(request: Request, crop: str = "rice", land_size: str = ""):
-    profile_defaults = resolve_profile_defaults(request, default_crop=crop)
-    effective_crop = crop if crop and crop.lower() not in {"", "rice"} else profile_defaults["crop"]
+def advisory_page(request: Request, crop: Optional[str] = None, land_size: str = ""):
+    profile_defaults = resolve_profile_defaults(request, default_crop=crop or "rice")
+    effective_crop = (crop or "").strip() or profile_defaults["crop"]
     effective_land_size = (land_size or "").strip() or profile_defaults["land_size"] or "பொது நில அளவு"
     advisory = get_field_advisory(
         crop=effective_crop,
@@ -3139,13 +3139,13 @@ def advisory_page(request: Request, crop: str = "rice", land_size: str = ""):
 @app.get("/disease-detection", response_class=HTMLResponse)
 def disease_detection_page(
     request: Request,
-    crop_type: str = "Rice",
+    crop_type: Optional[str] = None,
     image_url: str = "https://example.com/crop-scan.jpg",
     notes: str = "Yellowing leaves and spots observed",
     upload_message: str = "",
 ):
-    profile_defaults = resolve_profile_defaults(request, default_crop=crop_type)
-    effective_crop_type = crop_type if crop_type and crop_type.lower() not in {"", "rice"} else profile_defaults["crop"]
+    profile_defaults = resolve_profile_defaults(request, default_crop=crop_type or "Rice")
+    effective_crop_type = (crop_type or "").strip() or profile_defaults["crop"]
     result = diagnose_crop_issue(effective_crop_type, image_url, notes, persist=False)
     diagnosis = escape(str(result.get("diagnosis", "General stress pattern detected")))
     recommendation = escape(str(result.get("recommendation", "Inspect the field and review nutrient balance.")))
@@ -3410,7 +3410,7 @@ def _render_disease_history_page(records):
 @app.get("/soil-health", response_class=HTMLResponse)
 def soil_health_page(
     request: Request,
-    crop: str = "groundnut",
+    crop: Optional[str] = None,
     ph: float = 6.5,
     nitrogen: float = 25,
     phosphorus: float = 20,
@@ -3418,8 +3418,8 @@ def soil_health_page(
 ):
     from digital_farming.services.soil_health import assess_soil_health
 
-    profile_defaults = resolve_profile_defaults(request, default_crop=crop)
-    effective_crop = crop if crop and crop.lower() not in {"", "groundnut"} else profile_defaults["crop"]
+    profile_defaults = resolve_profile_defaults(request, default_crop=crop or "groundnut")
+    effective_crop = (crop or "").strip() or profile_defaults["crop"]
     assessment = assess_soil_health(
         crop=effective_crop,
         ph=ph,
@@ -4398,7 +4398,7 @@ WEATHER_MARKET_PAGE = """
 @app.get("/weather", response_class=HTMLResponse)
 def weather_page(
   request: Request,
-    region: str = "Kallakurichi",
+    region: Optional[str] = None,
     period: str = "daily",
     district: str = "",
     taluk: str = "",
@@ -4406,15 +4406,13 @@ def weather_page(
 ):
     profile_defaults = resolve_profile_defaults(
       request,
-      default_region=region,
+      default_region=region or "Kallakurichi",
       default_village=village,
       default_crop="rice",
     )
-    region_name = (region or "Kallakurichi").strip() or "Kallakurichi"
-    if region_name == "Kallakurichi":
-      region_name = profile_defaults["region"] or region_name
-    district_name = (district or "").strip() or "Villupuram"
-    taluk_name = (taluk or "").strip() or "Kallakurichi"
+    region_name = (region or "").strip() or profile_defaults["region"] or "Kallakurichi"
+    district_name = (district or "").strip() or profile_defaults["region"] or "Villupuram"
+    taluk_name = (taluk or "").strip() or profile_defaults["village"] or "Kallakurichi"
     village_name = (village or "").strip() or profile_defaults["village"] or "Periyar Nagar"
     period_name = (period or "daily").strip().lower() or "daily"
     if period_name not in {"daily", "weekly", "monthly"}:
@@ -4738,12 +4736,19 @@ def weather_quality_page():
 
 
 @app.get("/market-intelligence", response_class=HTMLResponse)
-def market_intelligence_page(request: Request, crop: str = "rice", market: str = "Kallakurichi"):
+def market_intelligence_page(request: Request, crop: Optional[str] = None, market: Optional[str] = None):
     from digital_farming.services.market_intelligence import get_market_intelligence
 
-    profile_defaults = resolve_profile_defaults(request, default_region=market, default_village=market, default_crop=crop)
-    effective_crop = crop if crop and crop.lower() not in {"", "rice"} else profile_defaults["crop"]
-    effective_market = market if market and market.lower() not in {"", "kallakurichi"} else (profile_defaults["village"] or profile_defaults["region"] or market)
+    profile_defaults = resolve_profile_defaults(
+        request,
+        default_region=market or "Kallakurichi",
+        default_village=market or "",
+        default_crop=crop or "rice",
+    )
+    effective_crop = (crop or "").strip() or profile_defaults["crop"]
+    effective_market = (market or "").strip() or (
+        profile_defaults["village"] or profile_defaults["region"] or "Kallakurichi"
+    )
 
     intelligence = get_market_intelligence(crop=effective_crop, market=effective_market)
     crop_name = escape(str(effective_crop or "நெல்").strip() or "நெல்")
@@ -4839,11 +4844,14 @@ def market_intelligence_page(request: Request, crop: str = "rice", market: str =
 
 
 @app.get("/weather-market", response_class=HTMLResponse)
-def weather_market_page(request: Request, region: str = "Kallakurichi"):
-    profile_defaults = resolve_profile_defaults(request, default_region=region, default_village="", default_crop="rice")
-    region_name = (region or "Kallakurichi").strip() or "Kallakurichi"
-    if region_name == "Kallakurichi":
-        region_name = profile_defaults["region"] or region_name
+def weather_market_page(request: Request, region: Optional[str] = None):
+    profile_defaults = resolve_profile_defaults(
+        request,
+        default_region=region or "Kallakurichi",
+        default_village="",
+        default_crop="rice",
+    )
+    region_name = (region or "").strip() or profile_defaults["region"] or "Kallakurichi"
 
     daily_forecast = list_current_weather_forecast("daily", region_name)
 
@@ -4995,7 +5003,7 @@ def weather_market_page(request: Request, region: str = "Kallakurichi"):
 @app.get("/sustainability", response_class=HTMLResponse)
 def sustainability_page(
     request: Request,
-    farm_size_ha: float = 5.0,
+    farm_size_ha: Optional[float] = None,
     soil_carbon_tons: float = 2.4,
     water_use_liters: float = 4200.0,
     energy_use_kwh: float = 320.0,
@@ -5003,13 +5011,15 @@ def sustainability_page(
     from digital_farming.services.sustainability import assess_carbon_and_sustainability
 
     profile_defaults = resolve_profile_defaults(request)
-    if farm_size_ha == 5.0 and profile_defaults.get("land_size"):
-        try:
-            profile_farm_size = float(profile_defaults["land_size"])
-            if profile_farm_size > 0:
-                farm_size_ha = profile_farm_size
-        except (TypeError, ValueError):
-            pass
+    if farm_size_ha is None:
+        farm_size_ha = 5.0
+        if profile_defaults.get("land_size"):
+            try:
+                profile_farm_size = float(profile_defaults["land_size"])
+                if profile_farm_size > 0:
+                    farm_size_ha = profile_farm_size
+            except (TypeError, ValueError):
+                pass
 
     report = assess_carbon_and_sustainability(
         farm_size_ha=farm_size_ha,
@@ -6355,11 +6365,11 @@ def profile_page(request: Request, username: Optional[str] = None):
 
 
 @app.get("/crop-calendar", response_class=HTMLResponse)
-def crop_calendar_page(request: Request, crop: str = "rice", season: str = "Kharif"):
+def crop_calendar_page(request: Request, crop: Optional[str] = None, season: str = "Kharif"):
     from digital_farming.services.crop_calendar import build_crop_calendar
 
-    profile_defaults = resolve_profile_defaults(request, default_crop=crop)
-    effective_crop = crop if crop and crop.lower() not in {"", "rice"} else profile_defaults["crop"]
+    profile_defaults = resolve_profile_defaults(request, default_crop=crop or "rice")
+    effective_crop = (crop or "").strip() or profile_defaults["crop"]
     calendar = build_crop_calendar(crop=effective_crop, season=season)
     crop_label = escape(str(calendar.get("crop", "crop")).title())
     season_label = escape(str(calendar.get("season", "Kharif")))
