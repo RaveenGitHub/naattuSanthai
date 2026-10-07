@@ -602,11 +602,22 @@ def get_scheme_fetch_history() -> list[dict]:
 
 
 def get_source_registry() -> list[dict]:
-    latest_row = None
     with get_connection() as conn:
-        latest_row = conn.execute(
-            "SELECT source_name, created_at FROM government_scheme_updates ORDER BY created_at DESC LIMIT 1"
-        ).fetchone()
+        source_rows = conn.execute(
+            """
+            SELECT source_name, MAX(created_at) AS last_record_at
+            FROM government_scheme_updates
+            WHERE source_name IS NOT NULL AND TRIM(source_name) != ''
+            GROUP BY LOWER(TRIM(source_name))
+            """
+        ).fetchall()
+    last_record_by_source = {
+        str(row["source_name"]).strip().casefold(): row["last_record_at"]
+        for row in source_rows
+    }
+
+    def last_record_for(source_name: str) -> Optional[str]:
+        return last_record_by_source.get(source_name.casefold())
 
     registry = [
         {
@@ -619,7 +630,8 @@ def get_source_registry() -> list[dict]:
             "is_official": True,
             "is_fallback": False,
             "source_policy": "official",
-            "last_sync": latest_row["created_at"] if latest_row else None,
+            "last_record_at": last_record_for("PM-Kisan"),
+            "last_sync": None,
         },
         {
             "id": "tn-agri-dept",
@@ -631,7 +643,8 @@ def get_source_registry() -> list[dict]:
             "is_official": True,
             "is_fallback": False,
             "source_policy": "official",
-            "last_sync": latest_row["created_at"] if latest_row else None,
+            "last_record_at": last_record_for("Tamil Nadu Agriculture Department"),
+            "last_sync": None,
         },
         {
             "id": "tn-govt-portal",
@@ -643,7 +656,8 @@ def get_source_registry() -> list[dict]:
             "is_official": True,
             "is_fallback": False,
             "source_policy": "official",
-            "last_sync": latest_row["created_at"] if latest_row else None,
+            "last_record_at": last_record_for("Tamil Nadu Government Portal"),
+            "last_sync": None,
         },
         {
             "id": "local-notice-board",
@@ -655,7 +669,8 @@ def get_source_registry() -> list[dict]:
             "is_official": False,
             "is_fallback": True,
             "source_policy": "fallback",
-            "last_sync": latest_row["created_at"] if latest_row else None,
+            "last_record_at": last_record_for("Local Notice Board"),
+            "last_sync": None,
         },
     ]
     return registry
@@ -1485,7 +1500,7 @@ def get_scheme_fetch_status() -> dict:
         "official_sources": [source["name"] for source in registry_sources if source.get("is_official") is True],
         "fallback_sources": [source["name"] for source in registry_sources if source.get("is_fallback") is True],
         "sources": registry_sources,
-        "notes": "Scheme sources are verified against the trusted registry and reviewed for duplicate or untrusted entries.",
+        "notes": "Registry entries identify configured sources; stored record timestamps are not evidence of a completed live source sync.",
     }
     scheduler = get_scheme_scheduler()
     if scheduler.last_run is None and latest_row:

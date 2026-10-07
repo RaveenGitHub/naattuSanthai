@@ -7,11 +7,13 @@
 | Work area | Status | Remaining work |
 |---|---|---|
 | Weather data validation and operational readiness | Implemented with rollout blocked | Configure authorized IMD access, verify live payload coverage and city mappings, and confirm live refresh outcomes before claiming weather coverage. |
-| Scheme raw ingestion and review | Partially implemented | Verify authorized real endpoints; formalize source-specific normalization plus changed-notice migration/reprocessing; operationalize scheduled runs only after source verification. |
+| Scheme raw ingestion and review | Partially implemented | The source registry reports per-source stored-record timestamps separately from live sync, which remains explicitly unverified. Verify authorized real endpoints; formalize source-specific normalization plus changed-notice migration/reprocessing; operationalize scheduled runs only after source verification. |
 | Scheme publication and farmer experience | Partially implemented | Complete content/readability review with real notices and farmers; define archive/retention operations and validate multi-year usability. |
 | Monitoring, pilot, and release | Open | Run production-like scheduler/source checks, complete operational alerts and rollout/rollback evidence, and conduct field validation. |
 
 **Next work:** unblock authorized live-source verification without substituting synthetic data, then close mapping/normalization and operational scheduling gaps. Track test verification separately from real-feed and field evidence.
+
+**Verification update — 2026-10-07:** The admin source registry now reports each source's latest stored-record timestamp independently and leaves live-sync time unverified rather than reusing a timestamp from another source. Four focused source-registry tests passed on isolated SQLite data. These checks do not validate official live endpoints or the legacy scheduler's synthetic outcomes.
 
 ## 1. Goal
 

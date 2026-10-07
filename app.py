@@ -2528,7 +2528,8 @@ def admin_source_registry_page(request: Request, authorization: Optional[str] = 
           <p><strong>Trust level:</strong> {trust}</p>
           <p><strong>Official source:</strong> {official}</p>
           <p><strong>Fallback source:</strong> {fallback}</p>
-          <p><strong>Last sync:</strong> {last_sync}</p>
+          <p><strong>Latest stored record:</strong> {last_record_at}</p>
+          <p><strong>Live sync:</strong> Not verified</p>
         </article>
         """.format(
             name=escape(str(source.get("name", "Unknown source"))),
@@ -2539,7 +2540,7 @@ def admin_source_registry_page(request: Request, authorization: Optional[str] = 
             trust=escape(str(source.get("trust_level", "medium"))),
             official=escape(str(source.get("is_official", False))),
             fallback=escape(str(source.get("is_fallback", False))),
-            last_sync=escape(str(source.get("last_sync") or "Not synced yet")),
+            last_record_at=escape(str(source.get("last_record_at") or "No records yet")),
         )
         for source in sources
     ) or "<article class='card empty'><h3>No registered sources</h3><p>There are no trusted scheme sources configured yet.</p></article>"

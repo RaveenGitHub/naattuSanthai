@@ -1211,6 +1211,8 @@ def test_admin_content_configuration_page_renders_special_news_and_ad_controls()
 
 
 def test_source_registry_and_scheduler_metadata_are_exposed_to_admins():
+    admin_login = client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    assert admin_login.status_code == 200
     registry_response = client.get("/api/admin/source-registry")
     assert registry_response.status_code == 200
     payload = registry_response.json()
@@ -1222,6 +1224,8 @@ def test_source_registry_and_scheduler_metadata_are_exposed_to_admins():
     assert page_response.status_code == 200
     assert "Source Registry" in page_response.text or "மூலப் பதிவு" in page_response.text
     assert "Scheduler" in page_response.text or "திட்டமிடுபவர்" in page_response.text
+    assert "Latest stored record" in page_response.text
+    assert "Live sync:</strong> Not verified" in page_response.text
 
 
 def test_source_registry_distinguishes_official_sources_from_fallbacks_and_trust_flags():
@@ -1231,6 +1235,49 @@ def test_source_registry_distinguishes_official_sources_from_fallbacks_and_trust
     assert any(source.get("is_fallback") is True for source in sources)
     assert any(source.get("status") == "active" for source in sources)
     assert "official_sources" in status["source_registry"] or "fallback_sources" in status["source_registry"]
+
+
+def test_source_registry_reports_record_timestamps_per_source_without_claiming_live_sync(monkeypatch, tmp_path):
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "source-registry-sync.db"))
+    init_db()
+    now = __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
+    source_timestamps = {
+        "PM-Kisan": (now - __import__("datetime").timedelta(days=1)).isoformat(),
+        "Tamil Nadu Agriculture Department": now.isoformat(),
+    }
+    with get_connection() as conn:
+        for index, (source_name, created_at) in enumerate(source_timestamps.items()):
+            conn.execute(
+                """
+                INSERT INTO government_scheme_updates (
+                    id, title_ta, summary_ta, eligibility_ta, benefits_ta, apply_steps_ta,
+                    category, scheme_type, source_name, source_url, is_archived, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    f"SOURCE-SYNC-{index}",
+                    "அரசுத் திட்டம்",
+                    "விவசாயிகளுக்கான திட்டத் தகவல்",
+                    "தகுதியான விவசாயிகள்",
+                    "உதவி வழங்கப்படும்",
+                    "அதிகாரப்பூர்வ இணையதளத்தை அணுகவும்",
+                    "subsidy",
+                    "central",
+                    source_name,
+                    "https://example.gov.in/",
+                    0,
+                    created_at,
+                ),
+            )
+
+    from services import get_source_registry
+
+    sources = {item["name"]: item for item in get_source_registry()}
+    assert sources["PM-Kisan"]["last_record_at"] == source_timestamps["PM-Kisan"]
+    assert sources["Tamil Nadu Agriculture Department"]["last_record_at"] == source_timestamps["Tamil Nadu Agriculture Department"]
+    assert sources["PM-Kisan"]["last_record_at"] != sources["Tamil Nadu Agriculture Department"]["last_record_at"]
+    assert sources["PM-Kisan"]["last_sync"] is None
+    assert sources["Tamil Nadu Agriculture Department"]["last_sync"] is None
 
 
 def test_scheme_fetch_status_exposes_explicit_freshness_and_retention_policy():
