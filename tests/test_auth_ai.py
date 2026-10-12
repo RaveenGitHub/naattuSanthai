@@ -18,6 +18,20 @@ def test_login_returns_token_for_valid_user():
     payload = response.json()
     assert "token" in payload
     assert payload["role"] == "operator"
+    assert payload["redirect_url"] == "/dashboard"
+
+
+def test_admin_login_redirects_to_admin_overview():
+    response = client.post(
+        "/auth/login",
+        json={"username": "admin1", "password": "admin123"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["role"] == "admin"
+    assert payload["redirect_url"] == "/admin/overview"
+    assert "data.redirect_url" in client.get("/login").text
 
 
 def test_lowercase_bearer_authorization_is_accepted():

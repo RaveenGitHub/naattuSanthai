@@ -1077,7 +1077,13 @@ def login(request: Request, payload: LoginRequest):
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
     clear_auth_rate_limit(request, "login_failed", key_suffix=username_key)
-    response = JSONResponse({"success": True, "token": result["token"], "role": result["role"]})
+    redirect_url = "/admin/overview" if result["role"] == "admin" else "/dashboard"
+    response = JSONResponse({
+        "success": True,
+        "token": result["token"],
+        "role": result["role"],
+        "redirect_url": redirect_url,
+    })
     secure_cookie = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
     response.set_cookie(
         key="digital_farming_session",
@@ -5961,7 +5967,7 @@ def login_page():
           throw new Error(data.detail || 'Login failed');
         }
         localStorage.setItem('digital_farming_token', data.token);
-        window.location.href = '/dashboard';
+        window.location.href = data.redirect_url || (data.role === 'admin' ? '/admin/overview' : '/dashboard');
       } catch (error) {
         errorBox.style.display = 'block';
         errorBox.textContent = error.message || 'Invalid username or password.';
