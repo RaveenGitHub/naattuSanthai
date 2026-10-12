@@ -103,11 +103,9 @@ historical rows; use `/api/weather/latest` or city forecast status for current d
 data. A bad newer row does not hide an older row that still passes freshness checks.
 Fetch monitoring continues to report received records separately from freshness.
 
-To fetch official IMD weather observations, request API access from the [IMD API portal](https://api.imd.gov.in/public/index.php), then set `IMD_API_KEY` in your local `.env`. Set `IMD_API_TOKEN` as well when the registered API plan requires bearer authentication. IMD binds API access to the registering client/IP; follow the portal's current access requirements. The default endpoint follows the [IMD API reference](https://api.imd.gov.in/public/api_reference.html): `https://api.imd.gov.in/api/v1/aws_data?sid=25`, where state ID 25 is Tamil Nadu. Restart the app after changing `.env`, sign in as an admin, then trigger a refresh with `POST /api/weather/fetch` (or use the admin UI/API client). The response and `GET /api/weather/fetch/status` report per-city freshness and missing-city coverage.
+To fetch official IMD city forecasts, request API access and a key/token from the [IMD API portal](https://api.imd.gov.in/public/index.php), then set `IMD_API_KEY` and `IMD_API_TOKEN` in your local `.env`. IMD binds API access to the registering client/IP; follow the portal's current access requirements. The default endpoint is `https://api.imd.gov.in/api/v1/cityforecast`. Restart the app after changing `.env`, sign in as an admin, then trigger a refresh with `POST /api/weather/fetch` (or use the admin UI/API client). The response and `GET /api/weather/fetch/status` report per-city freshness and missing-city coverage.
 
-The AWS endpoint supplies observations, not multi-day forecasts. The app maps the documented `DISTRICT` or `STATION` value to the configured city catalog, stores the latest observation per matched city, and leaves unmatched cities unavailable. It does not fabricate city coverage or derive weekly/monthly forecasts from AWS observations.
-
-Without a valid IMD API key, refresh returns an explicit not-configured/failure result and the page shows cities with no current data. Credentials and access tokens must remain in `.env` or a secret store; never commit them.
+Without valid IMD credentials, forecast refresh returns an explicit not-configured/failure result and the page shows cities with no current data. Credentials and access tokens must remain in `.env` or a secret store; never commit them.
 
 Weather ingestion requires a finite temperature and rejects records with nonnumeric,
 nonfinite, or out-of-range supplied measurements. Rainfall and wind cannot be negative;
@@ -135,7 +133,7 @@ daily forecasts or a derived monthly total.
 Records retain their period in storage and are exposed by the corresponding
 `/api/weather/weekly` or `/api/weather/monthly` endpoint and weather page period.
 Long-range records never satisfy daily city coverage or populate the daily view.
-The official IMD AWS connector currently consumes current observations only; it
+The official IMD city connector currently consumes today's forecast only; it
 does not synthesize weekly/monthly data from that response. Longer-range live
 availability still requires an authorized feed with the documented contract.
 

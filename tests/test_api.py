@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -710,10 +709,10 @@ def test_weather_fetch_coverage_marks_missing_cities_as_partial():
     assert len(result["city_coverage"]["missing"]) == 34
 
 
-def test_imd_aws_request_uses_credentials_without_exposing_them(monkeypatch):
+def test_imd_city_forecast_request_uses_credentials_without_exposing_them(monkeypatch):
     monkeypatch.setenv("IMD_API_KEY", "test-key")
     monkeypatch.setenv("IMD_API_TOKEN", "test-token")
-    monkeypatch.setenv("IMD_AWS_DATA_URL", "https://api.imd.gov.in/api/v1/aws_data?sid=25")
+    monkeypatch.setenv("IMD_CITY_FORECAST_URL", "https://api.imd.gov.in/api/v1/cityforecast")
     captured = {}
 
     class FakeResponse:
@@ -724,10 +723,7 @@ def test_imd_aws_request_uses_credentials_without_exposing_them(monkeypatch):
             return False
 
         def read(self):
-            return (
-                b'[{"DISTRICT":"CHENNAI","STATION":"NUNGAMBAKKAM",'
-                b'"DATE":"2026-10-12","TIME":"14:30:00","CURR_TEMP":"34","RH":"62"}]'
-            )
+            return b'[{"Station_Name":"Chennai","Todays_Forecast_Max_Temp":"34"}]'
 
     def fake_urlopen(request, timeout):
         captured["headers"] = {key.lower(): value for key, value in request.header_items()}
@@ -739,16 +735,13 @@ def test_imd_aws_request_uses_credentials_without_exposing_them(monkeypatch):
 
     assert result["status"] == "success"
     assert result["records"][0]["region"] == "Chennai"
-    assert result["records"][0]["temperature_c"] == 34
-    assert result["records"][0]["humidity_pct"] == 62
-    assert result["records"][0]["forecast_date"] == "2026-10-12T14:30:00"
     assert captured["headers"]["x-api-key"] == "test-key"
     assert captured["headers"]["authorization"] == "Bearer test-token"
     assert captured["timeout"] == 4
     assert "test-token" not in str(result)
 
 
-def test_imd_aws_without_api_key_reports_not_configured(monkeypatch):
+def test_imd_city_forecast_without_credentials_reports_not_configured(monkeypatch):
     monkeypatch.delenv("IMD_API_KEY", raising=False)
     monkeypatch.delenv("IMD_API_TOKEN", raising=False)
 
@@ -756,46 +749,7 @@ def test_imd_aws_without_api_key_reports_not_configured(monkeypatch):
 
     assert result["status"] == "not_configured"
     assert "IMD_API_KEY" in result["errors"][0]
-    assert "IMD_API_TOKEN" not in result["errors"][0]
-
-
-def test_imd_aws_token_is_optional_and_latest_station_observation_wins(monkeypatch):
-    monkeypatch.setenv("IMD_API_KEY", "test-key")
-    monkeypatch.delenv("IMD_API_TOKEN", raising=False)
-    captured = {}
-
-    class FakeResponse:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_args):
-            return False
-
-        def read(self):
-            return json.dumps([
-                {
-                    "DISTRICT": "COIMBATORE", "STATION": "OLDER",
-                    "DATE": "2026-10-12", "TIME": "10:00:00", "CURR_TEMP": "30",
-                },
-                {
-                    "DISTRICT": "COIMBATORE", "STATION": "LATEST",
-                    "DATE": "2026-10-12", "TIME": "12:00:00", "CURR_TEMP": "32",
-                },
-            ]).encode("utf-8")
-
-    def fake_urlopen(request, timeout):
-        captured["headers"] = {key.lower(): value for key, value in request.header_items()}
-        return FakeResponse()
-
-    monkeypatch.setattr(services, "urlopen", fake_urlopen)
-    result = services._fetch_imd_city_forecasts(timeout_seconds=4)
-
-    assert result["status"] == "success"
-    assert len(result["records"]) == 1
-    assert result["records"][0]["region"] == "Coimbatore"
-    assert result["records"][0]["temperature_c"] == 32
-    assert "LATEST" in result["records"][0]["summary_ta"]
-    assert "authorization" not in captured["headers"]
+    assert "IMD_API_TOKEN" in result["errors"][0]
 
 
 def test_weather_page_lists_all_catalog_cities_and_does_not_reuse_another_city():

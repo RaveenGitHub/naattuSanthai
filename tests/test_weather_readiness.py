@@ -13,7 +13,7 @@ def readiness_environment(monkeypatch, tmp_path):
     monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "weather.db"))
     init_db()
     for setting in (
-        "IMD_API_KEY", "IMD_API_TOKEN", "IMD_AWS_DATA_URL",
+        "IMD_API_KEY", "IMD_API_TOKEN", "IMD_CITY_FORECAST_URL",
         "IMD_WEATHER_FEED_URL", "TNSDMA_WEATHER_FEED_URL",
     ):
         monkeypatch.delenv(setting, raising=False)
@@ -29,7 +29,7 @@ def test_unconfigured_rollout_has_explicit_blockers(readiness_environment):
     assert result["status"] == "blocked"
     assert result["configuration"]["status"] == "blocked"
     assert set(result["blockers"]) == {
-        "missing_imd_api_key",
+        "missing_imd_api_key", "missing_imd_api_token",
         "no_completed_refresh", "incomplete_fresh_city_coverage",
     }
     assert result["last_refresh_status"] == "never_run"
@@ -56,9 +56,9 @@ def test_credentials_are_presence_only_not_proof_of_readiness(readiness_environm
     "https://[broken",
 ])
 def test_invalid_endpoint_is_reported_without_url_leak(readiness_environment, monkeypatch, url):
-    monkeypatch.setenv("IMD_AWS_DATA_URL", url)
+    monkeypatch.setenv("IMD_CITY_FORECAST_URL", url)
     result = services.get_weather_configuration_readiness()
-    assert "invalid_imd_aws_endpoint" in result["blockers"]
+    assert "invalid_imd_city_endpoint" in result["blockers"]
     assert url not in json.dumps(result)
 
 
@@ -74,7 +74,7 @@ def test_feed_mode_matches_fetcher_precedence_and_hides_urls(readiness_environme
 def test_ignored_feed_is_diagnosed_without_exposing_value(readiness_environment, monkeypatch, caplog):
     monkeypatch.setenv("TNSDMA_WEATHER_FEED_URL", "https://[broken")
     result = services.get_weather_configuration_readiness()
-    assert result["mode"] == "official_imd_aws_api"
+    assert result["mode"] == "official_imd_city_api"
     assert result["warnings"] == ["ignored_tnsdma_weather_feed_url"]
     assert result["feed_checks"][1]["configured"] is True
     assert result["feed_checks"][1]["accepted"] is False
@@ -84,7 +84,7 @@ def test_ignored_feed_is_diagnosed_without_exposing_value(readiness_environment,
 def test_malformed_official_endpoint_fails_without_network(readiness_environment, monkeypatch):
     monkeypatch.setenv("IMD_API_KEY", "key")
     monkeypatch.setenv("IMD_API_TOKEN", "token")
-    monkeypatch.setenv("IMD_AWS_DATA_URL", "https://[broken")
+    monkeypatch.setenv("IMD_CITY_FORECAST_URL", "https://[broken")
     result = services._fetch_imd_city_forecasts(15)
     assert result["status"] == "failed"
     assert result["records"] == []
