@@ -113,19 +113,20 @@ def get_weather_configuration_readiness() -> dict:
     ]
     api_key_present = bool(os.getenv("IMD_API_KEY", "").strip())
     api_token_present = bool(os.getenv("IMD_API_TOKEN", "").strip())
-    endpoint = os.getenv("IMD_CITY_FORECAST_URL", "https://api.imd.gov.in/api/v1/cityforecast").strip()
+    endpoint = os.getenv(
+        "IMD_AWS_DATA_URL",
+        "https://api.imd.gov.in/api/v1/aws_data?sid=25",
+    ).strip()
     endpoint_valid = _weather_url_allowed(endpoint, {"api.imd.gov.in"}, require_https=True)
     blockers = []
     if configured_feeds:
         mode = "authorized_json_feeds"
     else:
-        mode = "official_imd_city_api"
+        mode = "official_imd_aws_api"
         if not api_key_present:
             blockers.append("missing_imd_api_key")
-        if not api_token_present:
-            blockers.append("missing_imd_api_token")
         if not endpoint_valid:
-            blockers.append("invalid_imd_city_endpoint")
+            blockers.append("invalid_imd_aws_endpoint")
     warnings = [
         f"ignored_{check['setting'].lower()}"
         for check in feed_checks if check["configured"] and not check["accepted"]
@@ -179,10 +180,16 @@ def _weather_city_key(value: object) -> str:
 def _weather_city_catalog() -> dict[str, dict]:
     catalog = {}
     aliases = {
+        "kanchipuram": ("kancheepuram",),
+        "pudukkottai": ("pudukottai",),
+        "sivaganga": ("sivagangai",),
         "tiruchirappalli": ("trichy", "tiruchirapalli"),
         "thoothukudi": ("tuticorin",),
         "the nilgiris": ("nilgiris", "ooty", "udhagamandalam", "ootacamund"),
         "tirunelveli": ("tinnevelly",),
+        "tiruvallur": ("thiruvallur",),
+        "tiruvannamalai": ("thiruvannamalai",),
+        "villupuram": ("viluppuram",),
     }
     for city in list_tamil_nadu_weather_cities():
         catalog[_weather_city_key(city["city"])] = city
@@ -299,32 +306,46 @@ def _normalize_weather_payload(payload: object, source_name: str) -> list[dict]:
 def _normalize_imd_city_forecast(payload: object) -> list[dict]:
     records = payload.get("data", payload) if isinstance(payload, dict) else payload
     if isinstance(records, dict):
-        records = records.get("forecast", records.get("cityforecast", [records]))
+        records = records.get(
+            "aws_data",
+            records.get("observations", records.get("forecast", records.get("cityforecast", [records]))),
+        )
     if not isinstance(records, list):
         return []
 
-    normalized = []
+    normalized_by_city = {}
     catalog = _weather_city_catalog()
     for record in records:
         if not isinstance(record, dict):
             continue
-        city = (
-            record.get("Station_Name")
-            or record.get("station_name")
-            or record.get("City_Name")
-            or record.get("city_name")
-            or record.get("city")
-            or record.get("region")
-            or ""
+        location_candidates = (
+            record.get("DISTRICT"),
+            record.get("District"),
+            record.get("district"),
+            record.get("STATION"),
+            record.get("Station_Name"),
+            record.get("station_name"),
+            record.get("City_Name"),
+            record.get("city_name"),
+            record.get("city"),
+            record.get("region"),
         )
-        city_meta = catalog.get(_weather_city_key(city))
+        city_meta = next(
+            (
+                catalog.get(_weather_city_key(candidate))
+                for candidate in location_candidates
+                if candidate and catalog.get(_weather_city_key(candidate))
+            ),
+            None,
+        )
         if not city_meta:
             continue
 
         try:
+            current = _weather_number(record, "CURR_TEMP", "current_temperature")
             maximum = _weather_number(record, "Todays_Forecast_Max_Temp", "Today_Max_temp", "MAX_TEMP")
             minimum = _weather_number(record, "Todays_Forecast_Min_temp", "Today_Min_temp", "MIN_TEMP")
-            if maximum is None and minimum is None:
+            if current is None and maximum is None and minimum is None:
                 raise ValueError("Temperature is required")
             if maximum is not None and minimum is not None and minimum > maximum:
                 raise ValueError("Minimum temperature exceeds maximum temperature")
@@ -334,7 +355,7 @@ def _normalize_imd_city_forecast(payload: object) -> list[dict]:
                 "Rejected IMD weather record for %s: %s", city_meta["city"], exc,
             )
             continue
-        temperature = (
+        temperature = current if current is not None else (
             maximum / 2 + minimum / 2
             if maximum is not None and minimum is not None
             else maximum if maximum is not None else minimum
@@ -342,52 +363,87 @@ def _normalize_imd_city_forecast(payload: object) -> list[dict]:
         if temperature is None:
             continue
 
-        description = str(record.get("Todays_Forecast") or record.get("forecast") or "").strip()
-        normalized.append({
+        source_date = str(
+            record.get("DATE")
+            or record.get("Date")
+            or record.get("date")
+            or datetime.now(timezone.utc).date().isoformat()
+        )
+        source_time = str(record.get("TIME") or "").strip()
+        source_timestamp = f"{source_date}T{source_time}" if source_time else source_date
+        try:
+            observed_at = datetime.fromisoformat(source_timestamp.replace("Z", "+00:00"))
+            if observed_at.tzinfo is None:
+                observed_at = observed_at.replace(tzinfo=timezone(timedelta(hours=5, minutes=30)))
+            observed_at = observed_at.astimezone(timezone.utc)
+        except ValueError:
+            logging.getLogger(__name__).warning(
+                "Rejected IMD weather record for %s: invalid DATE or TIME",
+                city_meta["city"],
+            )
+            continue
+
+        station = str(record.get("STATION") or record.get("Station_Name") or "").strip()
+        description = str(
+            record.get("WEATHER_CODE")
+            or record.get("Todays_Forecast")
+            or record.get("forecast")
+            or ""
+        ).strip()
+        summary = (
+            f"IMD AWS வானிலை கண்காணிப்பு நிலையம்: {station}."
+            if station else "இந்த பகுதிக்கான IMD AWS வானிலை கண்காணிப்பு கிடைத்துள்ளது."
+        )
+        if description:
+            summary = f"{summary} வானிலை குறியீடு: {description}."
+        normalized = {
             "region": city_meta["city"],
             "city_tier": city_meta["tier"],
-            "forecast_date": str(record.get("Date") or record.get("date") or datetime.now(timezone.utc).date().isoformat()),
+            "forecast_date": source_timestamp,
             "temperature_c": temperature,
             **metrics,
-            "summary_ta": f"IMD முன்னறிவிப்பு: {description}" if description else "இந்த நகரத்திற்கான IMD முன்னறிவிப்பு கிடைத்துள்ளது.",
-            "advisory_ta": "உள்ளூர் வானிலை எச்சரிக்கைகளை கவனித்து, பாசன முடிவுகளை அதற்கேற்ப திட்டமிடவும்.",
+            "summary_ta": summary,
+            "advisory_ta": "IMD கண்காணிப்பு நிலையை சரிபார்த்து, உள்ளூர் எச்சரிக்கைகளின் அடிப்படையில் பாசனத்தை திட்டமிடவும்.",
             "source_name": "India Meteorological Department",
-        })
-    return normalized
+        }
+        city_key = _weather_city_key(city_meta["city"])
+        existing = normalized_by_city.get(city_key)
+        if existing is None or observed_at > existing[0]:
+            normalized_by_city[city_key] = (observed_at, normalized)
+    return [item[1] for item in normalized_by_city.values()]
 
 
 def _fetch_imd_city_forecasts(timeout_seconds: int) -> dict:
     api_key = os.getenv("IMD_API_KEY", "").strip()
     api_token = os.getenv("IMD_API_TOKEN", "").strip()
-    if not api_key or not api_token:
+    if not api_key:
         return {
             "status": "not_configured",
             "records": [],
             "sources": [],
-            "errors": ["Set IMD_API_KEY and IMD_API_TOKEN to enable the official IMD city forecast API."],
+            "errors": ["Set IMD_API_KEY to enable the official IMD AWS observation API."],
         }
 
     endpoint = os.getenv(
-        "IMD_CITY_FORECAST_URL",
-        "https://api.imd.gov.in/api/v1/cityforecast",
+        "IMD_AWS_DATA_URL",
+        "https://api.imd.gov.in/api/v1/aws_data?sid=25",
     ).strip()
     if not _weather_url_allowed(endpoint, {"api.imd.gov.in"}, require_https=True):
         return {
             "status": "failed",
             "records": [],
             "sources": [],
-            "errors": ["IMD_CITY_FORECAST_URL must use HTTPS on the official api.imd.gov.in host."],
+            "errors": ["IMD_AWS_DATA_URL must use HTTPS on the official api.imd.gov.in host."],
         }
 
-    request = Request(
-        endpoint,
-        headers={
-            "Accept": "application/json",
-            "Authorization": f"Bearer {api_token}",
-            "User-Agent": "Digital-Farming-Support-Center/1.0",
-            "x-api-key": api_key,
-        },
-    )
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": "Digital-Farming-Support-Center/1.0",
+        "x-api-key": api_key,
+    }
+    if api_token:
+        headers["Authorization"] = f"Bearer {api_token}"
+    request = Request(endpoint, headers=headers)
     try:
         with urlopen(request, timeout=timeout_seconds) as response:
             payload = json.loads(response.read().decode("utf-8"))
@@ -408,7 +464,7 @@ def _fetch_imd_city_forecasts(timeout_seconds: int) -> dict:
             "records": len(records),
             "status": "success" if records else "warning",
         }],
-        "errors": [] if records else ["IMD returned no valid forecasts for the configured city catalog."],
+        "errors": [] if records else ["IMD returned no valid AWS observations for the configured city catalog."],
     }
 
 

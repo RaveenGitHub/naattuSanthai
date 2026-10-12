@@ -17,4 +17,4 @@ services:
       JWT_EXPIRY_HOURS: "12"
       IMD_API_KEY: "${IMD_API_KEY:-}"
       IMD_API_TOKEN: "${IMD_API_TOKEN:-}"
-      IMD_CITY_FORECAST_URL: "${IMD_CITY_FORECAST_URL:-https://api.imd.gov.in/api/v1/cityforecast}"
+      IMD_AWS_DATA_URL: "${IMD_AWS_DATA_URL:-https://api.imd.gov.in/api/v1/aws_data?sid=25}"

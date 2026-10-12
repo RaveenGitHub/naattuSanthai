@@ -24,7 +24,7 @@ def test_compose_file_passes_runtime_environment_settings():
         "SECRET_KEY",
         "IMD_API_KEY",
         "IMD_API_TOKEN",
-        "IMD_CITY_FORECAST_URL",
+        "IMD_AWS_DATA_URL",
     ]:
         assert key in content
 
