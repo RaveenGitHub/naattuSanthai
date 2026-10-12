@@ -327,7 +327,14 @@ def get_admin_user_detail(username: str) -> Dict[str, object]:
     return dict(row)
 
 
-def set_user_status(admin_username: str, username: str, action: str, reason: str = "") -> Dict[str, str]:
+def set_user_status(
+    admin_username: str,
+    username: str,
+    action: str,
+    reason: str = "",
+    *,
+    audit_context: Optional[Dict[str, str]] = None,
+) -> Dict[str, str]:
     allowed_actions = {
         "activate": ({"pending_verification", "inactive", "locked"}, "active"),
         "reactivate": ({"inactive"}, "active"),
@@ -370,6 +377,7 @@ def set_user_status(admin_username: str, username: str, action: str, reason: str
             "success",
             reason or f"Account status set to {new_status}",
             conn=conn,
+            **(audit_context or {}),
         )
     return {"username": username, "status": new_status, "action": action, "unchanged": "false"}
 
@@ -576,6 +584,9 @@ def record_audit_log(
     outcome: str,
     details: Optional[str] = None,
     *,
+    client_ip: Optional[str] = None,
+    request_method: Optional[str] = None,
+    request_path: Optional[str] = None,
     conn: Optional[sqlite3.Connection] = None,
 ) -> Dict[str, str]:
     event_id = f"AUD-{uuid4().hex}"
@@ -586,12 +597,21 @@ def record_audit_log(
         "resource": resource,
         "outcome": outcome,
         "details": details,
+        "client_ip": client_ip,
+        "request_method": request_method,
+        "request_path": request_path,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     def insert_record(connection: sqlite3.Connection) -> None:
         connection.execute(
-            "INSERT INTO audit_logs (id, username, action, resource, outcome, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (record["id"], record["username"], record["action"], record["resource"], record["outcome"], record["details"], record["created_at"]),
+            "INSERT INTO audit_logs "
+            "(id, username, action, resource, outcome, details, client_ip, request_method, request_path, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                record["id"], record["username"], record["action"], record["resource"],
+                record["outcome"], record["details"], record["client_ip"],
+                record["request_method"], record["request_path"], record["created_at"],
+            ),
         )
 
     if conn is None:
@@ -628,7 +648,8 @@ def list_audit_logs(
     params.append(min(1000, max(1, limit)))
     with get_connection() as conn:
         rows = conn.execute(
-            f"SELECT id, username, action, resource, outcome, details, created_at FROM audit_logs{where} ORDER BY created_at DESC LIMIT ?",
+            f"SELECT id, username, action, resource, outcome, details, client_ip, request_method, request_path, created_at "
+            f"FROM audit_logs{where} ORDER BY created_at DESC LIMIT ?",
             params,
         ).fetchall()
     return [
@@ -639,6 +660,9 @@ def list_audit_logs(
             "resource": row["resource"],
             "outcome": row["outcome"],
             "details": row["details"],
+            "client_ip": row["client_ip"],
+            "request_method": row["request_method"],
+            "request_path": row["request_path"],
             "created_at": row["created_at"],
         }
         for row in rows
@@ -812,6 +836,3 @@ def authenticate(username: str, password: str) -> Dict[str, str]:
     token = create_token(username)
     record_audit_log(username, "login", "auth", "success", "JWT token issued")
     return {"token": token, "role": user["role"]}
-
-
-seed_default_users()

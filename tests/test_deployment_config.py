@@ -1,3 +1,6 @@
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -37,6 +40,33 @@ def test_readme_mentions_project_setup():
     content = Path("README.md").read_text(encoding="utf-8")
     assert "FastAPI" in content or "uvicorn" in content or "Docker" in content
     assert "--env-file .env" in content
+
+
+def test_app_initializes_a_new_database_on_first_import(tmp_path):
+    database_path = tmp_path / "first-run.db"
+    environment = os.environ.copy()
+    environment["DATABASE_PATH"] = str(database_path)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import app; "
+                "from database import get_connection; "
+                "conn = get_connection(); "
+                "print(conn.execute('SELECT COUNT(*) FROM users').fetchone()[0]); "
+                "conn.close()"
+            ),
+        ],
+        cwd=Path.cwd(),
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert int(result.stdout.strip()) >= 3
 
 
 def test_weather_refresh_has_standalone_worker_and_windows_task_registration():

@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import date, datetime, timezone
 from html import escape
 from time import monotonic
-from typing import Optional
+from typing import Dict, Optional
 from urllib.parse import quote, urlencode
 from uuid import uuid4
 
@@ -12,7 +12,7 @@ from fastapi import FastAPI, File, Form, Header, HTTPException, Query, Request, 
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import ValidationError
 
-from database import get_connection, get_migration_status
+from database import get_connection, get_migration_status, init_db
 from digital_farming.services.advisory import get_field_advisory
 from diagnostics import diagnose_crop_issue, list_diagnosis_history
 from routes import router
@@ -852,6 +852,9 @@ APP_SHELL_PAGE = """
 </html>
 """
 
+init_db()
+seed_default_users()
+
 app = FastAPI(title="Digital Farming Support Center")
 app.state.started_at = datetime.now(timezone.utc)
 app.include_router(router)
@@ -924,6 +927,14 @@ def get_client_ip(request: Request) -> str:
     return "unknown"
 
 
+def get_audit_request_context(request: Request) -> Dict[str, str]:
+    return {
+        "client_ip": get_client_ip(request)[:64],
+        "request_method": request.method[:16],
+        "request_path": request.url.path[:500],
+    }
+
+
 def validate_uploaded_image(file: UploadFile) -> str:
     filename = (file.filename or "").strip()
     content_type = (file.content_type or "").lower().strip()
@@ -991,6 +1002,7 @@ def audit_admin_page_denial(request: Request, session: dict, reason: str) -> Non
         request.url.path,
         "failure",
         reason,
+        **get_audit_request_context(request),
     )
 
 
@@ -1313,7 +1325,14 @@ def get_bearer_token(authorization: Optional[str]) -> str:
 
 def require_admin_access(request: Request, authorization: Optional[str]) -> dict:
     def deny(message: str, *, actor: str = "anonymous", status_code: int = 401):
-        record_audit_log(actor, "admin_access_denied", request.url.path, "failure", message)
+        record_audit_log(
+            actor,
+            "admin_access_denied",
+            request.url.path,
+            "failure",
+            message,
+            **get_audit_request_context(request),
+        )
         raise HTTPException(status_code=status_code, detail=message)
 
     try:
@@ -1420,6 +1439,7 @@ def get_users(request: Request, authorization: Optional[str] = Header(default=No
             request.url.path,
             "failure",
             "Access denied: Admin access required",
+            **get_audit_request_context(request),
         )
         raise HTTPException(status_code=403, detail="Admin access required")
     return {"success": True, "data": list_users()["items"], "error": None}
@@ -1463,6 +1483,7 @@ def admin_users_endpoint(
         "admin/users",
         "success",
         f"page={page}; page_size={page_size}; query_ms={query_latency_ms:.2f}",
+        **get_audit_request_context(request),
     )
     return {"success": True, "data": result, "error": None}
 
@@ -1474,7 +1495,14 @@ def admin_user_detail_endpoint(request: Request, username: str, authorization: O
         detail = get_admin_user_detail(username)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    record_audit_log(payload_token.get("sub", "unknown"), "user_viewed", f"users/{username}", "success", "Admin viewed user profile")
+    record_audit_log(
+        payload_token.get("sub", "unknown"),
+        "user_viewed",
+        f"users/{username}",
+        "success",
+        "Admin viewed user profile",
+        **get_audit_request_context(request),
+    )
     return {"success": True, "data": detail, "error": None}
 
 
@@ -1486,10 +1514,24 @@ def admin_user_status_endpoint(
     authorization: Optional[str] = Header(default=None),
 ):
     admin_payload = require_admin_access(request, authorization)
+    audit_context = get_audit_request_context(request)
     try:
-        result = set_user_status(admin_payload.get("sub", "unknown"), username, payload.action, payload.reason)
+        result = set_user_status(
+            admin_payload.get("sub", "unknown"),
+            username,
+            payload.action,
+            payload.reason,
+            audit_context=audit_context,
+        )
     except ValueError as exc:
-        record_audit_log(admin_payload.get("sub", "unknown"), f"user_{payload.action}", f"users/{username}", "failure", str(exc))
+        record_audit_log(
+            admin_payload.get("sub", "unknown"),
+            f"user_{payload.action}",
+            f"users/{username}",
+            "failure",
+            str(exc),
+            **audit_context,
+        )
         status_code = 404 if str(exc) == "User not found" else 400
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc
     return {"success": True, "data": result, "error": None}
@@ -2416,6 +2458,8 @@ def admin_audit_logs_page(
           <td>{action}</td>
           <td>{resource}</td>
           <td>{outcome}</td>
+          <td>{client_ip}</td>
+          <td>{request_context}</td>
           <td>{details}</td>
           <td>{created_at}</td>
         </tr>
@@ -2424,13 +2468,23 @@ def admin_audit_logs_page(
             action=escape(str(item.get("action", "unknown"))),
             resource=escape(str(item.get("resource", "unknown"))),
             outcome=escape(str(item.get("outcome", "unknown"))),
+            client_ip=escape(str(item.get("client_ip") or "—")),
+            request_context=escape(
+                " ".join(
+                    part for part in (
+                        str(item.get("request_method") or "").strip(),
+                        str(item.get("request_path") or "").strip(),
+                    )
+                    if part
+                ) or "—"
+            ),
             details=escape(str(item.get("details", ""))),
             created_at=escape(str(item.get("created_at", ""))),
         )
         for item in logs
     ) if logs else """
         <tr>
-          <td colspan='6'>No audit events recorded yet.</td>
+          <td colspan='8'>No audit events recorded yet.</td>
         </tr>
         """
 
@@ -2494,6 +2548,8 @@ def admin_audit_logs_page(
           <th>Action</th>
           <th>Resource</th>
           <th>Outcome</th>
+          <th>Client IP</th>
+          <th>Request</th>
           <th>Details</th>
           <th>Created At</th>
         </tr>

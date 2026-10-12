@@ -4,26 +4,28 @@
 
 Implement the Admin Page as a server-authorized user-management module. Deliver the read-only list and detail workflow first, then lifecycle mutations, audit coverage, and performance hardening. Preserve the existing Admin role and treat System Admin as a future extension until a separate role is introduced.
 
-## Implementation Status — 2026-10-07
+## Implementation Status — 2026-10-12
 
-**Overall status: In progress.** The admin list, detail/status APIs, typed list/detail responses, date filters, bounded admin pagination, supported user indexes, and basic audit monitoring are implemented. Lifecycle actions enforce transitions and final-admin/self-deactivation safeguards; account-status changes and logout invalidate issued tokens. The UI and release/performance acceptance remain incomplete.
+**Overall status: In progress.** The admin list, detail/status APIs, typed list/detail responses, date filters, bounded admin pagination, supported user indexes, and audit monitoring are implemented. Lifecycle actions enforce transitions and final-admin/self-deactivation safeguards; account-status changes and logout invalidate issued tokens. Admin user-management audit events now retain nullable client IP, request method, and request path metadata, including in-place migration for existing SQLite databases and display in the admin audit page. Browser/accessibility and release/performance acceptance remain incomplete.
 
 | Phase | Status | Remaining work |
 |---|---|---|
-| 1. Data contract and authorization | Partially implemented | Typed summary/detail/list contracts, shared admin checks, token status/version checks, and self/final-admin safeguards are in place. Still verify every admin denial path and complete request-context audit metadata. |
+| 1. Data contract and authorization | Implemented for the current contract | Typed summary/detail/list contracts, shared admin checks, token status/version checks, self/final-admin safeguards, and request-context metadata for admin user-management actions and denials are in place. |
 | 2. User list API and UI | Implemented; browser/accessibility validation pending | Search, role/status/date filters, bounded paging, indexes, all required list columns, and filter-preserving pagination are in place. The page has a narrow-screen card layout, keyboard-native controls, and live mutation/error feedback. Validate across supported browsers and viewport sizes. |
 | 3. User detail | Implemented for the current data contract | Secret-safe detail response and view audit are in place. A semantic dialog renders profile fields safely and states that linked-module summaries are not yet available. Add those summaries when the related user-level data sources are defined. |
 | 4. Activation and deactivation | Implemented and focused-tested | Backend transitions, idempotent retries, final-admin protection, token-version invalidation, visible UI feedback, and stale API/page access rejection are covered. |
-| 5. Audit and monitoring | Partially implemented | Actor/action/outcome/affected-user filters and list/action/average-query-latency metrics are available. Denied access to protected APIs and admin pages is now audited; add request-context/IP metadata and validate metric usefulness operationally. |
-| 6. Testing and release readiness | Open | Five focused admin authorization, UI, lifecycle, and audit regressions passed on isolated SQLite data. A 10,000-user local SQLite render returned 25 rows in 0.6349 seconds (under the 2-second target). Run the full regression suite, deployment-equivalent benchmark, browser/accessibility checks, and release/rollback validation. |
+| 5. Audit and monitoring | Implemented for the current contract; operational validation pending | Actor/action/outcome/affected-user filters, request-context/IP metadata, and list/action/average-query-latency metrics are available. Denied access to protected APIs and admin pages is audited. Validate metric usefulness and retention operationally. |
+| 6. Testing and release readiness | Open | The complete admin/user selector passes on isolated SQLite data (27 passed), the full API module passes from a brand-new database path (110 passed), and deployment configuration/first-run checks pass (8 passed). A 10,000-user local SQLite render returned 25 rows in 0.6349 seconds (under the 2-second target). Run the full workspace regression suite, deployment-equivalent benchmark, browser/accessibility checks, and release/rollback validation. |
 
-**Next work:** add audit request-context metadata, validate the admin page in supported browsers and assistive technologies, and run full regression plus deployment-equivalent release checks. Keep release readiness open until those gates have evidence.
+**Next work:** validate the admin page in supported browsers and assistive technologies, then run the full workspace regression suite plus deployment-equivalent release checks. Keep release readiness open until those gates have evidence.
 
 ## 2. Current Repository Baseline
 
 - The admin user page and list, detail, and status API routes are present and use the shared admin-access guard.
 - User records already contain profile, role, status, registration, login, and failed-login fields; login rejects pending, inactive, and locked accounts.
 - Audit-log storage and admin audit views already exist, and current user-management routes record list, view, and lifecycle outcomes.
+- Admin user-management audit records include nullable client IP, request method, and request path fields. Existing SQLite databases add these columns during initialization without dropping prior audit history.
+- The app initializes schema before default-user seeding, so a clean deployment can start against a brand-new configured database path.
 - The admin list API supports search, role/status/registration/last-login filters, and page sizes up to 100; the legacy `/api/users` compatibility route remains separate.
 - Status changes increment the user's token version. Logout revokes the token and increments that version so access/refresh tokens cannot become valid again after reactivation.
 - Account details exclude credentials and tokens. The page renders the current profile contract in an accessible dialog and provides an explicit empty state for linked-module summaries not yet backed by data.

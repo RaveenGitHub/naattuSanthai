@@ -267,10 +267,17 @@ def init_db() -> None:
                 resource TEXT NOT NULL,
                 outcome TEXT NOT NULL,
                 details TEXT,
+                client_ip TEXT,
+                request_method TEXT,
+                request_path TEXT,
                 created_at TEXT NOT NULL
             )
             """
         )
+        audit_columns = {row[1] for row in conn.execute("PRAGMA table_info(audit_logs)").fetchall()}
+        for column in ("client_ip", "request_method", "request_path"):
+            if column not in audit_columns:
+                conn.execute(f"ALTER TABLE audit_logs ADD COLUMN {column} TEXT")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS revoked_auth_tokens (

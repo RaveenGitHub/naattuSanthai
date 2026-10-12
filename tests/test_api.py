@@ -1,8 +1,9 @@
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
-from app import app
+from app import _AUTH_REQUEST_BUCKETS, app
 from database import create_db_backup, get_connection, get_migration_status, init_db, record_migration_status
 from security import create_token, create_user, issue_password_reset_token, set_user_status, verify_token
 from services import get_scheme_fetch_status, list_archived_scheme_updates
@@ -10,6 +11,13 @@ from services import get_scheme_fetch_status
 import services
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def reset_auth_rate_limit_state():
+    _AUTH_REQUEST_BUCKETS.clear()
+    yield
+    _AUTH_REQUEST_BUCKETS.clear()
 
 
 def test_root_endpoint():
@@ -61,17 +69,28 @@ def test_admin_route_denial_is_audited():
 
     admin_route_denial = client.get(
         "/api/admin/users",
-        headers={"Authorization": "Bearer " + farmer_login.json()["token"]},
+        headers={
+            "Authorization": "Bearer " + farmer_login.json()["token"],
+            "X-Forwarded-For": "203.0.113.10",
+        },
     )
     assert admin_route_denial.status_code == 403
     with get_connection() as conn:
         denial = conn.execute(
-            "SELECT username, resource, outcome, details FROM audit_logs "
+            "SELECT username, resource, outcome, details, client_ip, request_method, request_path FROM audit_logs "
             "WHERE action = ? AND resource = ? ORDER BY created_at DESC LIMIT 1",
             ("admin_access_denied", "/api/admin/users"),
         ).fetchone()
     assert denial is not None
-    assert tuple(denial) == ("farmer1", "/api/admin/users", "failure", "Admin access required")
+    assert tuple(denial) == (
+        "farmer1",
+        "/api/admin/users",
+        "failure",
+        "Admin access required",
+        "203.0.113.10",
+        "GET",
+        "/api/admin/users",
+    )
 
 
 def test_admin_user_management_lists_details_and_controls_status():
@@ -188,7 +207,7 @@ def test_admin_audit_filters_and_user_management_metrics():
 
     changed = client.post(
         f"/api/admin/users/{username}/status",
-        headers=headers,
+        headers={**headers, "X-Forwarded-For": "203.0.113.20"},
         json={"action": "deactivate"},
     )
     assert changed.status_code == 200
@@ -200,6 +219,16 @@ def test_admin_audit_filters_and_user_management_metrics():
     assert filtered.status_code == 200
     assert len(filtered.json()["data"]) == 1
     assert filtered.json()["data"][0]["resource"] == f"users/{username}"
+    assert filtered.json()["data"][0]["client_ip"] == "203.0.113.20"
+    assert filtered.json()["data"][0]["request_method"] == "POST"
+    assert filtered.json()["data"][0]["request_path"] == f"/api/admin/users/{username}/status"
+    audit_page = client.get(
+        f"/admin/audit-logs?affected_user={username}&action=user_deactivate",
+        headers=headers,
+    )
+    assert audit_page.status_code == 200
+    assert "203.0.113.20" in audit_page.text
+    assert f"POST /api/admin/users/{username}/status" in audit_page.text
 
     metrics = client.get("/api/admin/user-management/metrics", headers=headers)
     assert metrics.status_code == 200
@@ -852,7 +881,7 @@ def test_market_intelligence_displays_source_trust_status():
 
 
 def test_scheme_ai_validation_flags_incomplete_or_generic_records():
-    with __import__("sqlite3").connect("digital_farming.db") as conn:
+    with get_connection() as conn:
         conn.execute(
             """
             INSERT OR REPLACE INTO government_scheme_updates (
@@ -883,7 +912,7 @@ def test_scheme_ai_validation_flags_incomplete_or_generic_records():
 
 
 def test_archived_scheme_updates_include_year_grouping_metadata():
-    with __import__("sqlite3").connect("digital_farming.db") as conn:
+    with get_connection() as conn:
         conn.execute(
             """
             INSERT OR REPLACE INTO government_scheme_updates (
@@ -916,7 +945,7 @@ def test_archived_scheme_updates_include_year_grouping_metadata():
 
 
 def test_government_schemes_archive_page_groups_entries_by_year():
-    with __import__("sqlite3").connect("digital_farming.db") as conn:
+    with get_connection() as conn:
         conn.execute(
             """
             INSERT OR REPLACE INTO government_scheme_updates (
@@ -947,7 +976,7 @@ def test_government_schemes_archive_page_groups_entries_by_year():
 
 
 def test_scheme_source_compliance_flags_untrusted_or_duplicate_sources():
-    with __import__("sqlite3").connect("digital_farming.db") as conn:
+    with get_connection() as conn:
         conn.execute(
             """
             INSERT OR REPLACE INTO government_scheme_updates (
@@ -1014,7 +1043,7 @@ def test_admin_quality_gate_page_renders_fetch_and_source_health():
 
 
 def test_admin_quality_gate_page_surfaces_source_risk_and_review_backlog():
-    with __import__("sqlite3").connect("digital_farming.db") as conn:
+    with get_connection() as conn:
         conn.execute(
             """
             INSERT OR REPLACE INTO government_scheme_updates (
@@ -1046,7 +1075,7 @@ def test_admin_quality_gate_page_surfaces_source_risk_and_review_backlog():
 
 
 def test_quality_gate_flags_low_quality_or_generic_scheme_content():
-    with __import__("sqlite3").connect("digital_farming.db") as conn:
+    with get_connection() as conn:
         conn.execute(
             """
             INSERT OR REPLACE INTO government_scheme_updates (
@@ -1077,7 +1106,7 @@ def test_quality_gate_flags_low_quality_or_generic_scheme_content():
 
 
 def test_scheme_review_queue_tracks_flagged_records_and_admin_actions():
-    with __import__("sqlite3").connect("digital_farming.db") as conn:
+    with get_connection() as conn:
         conn.execute(
             """
             INSERT OR REPLACE INTO government_scheme_updates (
@@ -1122,7 +1151,7 @@ def test_scheme_review_resolution_records_admin_decision_and_audit_entry():
     assert login.status_code == 200
     token = login.json()["token"]
 
-    with __import__("sqlite3").connect("digital_farming.db") as conn:
+    with get_connection() as conn:
         conn.execute(
             """
             INSERT OR REPLACE INTO government_scheme_updates (
@@ -1156,7 +1185,7 @@ def test_scheme_review_resolution_records_admin_decision_and_audit_entry():
     assert payload["success"] is True
     assert payload["data"]["decision"] == "approved"
 
-    with __import__("sqlite3").connect("digital_farming.db") as conn:
+    with get_connection() as conn:
         review_row = conn.execute(
             "SELECT decision, reviewer, reason FROM scheme_review_actions WHERE scheme_id = ? ORDER BY created_at DESC LIMIT 1",
             ("SCHEME-REVIEW-RESOLVE-001",),
@@ -1436,7 +1465,7 @@ def test_admin_pilot_readiness_and_feedback_loop_are_exposed_on_api_and_page():
 
 
 def test_pilot_readiness_warns_when_source_risk_or_review_queue_is_unhealthy():
-    with __import__("sqlite3").connect("digital_farming.db") as conn:
+    with get_connection() as conn:
         conn.execute(
             """
             INSERT OR REPLACE INTO government_scheme_updates (
@@ -1793,7 +1822,7 @@ def test_registration_persists_farmer_profile_fields_for_onboarding():
     payload = response.json()
     assert payload["success"] is True
 
-    with __import__("sqlite3").connect("digital_farming.db") as conn:
+    with get_connection() as conn:
         row = conn.execute(
             "SELECT full_name, village, region, area, primary_crop, land_size, water_source, farming_method, secondary_crops, tools, irrigation_type FROM users WHERE username = ?",
             (username,),
@@ -1952,7 +1981,7 @@ def test_failed_login_attempts_lock_account_after_threshold():
     locked = isolated_client.post("/auth/login", json={"username": username, "password": "StrongPass123"})
     assert locked.status_code == 401
 
-    with __import__("sqlite3").connect("digital_farming.db") as conn:
+    with get_connection() as conn:
         row = conn.execute("SELECT status, failed_login_attempts FROM users WHERE username = ?", (username,)).fetchone()
     assert row is not None
     assert row[0] == "locked"
@@ -1964,7 +1993,7 @@ def test_admin_can_unlock_a_locked_user():
     isolated_client = TestClient(app)
     create_user(username, "StrongPass123", "farmer")
 
-    with __import__("sqlite3").connect("digital_farming.db") as conn:
+    with get_connection() as conn:
         conn.execute(
             "UPDATE users SET status = ?, failed_login_attempts = ? WHERE username = ?",
             ("locked", 5, username),
@@ -1983,7 +2012,7 @@ def test_admin_can_unlock_a_locked_user():
     assert payload["success"] is True
     assert payload["data"]["status"] == "active"
 
-    with __import__("sqlite3").connect("digital_farming.db") as conn:
+    with get_connection() as conn:
         row = conn.execute("SELECT status, failed_login_attempts FROM users WHERE username = ?", (username,)).fetchone()
     assert row is not None
     assert row[0] == "active"
@@ -2059,18 +2088,23 @@ def test_protected_pages_redirect_to_login_without_session_cookie():
 
 def test_profile_page_requires_authentication_and_owner_access():
     isolated_client = TestClient(app)
+    username = f"profile_owner_{__import__('uuid').uuid4().hex[:8]}"
+    create_user(username, "StrongPass123", "operator")
 
-    public_response = isolated_client.get("/profile?username=operator1", follow_redirects=False)
+    public_response = isolated_client.get(f"/profile?username={username}", follow_redirects=False)
     assert public_response.status_code in {302, 307}
     assert public_response.headers.get("location", "").startswith("/login")
 
-    login_response = isolated_client.post("/auth/login", json={"username": "operator1", "password": "password123"})
+    login_response = isolated_client.post(
+        "/auth/login",
+        json={"username": username, "password": "StrongPass123"},
+    )
     assert login_response.status_code == 200
 
-    own_profile = isolated_client.get("/profile?username=operator1", follow_redirects=False)
+    own_profile = isolated_client.get(f"/profile?username={username}", follow_redirects=False)
     assert own_profile.status_code == 200
     assert "சுயவிபரம்" in own_profile.text or "Profile" in own_profile.text
-    assert "operator1" in own_profile.text or "ஆபரேட்டர்" in own_profile.text
+    assert username in own_profile.text or "ஆபரேட்டர்" in own_profile.text
 
     other_profile = isolated_client.get("/profile?username=admin1", follow_redirects=False)
     assert other_profile.status_code in {302, 307}
@@ -2079,13 +2113,25 @@ def test_profile_page_requires_authentication_and_owner_access():
 
 def test_profile_page_renders_user_and_farm_summary():
     isolated_client = TestClient(app)
-    login_response = isolated_client.post("/auth/login", json={"username": "operator1", "password": "password123"})
+    username = f"profile_summary_{__import__('uuid').uuid4().hex[:8]}"
+    create_user(
+        username,
+        "StrongPass123",
+        "operator",
+        village="Kallakurichi",
+        region="Kallakurichi",
+        land_size="2.5",
+    )
+    login_response = isolated_client.post(
+        "/auth/login",
+        json={"username": username, "password": "StrongPass123"},
+    )
     assert login_response.status_code == 200
 
-    response = isolated_client.get("/profile?username=operator1")
+    response = isolated_client.get(f"/profile?username={username}")
     assert response.status_code == 200
     assert "சுயவிபரம்" in response.text or "Profile" in response.text
-    assert "operator1" in response.text or "ஆபரேட்டர்" in response.text
+    assert username in response.text or "ஆபரேட்டர்" in response.text
     assert "கிராமம்" in response.text or "Village" in response.text
     assert "நிலம்" in response.text or "Farm" in response.text
 
