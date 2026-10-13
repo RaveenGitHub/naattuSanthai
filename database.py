@@ -282,6 +282,28 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS admin_content_config (
+                id TEXT PRIMARY KEY,
+                kind TEXT NOT NULL CHECK (kind IN ('special_news', 'advertising')),
+                title TEXT NOT NULL,
+                status TEXT NOT NULL CHECK (status IN ('draft', 'scheduled', 'active', 'archived')),
+                channel TEXT,
+                published_at TEXT,
+                target_group TEXT,
+                placement TEXT,
+                created_by TEXT NOT NULL,
+                updated_by TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_admin_content_kind_status "
+            "ON admin_content_config(kind, status, updated_at)"
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY,
                 username TEXT NOT NULL UNIQUE,

@@ -704,4 +704,4 @@ The weather module should not be treated as a simple data feed. It requires the 
 2. Complete pilot field usability review; captured feedback is not sign-off
 3. Obtain independent traceability evidence verification and approve a sustainability methodology
 4. Configure authorized external weather/market credentials and verify live source behavior
-5. Finish the remaining admin content-configuration workflow and align farmer-facing UX
+5. Connect approved content to farmer-facing pages and separately authorize any broadcast or ad-delivery integration

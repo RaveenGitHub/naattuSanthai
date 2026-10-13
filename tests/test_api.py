@@ -1227,16 +1227,22 @@ def test_admin_operations_checklist_page_renders_backup_and_migration_readiness(
 
 
 def test_admin_content_configuration_page_renders_special_news_and_ad_controls():
+    admin_login = client.post("/auth/login", json={"username": "admin1", "password": "admin123"})
+    assert admin_login.status_code == 200
     response = client.get("/admin/content-config")
     assert response.status_code == 200
     assert "Special News" in response.text or "சிறப்பு செய்திகள்" in response.text
     assert "Advertising" in response.text or "விளம்பரம்" in response.text
+    assert "content-form" in response.text
+    assert "Archive" in response.text
 
     api_response = client.get("/api/admin/content-config")
     assert api_response.status_code == 200
     assert api_response.json()["success"] is True
     assert "special_news" in api_response.json()["data"]
     assert "advertising" in api_response.json()["data"]
+    assert api_response.json()["data"]["special_news"] == []
+    assert api_response.json()["data"]["advertising"] == []
 
 
 def test_source_registry_and_scheduler_metadata_are_exposed_to_admins():

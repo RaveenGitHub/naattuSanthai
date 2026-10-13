@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, constr
+from pydantic import BaseModel, ConfigDict, Field, constr, model_validator
 
 
 class FarmerCreate(BaseModel):
@@ -91,6 +91,61 @@ class PilotFeedbackCreate(BaseModel):
     issues: List[constr(min_length=1, max_length=500, strip_whitespace=True)] = Field(default_factory=list, max_length=10)
     recommended_change: str = Field(default="", max_length=2000)
     feedback_notes: str = Field(default="", max_length=4000)
+
+
+class ContentConfigCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    kind: Literal["special_news", "advertising"]
+    title: str = Field(min_length=1, max_length=200)
+    status: Literal["draft", "scheduled", "active", "archived"] = "draft"
+    channel: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    published_at: Optional[datetime] = None
+    target_group: Optional[str] = Field(default=None, min_length=1, max_length=160)
+    placement: Optional[str] = Field(default=None, min_length=1, max_length=120)
+
+    @model_validator(mode="after")
+    def validate_content_kind(self):
+        if self.kind == "special_news" and not self.channel:
+            raise ValueError("Special news requires a channel")
+        if self.kind == "advertising" and (not self.target_group or not self.placement):
+            raise ValueError("Advertising requires a target group and placement")
+        if self.kind == "special_news" and (self.target_group or self.placement):
+            raise ValueError("Special news cannot include advertising fields")
+        if self.kind == "advertising" and (self.channel or self.published_at):
+            raise ValueError("Advertising cannot include news channel or publication time")
+        if self.status == "scheduled":
+            if self.kind != "special_news":
+                raise ValueError("Only special news can be scheduled")
+            if not self.published_at:
+                raise ValueError("Scheduled news requires a publication time")
+            publish_time = self.published_at
+            if publish_time.tzinfo is None:
+                publish_time = publish_time.replace(tzinfo=timezone.utc)
+            if publish_time.astimezone(timezone.utc) <= datetime.now(timezone.utc):
+                raise ValueError("Scheduled news publication time must be in the future")
+        if (
+            self.kind == "special_news"
+            and self.status == "active"
+            and self.published_at is not None
+        ):
+            publish_time = self.published_at
+            if publish_time.tzinfo is None:
+                publish_time = publish_time.replace(tzinfo=timezone.utc)
+            if publish_time.astimezone(timezone.utc) > datetime.now(timezone.utc):
+                raise ValueError("News with a future publication time cannot be active")
+        return self
+
+
+class ContentConfigUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    title: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    status: Optional[Literal["draft", "scheduled", "active", "archived"]] = None
+    channel: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    published_at: Optional[datetime] = None
+    target_group: Optional[str] = Field(default=None, min_length=1, max_length=160)
+    placement: Optional[str] = Field(default=None, min_length=1, max_length=120)
 
 
 class WeatherAlert(BaseModel):

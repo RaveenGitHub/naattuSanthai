@@ -190,3 +190,101 @@ def test_disease_inference_provider_contract_stays_manual_review(monkeypatch, tm
     assert result["provider_prediction"]["confidence_score"] == 0.92
     assert result["manual_review_required"] is True
     assert result["diagnosis"] == "Image review required"
+
+
+def test_admin_content_configuration_is_persistent_validated_and_audited(monkeypatch, tmp_path):
+    admin, token = _actor(monkeypatch, tmp_path, role="admin")
+    client = TestClient(main_app)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    denied = TestClient(main_app).get("/api/admin/content-config")
+    assert denied.status_code == 401
+    invalid_scheduled = client.post(
+        "/api/admin/content-config",
+        headers=headers,
+        json={"kind": "special_news", "title": "Rain alert", "channel": "Operator", "status": "scheduled"},
+    )
+    assert invalid_scheduled.status_code == 422
+    invalid_future_active = client.post(
+        "/api/admin/content-config",
+        headers=headers,
+        json={
+            "kind": "special_news",
+            "title": "Rain alert",
+            "channel": "Operator",
+            "status": "active",
+            "published_at": "2030-01-01T08:00:00Z",
+        },
+    )
+    assert invalid_future_active.status_code == 422
+
+    created_news = client.post(
+        "/api/admin/content-config",
+        headers=headers,
+        json={
+            "kind": "special_news",
+            "title": "Rain alert",
+            "channel": "Operator bulletin",
+            "status": "scheduled",
+            "published_at": "2030-01-01T08:00:00Z",
+        },
+    )
+    assert created_news.status_code == 201
+    news = created_news.json()["data"]
+    assert news["created_by"] == admin
+    assert news["status"] == "scheduled"
+    news_id = news["id"]
+
+    created_ad = client.post(
+        "/api/admin/content-config",
+        headers=headers,
+        json={
+            "kind": "advertising",
+            "title": "Seed campaign",
+            "target_group": "Rice farmers",
+            "placement": "home-banner",
+            "status": "draft",
+        },
+    )
+    assert created_ad.status_code == 201
+    invalid_scheduled_ad = client.post(
+        "/api/admin/content-config",
+        headers=headers,
+        json={
+            "kind": "advertising",
+            "title": "Scheduled ad",
+            "target_group": "Rice farmers",
+            "placement": "home-banner",
+            "status": "scheduled",
+        },
+    )
+    assert invalid_scheduled_ad.status_code == 422
+
+    edited = client.patch(
+        f"/api/admin/content-config/{news_id}",
+        headers=headers,
+        json={"title": "Updated rain alert", "status": "active", "published_at": None},
+    )
+    assert edited.status_code == 200
+    assert edited.json()["data"]["title"] == "Updated rain alert"
+    assert edited.json()["data"]["status"] == "active"
+
+    archived = client.patch(
+        f"/api/admin/content-config/{news_id}",
+        headers=headers,
+        json={"status": "archived"},
+    )
+    assert archived.status_code == 200
+    listed = client.get("/api/admin/content-config", headers=headers)
+    assert len(listed.json()["data"]["special_news"]) == 1
+    assert len(listed.json()["data"]["advertising"]) == 1
+    assert listed.json()["data"]["special_news"][0]["status"] == "archived"
+
+    with __import__("database").get_connection() as conn:
+        audit_actions = {
+            row["action"]
+            for row in conn.execute(
+                "SELECT action FROM audit_logs WHERE username = ?", (admin,)
+            ).fetchall()
+        }
+    assert {"content_config_created", "content_config_updated"}.issubset(audit_actions)

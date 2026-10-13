@@ -81,6 +81,13 @@ This app is being shaped as a Tamil Nadu farmer-first digital agriculture platfo
   `POST /api/admin/pilot-feedback` and reviewed by admins at
   `GET /api/admin/pilot-feedback`. Feedback is evidence of submissions, not
   field, agronomy, or accessibility sign-off.
+- Admins can manage special-news and advertising configuration at
+  `/admin/content-config`, with authenticated
+  `GET`/`POST /api/admin/content-config` and
+  `PATCH /api/admin/content-config/{item_id}` endpoints. Records are persisted,
+  status changes are audited, and scheduled news requires a publication time.
+  This is editorial configuration only: active status does not publish to farmer
+  pages, send SMS/WhatsApp messages, or deliver advertisements.
 - Sustainability calculations are indicative estimates, not verified carbon
   accounting. Inputs are validated, including finite measurements and farm-area
   bounds.

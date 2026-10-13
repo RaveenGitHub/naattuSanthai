@@ -14,12 +14,18 @@ from jwt import PyJWTError
 from pydantic import ValidationError
 
 from database import get_connection, get_migration_status, init_db
-from schemas import PilotFeedbackCreate
+from schemas import ContentConfigCreate, ContentConfigUpdate, PilotFeedbackCreate
 from digital_farming.services.advisory import get_field_advisory
 from digital_farming.services.pilot_feedback import (
     get_pilot_feedback_summary,
     list_pilot_feedback,
     submit_pilot_feedback,
+)
+from digital_farming.services.content_config import (
+    create_content_config_item,
+    get_content_config_item,
+    list_content_config,
+    update_content_config_item,
 )
 from diagnostics import DiseaseInferenceProvider, diagnose_crop_issue, list_diagnosis_history
 from routes import router
@@ -1956,41 +1962,77 @@ def admin_monitoring_overview(authorization: Optional[str] = Header(default=None
 
 
 @app.get("/api/admin/content-config")
-def admin_content_config_api():
+def admin_content_config_api(
+    request: Request, authorization: Optional[str] = Header(default=None)
+):
+    require_admin_access(request, authorization)
     return {
         "success": True,
-        "data": {
-            "special_news": [
-                {
-                    "title": "Kharif advisory window open",
-                    "channel": "Operator bulletin",
-                    "status": "active",
-                    "published_at": "2026-09-10T08:00:00Z",
-                },
-                {
-                    "title": "Rainfall risk alert for Villupuram cluster",
-                    "channel": "Village WhatsApp",
-                    "status": "scheduled",
-                    "published_at": "2026-09-11T06:30:00Z",
-                },
-            ],
-            "advertising": [
-                {
-                    "title": "Seed supplier campaign",
-                    "target_group": "Farmers in Kallakurichi",
-                    "status": "active",
-                    "placement": "home-banner",
-                },
-                {
-                    "title": "Irrigation subsidy promotion",
-                    "target_group": "Pump-set owners",
-                    "status": "draft",
-                    "placement": "dashboard-card",
-                },
-            ],
-        },
+        "data": list_content_config(),
         "error": None,
     }
+
+
+@app.post("/api/admin/content-config", status_code=201)
+def create_admin_content_config(
+    request: Request,
+    payload: ContentConfigCreate,
+    authorization: Optional[str] = Header(default=None),
+):
+    actor = require_admin_access(request, authorization)
+    item = create_content_config_item(payload, str(actor.get("sub") or "admin"))
+    record_audit_log(
+        str(actor.get("sub") or "admin"),
+        "content_config_created",
+        f"{item['kind']}:{item['id']}",
+        "success",
+        f"Created {item['status']} content configuration",
+        **get_audit_request_context(request),
+    )
+    return {"success": True, "data": item, "error": None}
+
+
+@app.patch("/api/admin/content-config/{item_id}")
+def update_admin_content_config(
+    request: Request,
+    item_id: str,
+    payload: ContentConfigUpdate,
+    authorization: Optional[str] = Header(default=None),
+):
+    actor = require_admin_access(request, authorization)
+    existing = get_content_config_item(item_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Content configuration item not found")
+    fields = {
+        "kind": existing["kind"],
+        "title": existing["title"],
+        "status": existing["status"],
+        "channel": existing["channel"],
+        "published_at": existing["published_at"],
+        "target_group": existing["target_group"],
+        "placement": existing["placement"],
+    }
+    fields.update(payload.model_dump(exclude_unset=True))
+    try:
+        validated = ContentConfigCreate.model_validate(fields)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=422, detail=exc.errors(include_context=False)
+        ) from exc
+    item = update_content_config_item(
+        item_id, validated, str(actor.get("sub") or "admin")
+    )
+    if item is None:
+        raise HTTPException(status_code=404, detail="Content configuration item not found")
+    record_audit_log(
+        str(actor.get("sub") or "admin"),
+        "content_config_updated",
+        f"{item['kind']}:{item['id']}",
+        "success",
+        f"Updated content configuration to {item['status']}",
+        **get_audit_request_context(request),
+    )
+    return {"success": True, "data": item, "error": None}
 
 
 @app.get("/api/admin/source-registry")
@@ -5790,64 +5832,258 @@ def admin_content_config_page(request: Request, authorization: Optional[str] = H
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Content Configuration</title>
+  <title>Admin Content Configuration</title>
   <style>
-    :root {{
-      --bg: #f4f8f2;
-      --panel: #ffffff;
-      --primary: #2d7d46;
-      --secondary: #4aa6d6;
-      --warning: #d97706;
-      --text: #17301d;
-      --muted: #567163;
-      --line: #dfe9df;
-      --shadow: 0 12px 30px rgba(23, 48, 29, 0.08);
-    }}
-    * {{ box-sizing: border-box; }}
-    body {{ margin: 0; font-family: 'Nirmala UI', 'Segoe UI', Arial, sans-serif; background: linear-gradient(180deg, #eefaf0 0%, #f7f5ef 100%); color: var(--text); }}
-    .container {{ max-width: 1100px; margin: 0 auto; padding: 28px 18px 48px; }}
-    .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }}
-    .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 700; }}
-    .logo {{ width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; }}
-    .nav {{ display: flex; gap: 10px; flex-wrap: wrap; }}
-    .nav a {{ text-decoration: none; color: var(--text); background: #f4f8f4; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 600; }}
-    h1 {{ margin: 28px 0 10px; font-size: clamp(2rem, 4vw, 3rem); }}
-    .lede {{ color: var(--muted); line-height: 1.8; max-width: 75ch; }}
-    .grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 24px; }}
-    .panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 22px; box-shadow: var(--shadow); }}
-    .chip {{ display: inline-block; padding: 5px 10px; border-radius: 999px; background: #ebf9ef; color: var(--primary); font-weight: 700; margin-bottom: 10px; }}
-    ul {{ margin: 10px 0 0; padding-left: 18px; color: var(--muted); line-height: 1.9; }}
-    @media (max-width: 760px) {{ .grid {{ grid-template-columns: 1fr; }} .topbar {{ flex-direction: column; align-items: flex-start; }} }}
+    :root { --bg:#f4f8f2; --panel:#fff; --primary:#2d7d46; --text:#17301d; --muted:#567163; --line:#dfe9df; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:'Nirmala UI','Segoe UI',Arial,sans-serif; background:linear-gradient(180deg,#eefaf0,#f7f5ef); color:var(--text); }
+    main { max-width:1150px; margin:auto; padding:28px 18px 48px; }
+    h1 { margin:0 0 8px; font-size:clamp(2rem,4vw,3rem); }
+    h2 { margin-top:0; }
+    .lede, .muted { color:var(--muted); line-height:1.65; }
+    .layout { display:grid; grid-template-columns:minmax(280px,.8fr) minmax(0,1.2fr); gap:18px; margin-top:22px; align-items:start; }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:20px; box-shadow:0 12px 30px rgba(23,48,29,.07); }
+    label { display:block; font-weight:650; margin:12px 0 5px; }
+    input, select { width:100%; padding:10px 12px; border:1px solid #bdcdbf; border-radius:9px; font:inherit; background:white; }
+    .actions, .item-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+    button { border:0; border-radius:9px; padding:10px 14px; font:inherit; font-weight:650; cursor:pointer; background:var(--primary); color:white; }
+    button.secondary { background:#eaf2eb; color:var(--text); border:1px solid var(--line); }
+    button:disabled { opacity:.6; cursor:wait; }
+    .list { display:grid; gap:12px; }
+    .item { border:1px solid var(--line); border-radius:12px; padding:14px; background:#fbfdfb; }
+    .item h3 { margin:0 0 6px; }
+    .badge { display:inline-block; border-radius:999px; background:#eaf5ed; padding:3px 9px; font-size:.85rem; font-weight:700; }
+    .notice { min-height:1.5em; margin:12px 0 0; color:var(--primary); }
+    .notice.error { color:#a12828; }
+    [hidden] { display:none !important; }
+    @media (max-width:800px) { .layout { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
-  <div class="container">
-
+  <main>
     <h1>Special News & Advertising</h1>
-    <p class="lede">This content management screen allows admins to review special news announcements and advertising placements intended for the farmer experience.</p>
+    <p class="lede">சிறப்பு செய்திகள் மற்றும் விளம்பர உள்ளடக்கங்களை நிர்வகிக்கவும். This screen stores editorial configuration only; it does not broadcast messages or deliver ads.</p>
+    <div class="layout">
+      <section class="panel" aria-labelledby="editor-title">
+        <h2 id="editor-title">Create content</h2>
+        <form id="content-form">
+          <input id="item-id" type="hidden" />
+          <label for="kind">Content type</label>
+          <select id="kind" required>
+            <option value="special_news">Special news</option>
+            <option value="advertising">Advertising</option>
+          </select>
+          <label for="title">Title</label>
+          <input id="title" maxlength="200" required />
+          <div id="news-fields">
+            <label for="channel">News channel</label>
+            <input id="channel" maxlength="120" />
+            <label for="published-at">Scheduled publish time (optional)</label>
+            <input id="published-at" type="datetime-local" />
+          </div>
+          <div id="advertising-fields" hidden>
+            <label for="target-group">Target group</label>
+            <input id="target-group" maxlength="160" />
+            <label for="placement">Placement</label>
+            <input id="placement" maxlength="120" placeholder="home-banner" />
+          </div>
+          <label for="status">Editorial status</label>
+          <select id="status">
+            <option value="draft">Draft</option>
+            <option value="scheduled">Scheduled</option>
+            <option value="active">Active</option>
+            <option value="archived">Archived</option>
+          </select>
+          <div class="actions">
+            <button id="save-button" type="submit">Save content</button>
+            <button id="reset-button" class="secondary" type="button">Clear form</button>
+          </div>
+          <p id="form-status" class="notice" role="status" aria-live="polite"></p>
+        </form>
+      </section>
+      <section class="panel" aria-labelledby="records-title">
+        <h2 id="records-title">Configured content</h2>
+        <p id="load-status" class="muted" role="status">Loading saved content…</p>
+        <h3>சிறப்பு செய்திகள் / Special news</h3>
+        <div id="news-list" class="list"></div>
+        <h3 style="margin-top:22px">விளம்பரம் / Advertising</h3>
+        <div id="advertising-list" class="list"></div>
+      </section>
+    </div>
+  </main>
+  <script>
+    const form = document.getElementById('content-form');
+    const kind = document.getElementById('kind');
+    const formStatus = document.getElementById('form-status');
+    const saveButton = document.getElementById('save-button');
+    let contentItems = [];
 
-    <section class="grid">
-      <article class="panel">
-        <span class="chip">Special News</span>
-        <h2>சிறப்பு செய்திகள்</h2>
-        <ul>
-          <li>Kharif advisory window open for registered farmer groups.</li>
-          <li>Operator bulletin for seasonal rainfall risk is scheduled for release.</li>
-          <li>Priority broadcast channel remains the village operator network.</li>
-        </ul>
-      </article>
+    async function requestJson(url, options) {
+      const response = await fetch(url, {credentials:'same-origin', ...options});
+      const payload = await response.json();
+      if (!response.ok) {
+        const detail = payload.detail;
+        throw new Error(Array.isArray(detail) ? detail.map(item => item.msg).join('; ') : (detail || 'Request failed'));
+      }
+      return payload.data;
+    }
 
-      <article class="panel">
-        <span class="chip">Advertising</span>
-        <h2>விளம்பரம்</h2>
-        <ul>
-          <li>Seed supplier campaign is active on the home banner.</li>
-          <li>Irrigation subsidy promotion is in draft mode for dashboard placement.</li>
-          <li>All advertising blocks remain within approved regional targeting.</li>
-        </ul>
-      </article>
-    </section>
-  </div>
+    function setKindFields() {
+      const isNews = kind.value === 'special_news';
+      document.getElementById('news-fields').hidden = !isNews;
+      document.getElementById('advertising-fields').hidden = isNews;
+      document.getElementById('channel').required = isNews;
+      document.getElementById('target-group').required = !isNews;
+      document.getElementById('placement').required = !isNews;
+      document.getElementById('published-at').required = isNews && document.getElementById('status').value === 'scheduled';
+    }
+
+    function makeItem(item) {
+      const article = document.createElement('article');
+      article.className = 'item';
+      const title = document.createElement('h3');
+      title.textContent = item.title;
+      const status = document.createElement('span');
+      status.className = 'badge';
+      status.textContent = item.status;
+      const details = document.createElement('p');
+      details.className = 'muted';
+      details.textContent = item.kind === 'special_news'
+        ? `Channel: ${item.channel}${item.published_at ? ` · Publish: ${item.published_at}` : ''}`
+        : `Target: ${item.target_group} · Placement: ${item.placement}`;
+      const metadata = document.createElement('p');
+      metadata.className = 'muted';
+      metadata.textContent = `Updated by ${item.updated_by} · ${item.updated_at}`;
+      const actions = document.createElement('div');
+      actions.className = 'item-actions';
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'secondary';
+      edit.textContent = 'Edit';
+      edit.addEventListener('click', () => editItem(item));
+      actions.appendChild(edit);
+      if (item.status !== 'archived') {
+        const archive = document.createElement('button');
+        archive.type = 'button';
+        archive.className = 'secondary';
+        archive.textContent = 'Archive';
+        archive.addEventListener('click', () => updateStatus(item.id, 'archived'));
+        actions.appendChild(archive);
+      }
+      article.append(title, status, details, metadata, actions);
+      return article;
+    }
+
+    function renderItems() {
+      const news = contentItems.filter(item => item.kind === 'special_news');
+      const ads = contentItems.filter(item => item.kind === 'advertising');
+      const newsList = document.getElementById('news-list');
+      const advertisingList = document.getElementById('advertising-list');
+      newsList.replaceChildren(...news.map(makeItem));
+      advertisingList.replaceChildren(...ads.map(makeItem));
+      if (!news.length) newsList.textContent = 'No special news configured.';
+      if (!ads.length) advertisingList.textContent = 'No advertising configured.';
+      document.getElementById('load-status').textContent = `${contentItems.length} saved item(s).`;
+    }
+
+    async function loadItems() {
+      try {
+        const data = await requestJson('/api/admin/content-config');
+        contentItems = [...data.special_news, ...data.advertising];
+        renderItems();
+      } catch (error) {
+        const status = document.getElementById('load-status');
+        status.textContent = error.message;
+        status.classList.add('notice', 'error');
+      }
+    }
+
+    function editItem(item) {
+      document.getElementById('item-id').value = item.id;
+      kind.value = item.kind;
+      kind.disabled = true;
+      document.getElementById('title').value = item.title;
+      document.getElementById('status').value = item.status;
+      document.getElementById('channel').value = item.channel || '';
+      document.getElementById('published-at').value = item.published_at
+        ? new Date(item.published_at).toISOString().slice(0, 16) : '';
+      document.getElementById('target-group').value = item.target_group || '';
+      document.getElementById('placement').value = item.placement || '';
+      document.getElementById('editor-title').textContent = 'Edit content';
+      saveButton.textContent = 'Update content';
+      setKindFields();
+      form.scrollIntoView({behavior:'smooth', block:'start'});
+    }
+
+    function clearForm() {
+      form.reset();
+      document.getElementById('item-id').value = '';
+      kind.disabled = false;
+      document.getElementById('editor-title').textContent = 'Create content';
+      saveButton.textContent = 'Save content';
+      formStatus.textContent = '';
+      formStatus.classList.remove('error');
+      setKindFields();
+    }
+
+    async function updateStatus(itemId, status) {
+      try {
+        await requestJson(`/api/admin/content-config/${encodeURIComponent(itemId)}`, {
+          method:'PATCH',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({status})
+        });
+        await loadItems();
+        formStatus.textContent = 'Content archived.';
+      } catch (error) {
+        formStatus.textContent = error.message;
+        formStatus.classList.add('error');
+      }
+    }
+
+    kind.addEventListener('change', setKindFields);
+    document.getElementById('status').addEventListener('change', setKindFields);
+    document.getElementById('reset-button').addEventListener('click', clearForm);
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      saveButton.disabled = true;
+      formStatus.textContent = 'Saving…';
+      formStatus.classList.remove('error');
+      const itemId = document.getElementById('item-id').value;
+      const payload = {
+        title:document.getElementById('title').value,
+        status:document.getElementById('status').value
+      };
+      if (!itemId) payload.kind = kind.value;
+      if (kind.value === 'special_news') {
+        payload.channel = document.getElementById('channel').value;
+        const publishTime = document.getElementById('published-at').value;
+        payload.published_at = publishTime ? new Date(publishTime).toISOString() : null;
+      } else {
+        payload.target_group = document.getElementById('target-group').value;
+        payload.placement = document.getElementById('placement').value;
+      }
+      try {
+        await requestJson(itemId
+          ? `/api/admin/content-config/${encodeURIComponent(itemId)}`
+          : '/api/admin/content-config', {
+            method:itemId ? 'PATCH' : 'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify(payload)
+          });
+        clearForm();
+        formStatus.textContent = itemId ? 'Content updated.' : 'Content saved.';
+        await loadItems();
+      } catch (error) {
+        formStatus.textContent = error.message;
+        formStatus.classList.add('error');
+      } finally {
+        saveButton.disabled = false;
+      }
+    });
+    setKindFields();
+    loadItems();
+  </script>
 </body>
 </html>
 """
