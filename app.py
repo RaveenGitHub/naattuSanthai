@@ -9,12 +9,19 @@ from urllib.parse import quote, urlencode
 from uuid import uuid4
 
 from fastapi import FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from jwt import PyJWTError
 from pydantic import ValidationError
 
 from database import get_connection, get_migration_status, init_db
+from schemas import PilotFeedbackCreate
 from digital_farming.services.advisory import get_field_advisory
-from diagnostics import diagnose_crop_issue, list_diagnosis_history
+from digital_farming.services.pilot_feedback import (
+    get_pilot_feedback_summary,
+    list_pilot_feedback,
+    submit_pilot_feedback,
+)
+from diagnostics import DiseaseInferenceProvider, diagnose_crop_issue, list_diagnosis_history
 from routes import router
 from schemas_auth import (
     AuthResetPasswordRequest,
@@ -82,6 +89,8 @@ ROOT_PAGE = """
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#2d7d46" />
+  <link rel="manifest" href="/manifest.webmanifest" />
   <title>டிஜிட்டல் விவசாய ஆதரவு மையம்</title>
   <style>
     :root {
@@ -660,6 +669,8 @@ APP_SHELL_PAGE = """
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#2d7d46" />
+  <link rel="manifest" href="/manifest.webmanifest" />
   <title>Digital Farming Support Center</title>
   <style>
     :root {
@@ -748,6 +759,25 @@ APP_SHELL_PAGE = """
       border-color: rgba(45, 125, 70, 0.2);
       color: var(--primary);
     }
+    .assistive-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .assistive-controls button {
+      padding: 9px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--text);
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .assistive-controls button:focus-visible {
+      outline: 3px solid var(--secondary);
+      outline-offset: 2px;
+    }
     .frame-wrap {
       flex: 1;
       padding: 18px;
@@ -791,6 +821,11 @@ APP_SHELL_PAGE = """
         <a href="/government-schemes" class="nav-link" data-page="/government-schemes">Schemes</a>
         <a href="/admin/overview" class="nav-link" data-page="/admin/overview">Admin</a>
       </nav>
+      <div class="assistive-controls">
+        <button type="button" id="speak-page" aria-label="Read page guidance aloud in Tamil">🔊 Read aloud / கேட்க</button>
+        <button type="button" id="stop-speech" aria-label="Stop spoken guidance">■ Stop / நிறுத்து</button>
+        <span id="assistive-status" role="status" aria-live="polite"></span>
+      </div>
     </header>
 
     <div class="frame-wrap">
@@ -801,6 +836,38 @@ APP_SHELL_PAGE = """
   <script>
     const frame = document.getElementById('page-frame');
     const links = Array.from(document.querySelectorAll('.nav-link'));
+    const assistiveStatus = document.getElementById('assistive-status');
+    document.getElementById('speak-page').addEventListener('click', () => {
+      if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
+        assistiveStatus.textContent = 'Voice guidance is not supported by this browser.';
+        return;
+      }
+      let pageText = '';
+      try {
+        const pageDocument = frame.contentDocument;
+        const content = pageDocument && (pageDocument.querySelector('main, article, [role="main"]') || pageDocument.body);
+        pageText = content ? content.innerText.trim().slice(0, 4000) : '';
+      } catch (_error) {
+        assistiveStatus.textContent = 'Page text is unavailable for voice guidance.';
+        return;
+      }
+      if (!pageText) {
+        assistiveStatus.textContent = 'No page text is available to read.';
+        return;
+      }
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(pageText);
+      utterance.lang = 'ta-IN';
+      utterance.rate = 0.9;
+      utterance.onstart = () => { assistiveStatus.textContent = 'Reading page guidance.'; };
+      utterance.onend = () => { assistiveStatus.textContent = 'Voice guidance finished.'; };
+      utterance.onerror = () => { assistiveStatus.textContent = 'Voice guidance could not be played on this device.'; };
+      window.speechSynthesis.speak(utterance);
+    });
+    document.getElementById('stop-speech').addEventListener('click', () => {
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      assistiveStatus.textContent = 'Voice guidance stopped.';
+    });
     const normalizePage = (page) => {
       const value = (page || '/').toString();
       if (!value || value === '/') return '/home';
@@ -847,6 +914,11 @@ APP_SHELL_PAGE = """
       frame.setAttribute('src', initialPage);
     }
     setActiveLink(initialPage);
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/service-worker.js').catch(() => {
+        assistiveStatus.textContent = 'Offline shell is unavailable; online use is unaffected.';
+      });
+    }
   </script>
 </body>
 </html>
@@ -857,7 +929,130 @@ seed_default_users()
 
 app = FastAPI(title="Digital Farming Support Center")
 app.state.started_at = datetime.now(timezone.utc)
+app.state.disease_inference_provider = None
 app.include_router(router)
+
+
+@app.get("/manifest.webmanifest")
+def web_app_manifest():
+    return JSONResponse(
+        {
+            "name": "Digital Farming Support Center",
+            "short_name": "Naattu Santhai",
+            "lang": "ta-IN",
+            "start_url": "/",
+            "display": "standalone",
+            "background_color": "#edf8ff",
+            "theme_color": "#2d7d46",
+            "icons": [
+                {
+                    "src": "/app-icon.svg",
+                    "sizes": "any",
+                    "type": "image/svg+xml",
+                    "purpose": "any",
+                }
+            ],
+        },
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@app.get("/app-icon.svg")
+def app_icon():
+    return PlainTextResponse(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
+        '<rect width="64" height="64" rx="14" fill="#2d7d46"/>'
+        '<path d="M32 49V27m0 11C18 38 15 27 15 18c11 0 18 5 17 14m0 1c0-12 8-19 18-20 0 11-3 22-18 24" '
+        'fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"/>'
+        "</svg>",
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "public, max-age=86400", "X-Content-Type-Options": "nosniff"},
+    )
+
+
+@app.get("/service-worker.js")
+def service_worker():
+    script = """
+const CACHE_NAME = 'digital-farming-shell-v1';
+const SAFE_SHELL_PATHS = ['/', '/offline'];
+const PRIVATE_PATHS = ['/api/', '/auth/', '/login', '/register', '/profile', '/dashboard', '/admin/'];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll([
+        new Request('/', {headers: {Accept: 'text/html'}}),
+        '/offline'
+      ]))
+      .then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys()
+      .then((keys) => Promise.all(keys
+        .filter((key) => key.startsWith('digital-farming-shell-') && key !== CACHE_NAME)
+        .map((key) => caches.delete(key))))
+      .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  const url = new URL(request.url);
+  if (request.method !== 'GET' || url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith('/api/')) return;
+  if (PRIVATE_PATHS.some((path) => url.pathname.startsWith(path))) {
+    if (request.mode === 'navigate') {
+      event.respondWith(fetch(request).catch(() => caches.match('/offline')));
+    }
+    return;
+  }
+  if (request.mode !== 'navigate') return;
+  event.respondWith(
+    fetch(request).catch(async () => {
+      if (SAFE_SHELL_PATHS.includes(url.pathname)) {
+        const cached = await caches.match(request);
+        if (cached) return cached;
+      }
+      return caches.match('/offline');
+    })
+  );
+});
+"""
+    return PlainTextResponse(
+        script,
+        media_type="application/javascript",
+        headers={
+            "Cache-Control": "no-cache",
+            "Service-Worker-Allowed": "/",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@app.get("/offline", response_class=HTMLResponse)
+def offline_page():
+    return HTMLResponse(
+        """
+        <!doctype html>
+        <html lang="ta">
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <meta name="theme-color" content="#2d7d46">
+          <title>இணைப்பு இல்லை / Offline</title>
+          <main>
+            <h1>இணைய இணைப்பு இல்லை</h1>
+            <p>சேமிக்கப்பட்ட தனிப்பட்ட அல்லது விவசாயத் தரவை ஆஃப்லைனில் காட்டுவதில்லை.</p>
+            <p>இணைப்பை மீண்டும் பெற்று இந்தப் பக்கத்தைப் புதுப்பிக்கவும்.</p>
+            <button type="button" onclick="location.reload()">மீண்டும் முயற்சிக்கவும் / Retry</button>
+          </main>
+        </html>
+        """,
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
 
 PROTECTED_PAGE_PATHS = {"/dashboard", "/profile", "/disease-history"}
 ADMIN_PAGE_PREFIXES = ("/admin/",)
@@ -1380,6 +1575,7 @@ def diagnose(request: DiagnoseRequest, authorization: Optional[str] = Header(def
 
 @app.post("/api/diagnose/upload")
 def diagnose_upload(
+    request: Request,
     crop_type: str = Form(...),
     notes: str = Form(""),
     file: UploadFile = File(...),
@@ -1396,12 +1592,17 @@ def diagnose_upload(
     image_url = validate_uploaded_image(file)
     if file.content_type:
         image_url = f"{image_url}::{file.content_type}"
+    inference_provider: Optional[DiseaseInferenceProvider] = request.app.state.disease_inference_provider
+    image_bytes = file.file.read() if inference_provider is not None else None
 
     result = diagnose_crop_issue(
         crop_type,
         image_url,
         notes,
         created_by=str(payload.get("sub") or ""),
+        inference_provider=inference_provider,
+        image_bytes=image_bytes,
+        media_type=file.content_type,
     )
     return {"success": True, "data": result, "error": None}
 
@@ -2057,15 +2258,16 @@ def admin_pilot_readiness_api(authorization: Optional[str] = Header(default=None
     source_risk = scheme_status.get("source_compliance", {}).get("risk_level", "low")
     review_queue = scheme_status.get("review_queue", {})
     review_warning = review_queue.get("status") == "warning" or (review_queue.get("flagged_count", 0) > 0)
-    readiness_status = "pass" if scheme_gate == "pass" and weather_gate == "pass" and source_risk in {"low", "medium"} and not review_warning else "warning"
+    feedback_summary = get_pilot_feedback_summary()
 
     checklist = [
         {"item": "Source compliance reviewed for government scheme feeds", "status": "pass" if scheme_gate == "pass" and source_risk in {"low", "medium"} else "warning"},
         {"item": "Weather source compliance reviewed before pilot launch", "status": "pass" if weather_gate == "pass" else "warning"},
         {"item": "Admin quality gate and review queue inspected", "status": "pass" if not review_warning else "warning"},
         {"item": "Tamil readability and content clarity reviewed with sample farmers", "status": "pending"},
-        {"item": "Field pilot feedback logged for iteration and bug fixes", "status": "pending"},
+        {"item": "Field pilot feedback logged for iteration and bug fixes", "status": "recorded" if feedback_summary["total_submissions"] else "pending"},
     ]
+    readiness_status = "pass" if all(item["status"] == "pass" for item in checklist) else "warning"
 
     feedback_template = {
         "district": "",
@@ -2085,7 +2287,50 @@ def admin_pilot_readiness_api(authorization: Optional[str] = Header(default=None
             "status": readiness_status,
             "checklist": checklist,
             "feedback_template": feedback_template,
+            "feedback_summary": feedback_summary,
             "notes": "Pilot readiness must confirm source compliance, readability, and field usefulness before any broader rollout.",
+        },
+        "error": None,
+    }
+
+
+@app.post("/api/admin/pilot-feedback")
+def create_pilot_feedback(
+    request: Request,
+    payload: PilotFeedbackCreate,
+    authorization: Optional[str] = Header(default=None),
+):
+    token = get_bearer_token(authorization) if authorization else request.cookies.get("digital_farming_session", "")
+    try:
+        actor = verify_token(token)
+    except (PyJWTError, ValueError) as exc:
+        raise HTTPException(status_code=401, detail="Invalid token") from exc
+    if actor.get("role") not in {"farmer", "operator", "admin"}:
+        raise HTTPException(status_code=403, detail="Authenticated pilot participant access required")
+    feedback = submit_pilot_feedback(
+        payload.model_dump(),
+        submitted_by=str(actor["sub"]),
+    )
+    return {"success": True, "data": feedback, "error": None}
+
+
+@app.get("/api/admin/pilot-feedback")
+def read_pilot_feedback(
+    authorization: Optional[str] = Header(default=None),
+    limit: int = Query(default=50, ge=1, le=100),
+):
+    token = get_bearer_token(authorization)
+    try:
+        actor = verify_token(token)
+    except (PyJWTError, ValueError) as exc:
+        raise HTTPException(status_code=401, detail="Invalid token") from exc
+    if actor.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return {
+        "success": True,
+        "data": {
+            "summary": get_pilot_feedback_summary(),
+            "items": list_pilot_feedback(limit),
         },
         "error": None,
     }
@@ -2189,6 +2434,19 @@ def admin_pilot_readiness_page(authorization: Optional[str] = Header(default=Non
       <div class="panel">
         <h2>Feedback template</h2>
         <p class="lede">District, village, scheme tested, clarity score, usefulness score, issues, and change recommendation should be logged for every pilot interaction.</p>
+        <form id="pilot-feedback-form">
+          <label>District <input name="district" maxlength="120"></label>
+          <label>Village <input name="village" maxlength="120"></label>
+          <label>Farmer group <input name="farmer_group" maxlength="160"></label>
+          <label>Scheme or service tested <input name="scheme_under_test" maxlength="200"></label>
+          <label>Clarity score (1–5) <input name="clarity_score" type="number" min="1" max="5"></label>
+          <label>Usefulness score (1–5) <input name="usefulness_score" type="number" min="1" max="5"></label>
+          <label>Issues (one per line) <textarea name="issues" maxlength="5000"></textarea></label>
+          <label>Recommended change <textarea name="recommended_change" maxlength="2000"></textarea></label>
+          <label>Feedback notes <textarea name="feedback_notes" maxlength="4000"></textarea></label>
+          <button type="submit">Save feedback / கருத்தைச் சேமி</button>
+          <p id="feedback-status" role="status" aria-live="polite"></p>
+        </form>
       </div>
     </section>
 
@@ -2199,6 +2457,44 @@ def admin_pilot_readiness_page(authorization: Optional[str] = Header(default=Non
       </ul>
     </section>
   </div>
+  <script>
+    const feedbackForm = document.getElementById('pilot-feedback-form');
+    feedbackForm.addEventListener('submit', async (event) => {{
+      event.preventDefault();
+      const formData = new FormData(feedbackForm);
+      const score = (name) => formData.get(name) ? Number(formData.get(name)) : null;
+      const payload = {{
+        district: formData.get('district'),
+        village: formData.get('village'),
+        farmer_group: formData.get('farmer_group'),
+        scheme_under_test: formData.get('scheme_under_test'),
+        clarity_score: score('clarity_score'),
+        usefulness_score: score('usefulness_score'),
+        issues: formData.get('issues').split('\\n').map((item) => item.trim()).filter(Boolean),
+        recommended_change: formData.get('recommended_change'),
+        feedback_notes: formData.get('feedback_notes')
+      }};
+      const status = document.getElementById('feedback-status');
+      status.textContent = 'Saving feedback…';
+      try {{
+        const response = await fetch('/api/admin/pilot-feedback', {{
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {{'Content-Type': 'application/json'}},
+          body: JSON.stringify(payload)
+        }});
+        const result = await response.json();
+        if (!response.ok || !result.success) {{
+          status.textContent = result.detail || result.error?.message || 'Feedback could not be saved.';
+          return;
+        }}
+        feedbackForm.reset();
+        status.textContent = 'Feedback saved. This submission does not constitute field or agronomy sign-off.';
+      }} catch (_error) {{
+        status.textContent = 'Feedback could not be saved. Check the connection and try again.';
+      }}
+    }});
+  </script>
 </body>
 </html>
 """
@@ -5255,7 +5551,8 @@ def traceability_page(
         <ul>
           <li>{escape(str(traceability.get('traceability_status', 'Traceability verified')))}</li>
           <li>இடம்: {escape(str(traceability.get('location', location)))}</li>
-          <li>தொடர்பு முறை: lot trace confirmed</li>
+          <li>தரவு நிலை: {escape(str(traceability.get('evidence_status', traceability.get('traceability_status', 'unverified_claim'))))}</li>
+          <li>தர மதிப்பு: {escape(str(traceability.get('quality_grade_status', 'self_reported')))}</li>
         </ul>
       </div>
     </section>

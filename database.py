@@ -229,6 +229,59 @@ def init_db() -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_diagnosis_records_created_by ON diagnosis_records(created_by)")
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS traceability_lots (
+                lot_id TEXT PRIMARY KEY,
+                crop TEXT NOT NULL,
+                farmer TEXT NOT NULL,
+                origin TEXT NOT NULL,
+                quality_grade TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS traceability_events (
+                id TEXT PRIMARY KEY,
+                lot_id TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                location TEXT NOT NULL,
+                notes TEXT NOT NULL,
+                recorded_by TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (lot_id) REFERENCES traceability_lots(lot_id)
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_traceability_events_lot_created "
+            "ON traceability_events(lot_id, created_at, id)"
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS pilot_feedback (
+                id TEXT PRIMARY KEY,
+                district TEXT NOT NULL,
+                village TEXT NOT NULL,
+                farmer_group TEXT NOT NULL,
+                scheme_under_test TEXT NOT NULL,
+                clarity_score INTEGER,
+                usefulness_score INTEGER,
+                issues TEXT NOT NULL,
+                recommended_change TEXT NOT NULL,
+                feedback_notes TEXT NOT NULL,
+                submitted_by TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_pilot_feedback_created_at "
+            "ON pilot_feedback(created_at)"
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY,
                 username TEXT NOT NULL UNIQUE,

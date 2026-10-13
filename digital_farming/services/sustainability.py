@@ -1,12 +1,21 @@
 from __future__ import annotations
 
+import math
 from typing import Any, Dict
 
 
 def assess_carbon_and_sustainability(farm_size_ha: float, soil_carbon_tons: float, water_use_liters: float, energy_use_kwh: float) -> Dict[str, Any]:
-    carbon_score = (soil_carbon_tons / max(farm_size_ha, 1.0)) * 10.0
-    water_efficiency = (water_use_liters / max(farm_size_ha, 1.0)) / 1000.0
-    energy_efficiency = energy_use_kwh / max(farm_size_ha, 1.0)
+    measurements = (farm_size_ha, soil_carbon_tons, water_use_liters, energy_use_kwh)
+    if not all(math.isfinite(value) for value in measurements):
+        raise ValueError("Sustainability measurements must be finite numbers")
+    if farm_size_ha <= 0:
+        raise ValueError("Farm size must be greater than zero")
+    if any(value < 0 for value in measurements[1:]):
+        raise ValueError("Carbon, water, and energy measurements cannot be negative")
+
+    carbon_score = (soil_carbon_tons / farm_size_ha) * 10.0
+    water_efficiency = (water_use_liters / farm_size_ha) / 1000.0
+    energy_efficiency = energy_use_kwh / farm_size_ha
 
     if carbon_score >= 6.0:
         carbon_status = "Strong soil carbon performance"
@@ -44,5 +53,6 @@ def assess_carbon_and_sustainability(farm_size_ha: float, soil_carbon_tons: floa
         "regenerative_actions": regenerative_actions,
         "water_efficiency_m3_per_ha": round(water_efficiency, 2),
         "energy_use_kwh_per_ha": round(energy_efficiency, 2),
+        "assessment_basis": "Indicative estimates from user-supplied values; not independently measured or carbon-accounting verified.",
         "recommendations": recommendations,
     }

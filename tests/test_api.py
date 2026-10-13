@@ -2195,7 +2195,9 @@ def test_sustainability_and_traceability_pages_render_farmer_summary():
 
     traceability_response = client.get("/traceability?farmer=Kumaran&batch=RICE-24A&location=Kallakurichi&quality_grade=A")
     assert traceability_response.status_code == 200
-    assert "கயிறு" in traceability_response.text or "Traceability" in traceability_response.text
+    assert "unverified_claim" in traceability_response.text
+    assert "No lot evidence is stored" in traceability_response.text
+    assert "lot trace confirmed" not in traceability_response.text
     assert "Kumaran" in traceability_response.text or "குமரன்" in traceability_response.text
     assert "வகுப்பு" in traceability_response.text or "Grade" in traceability_response.text
 

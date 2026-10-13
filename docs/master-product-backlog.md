@@ -667,8 +667,10 @@ Status: Planned
 | Soil health page                | Partially implemented | API and HTML flow exist; recommendations still need formalization |
 | Soil testing AI recommendations | Planned               | Requires crop, fertilizer, and irrigation guidance engine         |
 | Weather page and forecast flow  | Planned               | No daily, weekly, or monthly weather intelligence yet             |
-| Disease detection page          | Planned               | No scan flow or model integration yet                             |
-| History model for disease scans | Planned               | DiseaseScanHistory not yet implemented                            |
+| Disease intake and upload       | Implemented            | Authenticated intake flow exists; without a provider it does not analyze image pixels |
+| Disease scan history            | Implemented            | Persisted intake history is user-scoped; no validated model output is stored |
+| Disease inference integration   | Blocked                 | Provider contract exists; authorized model and representative evaluation data are not configured |
+| Disease treatment content       | Blocked                 | Generic caution is available; disease-specific Tamil treatment requires agronomy review |
 | Cross-feature UX polish         | Partially implemented | Some screens are present but not fully unified                    |
 
 ---
@@ -698,9 +700,8 @@ The weather module should not be treated as a simple data feed. It requires the 
 
 ## 7. Recommended next focus
 
-1. Formalize AI validation and quality gating for scheme content
-2. Introduce disease scan page and upload flow
-3. Create disease scan history schema and API
-4. Build confidence and warning behavior for low-quality disease predictions
-5. Add weather admin fetch, data quality, and retention controls
-6. Align the remaining user experience across schemes, soil, weather, and disease support flows
+1. Obtain authorized disease-model access, representative evaluation data, and agronomy sign-off
+2. Complete pilot field usability review; captured feedback is not sign-off
+3. Obtain independent traceability evidence verification and approve a sustainability methodology
+4. Configure authorized external weather/market credentials and verify live source behavior
+5. Finish the remaining admin content-configuration workflow and align farmer-facing UX

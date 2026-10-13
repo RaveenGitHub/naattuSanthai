@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,9 +10,10 @@ from database import init_db
 
 
 def long_range_record(period):
+    india_time = timezone(timedelta(hours=5, minutes=30))
     return {
         "city": "Chennai", "period": period,
-        "forecast_date": "2026-10-03", "temperature_c": 30,
+        "forecast_date": datetime.now(india_time).date().isoformat(), "temperature_c": 30,
         "summary_ta": f"Published {period} outlook",
         "advisory_ta": f"Published {period} advisory",
     }

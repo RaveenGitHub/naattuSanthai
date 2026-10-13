@@ -120,23 +120,22 @@ The Disease Detection module should let farmers and operators upload crop images
 
 | Area                      | Status  | Notes                                              |
 | ------------------------- | ------- | -------------------------------------------------- |
-| Disease scan UI           | Planned | Not yet implemented in repo                        |
-| AI diagnosis pipeline     | Planned | Requires model selection and inference integration |
-| Treatment output in Tamil | Planned | Needs content and translation rules                |
-| Prevention guidance       | Planned | Needs agronomic rule set                           |
-| History storage           | Planned | DiseaseScanHistory schema not yet added            |
-| Mobile-first Tamil UX     | Planned | Not yet implemented                                |
-| Confidence warning flow   | Planned | No diagnostic confidence handling yet              |
-| Optional voice reading    | Planned | Not yet implemented                                |
+| Disease scan/intake UI    | Implemented | Upload and intake flows exist; intake alone does not analyze image pixels |
+| Inference provider contract | Implemented; provider blocked | Provider-neutral typed interface exists; no validated model/provider is configured |
+| Treatment output in Tamil | Safety fallback only | General caution and advisor referral exist; disease-specific treatment needs agronomy approval |
+| Prevention guidance       | Safety fallback only | General monitoring guidance exists; crop/disease-specific rules remain blocked |
+| History storage           | Implemented | Diagnosis intake records are persisted and scoped to the submitting user |
+| Mobile-first Tamil UX     | Partial | Tamil-first and responsive pages exist; field usability sign-off remains open |
+| Confidence warning flow   | Partial | Model predictions remain explicitly unverified and require manual review |
+| Optional voice reading    | Partial | Browser speech synthesis is available in the main shell; device voice availability varies |
 
 ---
 
 ## 5. Recommended next sprint focus
 
-1. Build the scan page and image upload flow
-2. Add scan history database model
-3. Integrate a lightweight disease model or placeholder inference service
-4. Return Tamil diagnosis and guidance
-5. Add low-confidence handling and UX cues
+1. Select and validate an authorized disease model and local training/evaluation data
+2. Configure a provider implementing the inference contract and test low-confidence/error behavior
+3. Obtain Tamil treatment/prevention content and qualified agronomy review
+4. Complete mobile field usability and accessibility sign-off
 
 This keeps the feature aligned with the product outcome while remaining practical for MVP delivery.

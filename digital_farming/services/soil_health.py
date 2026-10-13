@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any, Dict, List
 
 
@@ -12,6 +13,16 @@ def assess_soil_health(
     water_source: str = "",
     land_size: str = "",
 ) -> Dict[str, Any]:
+    measurements = (ph, nitrogen, phosphorus, potassium)
+    if not crop or not crop.strip():
+        raise ValueError("Crop is required")
+    if not all(math.isfinite(value) for value in measurements):
+        raise ValueError("Soil measurements must be finite numbers")
+    if ph < 0 or ph > 14:
+        raise ValueError("Soil pH must be between 0 and 14")
+    if any(value < 0 for value in (nitrogen, phosphorus, potassium)):
+        raise ValueError("Nutrient measurements cannot be negative")
+
     crop_name = (crop or "crop").strip().lower()
 
     if ph < 5.8:

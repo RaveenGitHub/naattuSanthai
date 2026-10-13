@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal, Optional
+from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, constr
 
 
 class FarmerCreate(BaseModel):
@@ -57,6 +57,40 @@ class SoilTestRecord(BaseModel):
     potassium: float
     fertility_status: str
     tested_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class TraceabilityLotCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    lot_id: str = Field(min_length=1, max_length=80)
+    crop: str = Field(min_length=1, max_length=100)
+    farmer: str = Field(min_length=1, max_length=120)
+    origin: str = Field(min_length=1, max_length=200)
+    quality_grade: Literal["A", "B", "C"] = "B"
+
+
+class TraceabilityEventCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    event_type: Literal[
+        "harvested", "graded", "collected", "transported", "buyer_handoff",
+    ]
+    location: str = Field(min_length=1, max_length=200)
+    notes: str = Field(default="", max_length=2000)
+
+
+class PilotFeedbackCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    district: str = Field(default="", max_length=120)
+    village: str = Field(default="", max_length=120)
+    farmer_group: str = Field(default="", max_length=160)
+    scheme_under_test: str = Field(default="", max_length=200)
+    clarity_score: Optional[int] = Field(default=None, ge=1, le=5)
+    usefulness_score: Optional[int] = Field(default=None, ge=1, le=5)
+    issues: List[constr(min_length=1, max_length=500, strip_whitespace=True)] = Field(default_factory=list, max_length=10)
+    recommended_change: str = Field(default="", max_length=2000)
+    feedback_notes: str = Field(default="", max_length=4000)
 
 
 class WeatherAlert(BaseModel):

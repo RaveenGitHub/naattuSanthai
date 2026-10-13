@@ -65,6 +65,31 @@ This app is being shaped as a Tamil Nadu farmer-first digital agriculture platfo
 - SQLite-backed persistence for MVP validation with future extension paths toward PostgreSQL and service isolation
 - Clear separation between app runtime, domain logic, and prototype compatibility shims
 
+## Pilot workflows and evidence limits
+
+- Disease image intake and user-scoped history are available, with a typed
+  provider-neutral inference contract. No disease provider/model is configured
+  by default; responses explicitly require manual review and must not be used
+  to select chemical treatment. Model access, representative evaluation data,
+  and agronomy approval remain release blockers.
+- Operator/admin traceability endpoints persist lots and append-only lifecycle
+  events: `POST /api/v1/procurement/lots`,
+  `POST /api/v1/procurement/lots/{lot_id}/events`, and
+  `GET /api/v1/procurement/lots/{lot_id}`. Event completeness is not independent
+  verification; quality grades are self-reported.
+- Pilot feedback can be submitted by operators/admins at
+  `POST /api/admin/pilot-feedback` and reviewed by admins at
+  `GET /api/admin/pilot-feedback`. Feedback is evidence of submissions, not
+  field, agronomy, or accessibility sign-off.
+- Sustainability calculations are indicative estimates, not verified carbon
+  accounting. Inputs are validated, including finite measurements and farm-area
+  bounds.
+- The optional Tamil read-aloud control uses browser `speechSynthesis`; voice
+  availability depends on the browser/device. The service worker caches only
+  the public app shell and offline notice. It does not cache API responses,
+  personal/farm records, or offline submissions; the offline page explicitly
+  states that private/agricultural data is unavailable.
+
 ## Run locally
 
 1. Copy `.env.example` to `.env` and adjust the values for your local or deployment environment.

@@ -14,9 +14,9 @@ This matrix tracks the active product modules and keeps them aligned to the repo
 | Admin User Management         | Backend + Security + UX  | High     | High       | Implemented; release validation pending | RBAC, user status model, audit logging, paginated queries         | `.\.venv\Scripts\python.exe -m pytest -q tests/test_api.py -k "admin or user"`                                                       | [admin-user-management-prd.md](admin-user-management-prd.md), [admin-user-management-implementation-plan.md](admin-user-management-implementation-plan.md), [app.py](../app.py), [security.py](../security.py) | Complete browser/accessibility and deployment-equivalent release validation | 2026-10-12    |
 | Soil Testing                  | Backend + Agronomy       | High     | Medium     | Partially implemented | Soil metric schema, recommendation rules, Tamil output rules      | `D:\Raveendran\naattuSanthai\naattuSanthai\.venv\Scripts\python.exe -m pytest -q tests/test_layered_app.py -k "soil_health"`         | [digital_farming/services/soil_health.py](../digital_farming/services/soil_health.py), [digital_farming/api/v1/routes.py](../digital_farming/api/v1/routes.py)                                                 | Add Tamil-readable labels and farmer validation for crop-specific irrigation guidance | 2026-09-13    |
 | Weather Intelligence          | Backend + Product + Data | High     | High       | Planned               | Authoritative weather sources, region model, AI summary rules     | `.\.venv\Scripts\python.exe -m pytest -q`                                                                                            | [docs/master-product-backlog.md](master-product-backlog.md), [docs/government-schemes-implementation-plan.md](government-schemes-implementation-plan.md)                                                       | Define source whitelist, fetch job, retention, and quality KPIs                       | 2026-09-01    |
-| Disease Detection             | Backend + AI + UX        | High     | High       | Planned               | Image model integration, scan flow, diagnosis confidence rules    | `.\.venv\Scripts\python.exe -m pytest -q`                                                                                            | [docs/disease-detection-prd.md](disease-detection-prd.md), [docs/disease-detection-backlog.md](disease-detection-backlog.md)                                                                                   | Build scan page and diagnosis service contract                                        | 2026-09-01    |
+| Disease Detection             | Backend + AI + UX        | High     | High       | Intake/history and provider contract implemented; model blocked | Authorized model/data, agronomy-reviewed guidance, confidence policy | `.\.venv\Scripts\python.exe -m pytest -q tests/test_auth_ai.py tests/test_pending_backlog_items.py` | [docs/disease-detection-prd.md](disease-detection-prd.md), [docs/disease-detection-backlog.md](disease-detection-backlog.md), [diagnostics.py](../diagnostics.py) | Configure a validated provider and obtain agronomy sign-off | 2026-10-28 |
 | Market Intelligence           | Backend + Product        | Medium   | Medium     | Completed / validated | Data source contracts, price normalization, farmer-facing display | `D:\Raveendran\naattuSanthai\naattuSanthai\.venv\Scripts\python.exe -m pytest -q tests/test_layered_app.py -k "market_intelligence"` | [digital_farming/services/market_intelligence.py](../digital_farming/services/market_intelligence.py), [digital_farming/api/v1/routes.py](../digital_farming/api/v1/routes.py)                                 | Keep source compliance checks in the release gate                                     | 2026-09-05    |
-| Sustainability & Traceability | Backend + Analytics      | Medium   | Medium     | Planned               | Data model depth, traceability workflows, reporting contracts     | `.\.venv\Scripts\python.exe -m pytest -q`                                                                                            | [digital_farming/services/sustainability.py](../digital_farming/services/sustainability.py), [digital_farming/services/traceability.py](../digital_farming/services/traceability.py)                           | Add traceability events and reporting data model                                      | 2026-09-01    |
+| Sustainability & Traceability | Backend + Analytics      | Medium   | Medium     | Indicative calculator and unverified event ledger implemented | Independent evidence verification, approved sustainability methodology | `.\.venv\Scripts\python.exe -m pytest -q tests/test_layered_app.py tests/test_pending_backlog_items.py` | [digital_farming/services/sustainability.py](../digital_farming/services/sustainability.py), [digital_farming/services/traceability.py](../digital_farming/services/traceability.py) | Obtain evidence verification and methodology review before verified claims | 2026-10-28 |
 
 ---
 
@@ -42,9 +42,9 @@ This matrix tracks the active product modules and keeps them aligned to the repo
 
 ### Disease Detection
 
-- Current strength: product and sprint backlog documentation is ready
-- Main risk: image workflow, model integration, and confidence fallbacks
-- Target next milestone: create an MVP scan and diagnosis page with confidence-safe handling
+- Current strength: image intake, user-scoped history, and a provider-neutral typed inference contract
+- Main risk: no validated provider/model or locally representative evaluation set is configured
+- Target next milestone: configure an authorized model and secure agronomy review of Tamil recommendations
 
 ### Market Intelligence
 
@@ -54,9 +54,9 @@ This matrix tracks the active product modules and keeps them aligned to the repo
 
 ### Sustainability & Traceability
 
-- Current strength: domain services exist as a foundation
-- Main risk: productization and integration across field records and reporting
-- Target next milestone: formal event model and operational dashboard patterns
+- Current strength: indicative calculation inputs are validated; lot events persist with explicit unverified status
+- Main risk: neither operator-entered events nor indicative calculations constitute independent verification
+- Target next milestone: approve a measurement methodology and evidence-verification process
 
 ---
 

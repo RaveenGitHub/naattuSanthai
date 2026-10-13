@@ -1,10 +1,27 @@
 from __future__ import annotations
 
+import math
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Protocol
 from uuid import uuid4
 
 from database import get_connection
+
+
+@dataclass(frozen=True)
+class DiseaseInferenceResult:
+    label: str
+    confidence: float
+    provider: str
+    model_version: str
+
+
+class DiseaseInferenceProvider(Protocol):
+    def infer(
+        self, crop_type: str, image_bytes: bytes, media_type: str
+    ) -> DiseaseInferenceResult:
+        ...
 
 
 def diagnose_crop_issue(
@@ -14,6 +31,9 @@ def diagnose_crop_issue(
     *,
     created_by: Optional[str] = None,
     persist: bool = True,
+    inference_provider: Optional[DiseaseInferenceProvider] = None,
+    image_bytes: Optional[bytes] = None,
+    media_type: Optional[str] = None,
 ) -> Dict[str, Any]:
     diagnosis = "Image review required"
     recommendation = (
@@ -43,7 +63,36 @@ def diagnose_crop_issue(
         "manual_review_required": True,
         "treatment_steps": guidance["treatment_steps"],
         "prevention_steps": guidance["prevention_steps"],
+        "inference_status": "not_configured",
     }
+    if inference_provider is not None:
+        if image_bytes is None or not media_type:
+            raise ValueError("Image bytes and media type are required for disease inference")
+        prediction = inference_provider.infer(crop_type, image_bytes, media_type)
+        if not isinstance(prediction, DiseaseInferenceResult):
+            raise TypeError("Disease inference providers must return DiseaseInferenceResult")
+        if (
+            not prediction.label.strip()
+            or len(prediction.label) > 200
+            or not prediction.provider.strip()
+            or not prediction.model_version.strip()
+            or not math.isfinite(prediction.confidence)
+            or not 0 <= prediction.confidence <= 1
+        ):
+            raise ValueError("Disease inference provider returned an invalid prediction")
+        result.update(
+            {
+                "image_analyzed": True,
+                "assessment_method": "provider_prediction_requires_manual_review",
+                "inference_status": "prediction_available_manual_review",
+                "provider_prediction": {
+                    "label": prediction.label.strip(),
+                    "confidence_score": prediction.confidence,
+                    "provider": prediction.provider.strip(),
+                    "model_version": prediction.model_version.strip(),
+                },
+            }
+        )
     if persist:
         save_diagnosis_record(result, created_by=created_by)
     return result

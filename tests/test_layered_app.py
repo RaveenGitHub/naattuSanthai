@@ -143,9 +143,9 @@ def test_procurement_traceability_route_returns_lot_status_and_verification():
     payload = response.json()
     assert payload["crop"] == "rice"
     assert payload["lot_id"] == "RICE-2041"
-    assert payload["batch_status"]
+    assert payload["batch_status"] == "unverified_claim"
     assert isinstance(payload["verification_steps"], list)
-    assert payload["verification_steps"]
+    assert "not been independently verified" in payload["verification_steps"][0]
 
 
 def test_traceability_route_returns_origin_and_procurement_summary():
@@ -157,7 +157,7 @@ def test_traceability_route_returns_origin_and_procurement_summary():
     assert payload["farmer"] == "Kumaran"
     assert payload["batch"] == "RICE-24A"
     assert payload["quality_grade"] == "A"
-    assert payload["traceability_status"]
+    assert payload["traceability_status"] == "unverified_claim"
     assert isinstance(payload["procurement_steps"], list)
     assert payload["procurement_steps"]
 
@@ -183,4 +183,4 @@ def test_sustainability_and_traceability_richness_layers_include_regeneration_an
     assert isinstance(traceability_payload["chain_of_custody"], list)
     assert isinstance(traceability_payload["lot_lifecycle"], list)
     assert traceability_payload["chain_of_custody"]
-    assert traceability_payload["lot_lifecycle"]
+    assert not traceability_payload["lot_lifecycle"]

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from sqlite3 import IntegrityError
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Header, HTTPException, Query
+from jwt import PyJWTError
 
 from digital_farming.services.advisory import get_field_advisory
 from digital_farming.services.crop_calendar import build_crop_calendar
@@ -11,9 +13,29 @@ from digital_farming.services.market_intelligence import get_market_intelligence
 from digital_farming.services.pest_monitoring import evaluate_pest_risk
 from digital_farming.services.soil_health import assess_soil_health
 from digital_farming.services.sustainability import assess_carbon_and_sustainability
-from digital_farming.services.traceability import build_traceability_summary
+from digital_farming.services.traceability import (
+    build_traceability_summary,
+    get_traceability_lot,
+    record_traceability_event,
+    register_traceability_lot,
+)
+from schemas import TraceabilityEventCreate, TraceabilityLotCreate
+from security import verify_token
 
 router = APIRouter(tags=["v1"])
+
+
+def _require_traceability_actor(authorization: Optional[str]) -> str:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Bearer token required")
+    token = authorization.split(" ", 1)[1].strip()
+    try:
+        payload = verify_token(token)
+    except (PyJWTError, ValueError) as exc:
+        raise HTTPException(status_code=401, detail="Invalid token") from exc
+    if payload.get("role") not in {"operator", "admin"}:
+        raise HTTPException(status_code=403, detail="Operator/Admin access required")
+    return str(payload["sub"])
 
 
 @router.get("/health")
@@ -64,7 +86,10 @@ def soil_health(
     phosphorus: float = Query(..., ge=0, description="Phosphorus level"),
     potassium: float = Query(..., ge=0, description="Potassium level"),
 ) -> Dict[str, Any]:
-    result = assess_soil_health(crop=crop, ph=ph, nitrogen=nitrogen, phosphorus=phosphorus, potassium=potassium)
+    try:
+        result = assess_soil_health(crop=crop, ph=ph, nitrogen=nitrogen, phosphorus=phosphorus, potassium=potassium)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {
         "crop": result["crop"],
         "labels_ta": {
@@ -142,17 +167,20 @@ def market_intelligence(
 
 @router.get("/sustainability/carbon")
 def sustainability_carbon_report(
-    farm_size_ha: float = Query(..., description="Farm size in hectares"),
-    soil_carbon_tons: float = Query(..., description="Estimated soil carbon stock in tons"),
-    water_use_liters: float = Query(..., description="Total irrigation and operational water used in liters"),
-    energy_use_kwh: float = Query(..., description="Total energy consumed in kWh"),
+    farm_size_ha: float = Query(..., gt=0, description="Farm size in hectares"),
+    soil_carbon_tons: float = Query(..., ge=0, description="Estimated soil carbon stock in tons"),
+    water_use_liters: float = Query(..., ge=0, description="Total irrigation and operational water used in liters"),
+    energy_use_kwh: float = Query(..., ge=0, description="Total energy consumed in kWh"),
 ) -> Dict[str, Any]:
-    report = assess_carbon_and_sustainability(
-        farm_size_ha=farm_size_ha,
-        soil_carbon_tons=soil_carbon_tons,
-        water_use_liters=water_use_liters,
-        energy_use_kwh=energy_use_kwh,
-    )
+    try:
+        report = assess_carbon_and_sustainability(
+            farm_size_ha=farm_size_ha,
+            soil_carbon_tons=soil_carbon_tons,
+            water_use_liters=water_use_liters,
+            energy_use_kwh=energy_use_kwh,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {
         "farm_size_ha": report["farm_size_ha"],
         "soil_carbon_tons": report["soil_carbon_tons"],
@@ -164,6 +192,7 @@ def sustainability_carbon_report(
         "regenerative_actions": report.get("regenerative_actions", []),
         "water_efficiency_m3_per_ha": report["water_efficiency_m3_per_ha"],
         "energy_use_kwh_per_ha": report["energy_use_kwh_per_ha"],
+        "assessment_basis": report["assessment_basis"],
         "recommendations": report["recommendations"],
     }
 
@@ -182,18 +211,14 @@ def procurement_traceability(
     quality_value = (batch_quality or quality_grade or "B").upper()
 
     if lot_id is not None or crop is not None:
-        verification_steps = [
-            "Lot identity matched to farm records and producer declaration.",
-            "Field quality inspection completed and the batch was reviewed for consistency.",
-            "Movement and collection records were checked for completion and chain-of-custody integrity.",
-        ]
-        status = "verified" if quality_value in {"A", "B", "GOOD"} else "requires_review"
         return {
             "crop": crop or "unknown",
             "lot_id": lot_reference,
-            "batch_status": status,
+            "batch_status": "unverified_claim",
             "quality_grade": quality_value,
-            "verification_steps": verification_steps,
+            "verification_steps": [
+                "No stored lot evidence was found; submitted details have not been independently verified."
+            ],
         }
 
     if farmer is None or batch is None or location is None:
@@ -215,3 +240,54 @@ def procurement_traceability(
         "chain_of_custody": traceability.get("chain_of_custody", []),
         "lot_lifecycle": traceability.get("lot_lifecycle", []),
     }
+
+
+@router.post("/procurement/lots", status_code=201)
+def create_procurement_lot(
+    payload: TraceabilityLotCreate,
+    authorization: Optional[str] = Header(default=None),
+) -> Dict[str, Any]:
+    actor = _require_traceability_actor(authorization)
+    try:
+        lot = register_traceability_lot(
+            lot_id=payload.lot_id,
+            crop=payload.crop,
+            farmer=payload.farmer,
+            origin=payload.origin,
+            quality_grade=payload.quality_grade,
+            created_by=actor,
+        )
+    except IntegrityError as exc:
+        raise HTTPException(status_code=409, detail="Lot ID already exists") from exc
+    return lot
+
+
+@router.post("/procurement/lots/{lot_id}/events", status_code=201)
+def append_procurement_lot_event(
+    lot_id: str,
+    payload: TraceabilityEventCreate,
+    authorization: Optional[str] = Header(default=None),
+) -> Dict[str, Any]:
+    actor = _require_traceability_actor(authorization)
+    try:
+        return record_traceability_event(
+            lot_id=lot_id,
+            event_type=payload.event_type,
+            location=payload.location,
+            notes=payload.notes,
+            recorded_by=actor,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/procurement/lots/{lot_id}")
+def get_procurement_lot(
+    lot_id: str,
+    authorization: Optional[str] = Header(default=None),
+) -> Dict[str, Any]:
+    _require_traceability_actor(authorization)
+    try:
+        return get_traceability_lot(lot_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

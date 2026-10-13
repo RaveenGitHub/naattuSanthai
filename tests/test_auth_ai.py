@@ -74,6 +74,7 @@ def test_ai_diagnosis_returns_recommendation():
     assert body["data"]["image_analyzed"] is False
     assert body["data"]["manual_review_required"] is True
     assert body["data"]["confidence"] == "Low"
+    assert body["data"]["inference_status"] == "not_configured"
 
 
 def test_ai_diagnosis_history_is_available_to_authorized_user():
@@ -139,7 +140,7 @@ def test_password_is_stored_hashed_in_database():
     username = f"hashuser_{uuid.uuid4().hex[:8]}"
     create_user(username, "verysecret", "operator")
 
-    with __import__("sqlite3").connect("digital_farming.db") as conn:
+    with get_connection() as conn:
         row = conn.execute("SELECT password FROM users WHERE username = ?", (username,)).fetchone()
 
     assert row is not None
@@ -172,9 +173,11 @@ def test_admin_can_list_and_create_users():
 
 
 def test_user_can_view_profile_and_reset_password():
+    username = f"profileuser_{uuid.uuid4().hex[:8]}"
+    create_user(username, "password123", "operator")
     login = client.post(
         "/auth/login",
-        json={"username": "operator1", "password": "password123"},
+        json={"username": username, "password": "password123"},
     )
     token = login.json()["token"]
 
@@ -183,7 +186,7 @@ def test_user_can_view_profile_and_reset_password():
         headers={"Authorization": f"Bearer {token}"},
     )
     assert profile_response.status_code == 200
-    assert profile_response.json()["data"]["username"] == "operator1"
+    assert profile_response.json()["data"]["username"] == username
     assert profile_response.json()["data"]["role"] == "operator"
 
     reset_response = client.post(
@@ -196,7 +199,7 @@ def test_user_can_view_profile_and_reset_password():
 
     re_login = client.post(
         "/auth/login",
-        json={"username": "operator1", "password": "NewPassword456"},
+        json={"username": username, "password": "NewPassword456"},
     )
     assert re_login.status_code == 200
     assert re_login.json()["role"] == "operator"

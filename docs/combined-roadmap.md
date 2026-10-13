@@ -33,11 +33,10 @@ Together they form the next layer of farmer support beyond the already-establish
 
 ### Planned
 
-- Disease detection upload and scan flow
-- AI model integration with image inference
-- Diagnosis result page with Tamil treatment and prevention guidance
-- Disease scan history and review model
-- Confidence warnings and human review workflow
+- Configure an authorized disease model through the provider-neutral inference contract
+- Evaluate model performance on representative local crops and field images
+- Obtain agronomy approval for disease-specific Tamil guidance
+- Complete operational disease-scan review analytics
 - Soil testing AI summary and recommendation engine
 - Crop, fertilizer, and irrigation guidance from soil data
 - Tamil-first soil result page with optional voice guidance
@@ -102,14 +101,13 @@ Goal:
 
 ## Phase 4 — Launch disease detection MVP
 
-Status: Planned
+Status: Intake/history and provider contract implemented; validated inference blocked
 
 Workstreams:
 
-- crop image upload and camera capture flow
-- disease detection inference layer
-- Tamil diagnosis and guidance output
-- low-confidence warnings and fallback review
+- configure and evaluate an authorized model provider
+- add agronomy-reviewed treatment and prevention content
+- define model confidence thresholds and human-review workflow
 
 Goal:
 
@@ -119,11 +117,10 @@ Goal:
 
 ## Phase 5 — Build operational history and support flow
 
-Status: Planned
+Status: Basic user-scoped intake history implemented; review analytics remain planned
 
 Workstreams:
 
-- DiseaseScanHistory model and endpoint
 - follow-up support review for repeated cases
 - archive/trend review for common crop issues
 - operational dashboards for detection volume and confidence
@@ -157,7 +154,7 @@ Goal:
 | -------- | ------------------------------- | --------------------- | ------------------------------------------------ |
 | High     | Government Schemes              | Mostly implemented    | Trust-building, policy access, farmer enablement |
 | High     | Soil Testing                    | Partially implemented | Converts raw field data into actionable guidance |
-| High     | Disease Detection               | Planned               | Early crop issue detection and intervention      |
+| High     | Disease Detection               | Intake/history and provider contract implemented; model blocked | Early crop issue detection and intervention |
 | High     | Admin monitoring and validation | Partial               | Needed for quality and operational safety        |
 | Medium   | Archive UX quality              | Partial               | Improves discovery and reduces clutter           |
 | Medium   | Source governance               | Partial               | Needed for trust and scale                       |
@@ -169,8 +166,8 @@ Goal:
 
 1. Government schemes quality and trust hardening
 2. Soil testing AI guidance MVP
-3. Disease detection upload and diagnosis MVP
-4. Scan history and review flow
+3. Validate the disease provider and agronomy review process
+4. Complete operational review analytics
 5. UX polish and field pilot readiness
 
 This keeps the roadmap grounded in the current codebase while sequencing the next highest-value user-facing work.
